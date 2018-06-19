@@ -2,3 +2,7 @@ bin
 lib
 share
 include
+.idea
+pip-selfcheck.json
+__pycache__/
+*.py[cod]
