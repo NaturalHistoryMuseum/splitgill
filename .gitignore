@@ -3,3 +3,4 @@ venv
 pip-selfcheck.json
 __pycache__/
 *.py[cod]
+docs/_build
