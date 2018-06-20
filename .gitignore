@@ -1,7 +1,4 @@
-bin
-lib
-share
-include
+venv
 .idea
 pip-selfcheck.json
 __pycache__/
