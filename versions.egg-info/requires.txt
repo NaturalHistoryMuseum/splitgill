@@ -9,7 +9,6 @@ imagesize==1.0.0
 Jinja2==2.10
 MarkupSafe==1.0
 packaging==17.1
-pkg-resources==0.0.0
 Pygments==2.2.0
 pymongo==3.6.1
 pyparsing==2.2.0

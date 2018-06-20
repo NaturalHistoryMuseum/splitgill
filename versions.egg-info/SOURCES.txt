@@ -1,4 +1,6 @@
+MANIFEST.in
 README.md
+requirements.txt
 setup.py
 versions/__init__.py
 versions/config.py
