@@ -1,0 +1,16 @@
+Metadata-Version: 1.2
+Name: versions
+Version: 0.1
+Summary: Versioned search library
+Home-page: https://github.com/NaturalHistoryMuseum/versions
+Author: Josh Humphries
+Author-email: data@nhm.ac.uk
+License: MIT
+Description: Versioned search library
+Platform: UNKNOWN
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Programming Language :: Python :: Implementation :: CPython
+Requires-Python: >=3.6.0
