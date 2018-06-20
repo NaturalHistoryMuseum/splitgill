@@ -21,7 +21,7 @@ def get_mongo(config, database=None, collection=None):
     :param collection:  the collection to use, can be None
     :return:
     """
-    with MongoClient(config.mongo_host, config.mong_port) as client:
+    with MongoClient(config.mongo_host, config.mongo_port) as client:
         if not database:
             yield client
         elif database and not collection:
