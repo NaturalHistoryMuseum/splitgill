@@ -1,0 +1,8 @@
+[run]
+include=versions/*
+
+[report]
+omit=
+    test*
+exclude_lines=
+    @abc.abstractmethod
