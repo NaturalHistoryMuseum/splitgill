@@ -1,6 +1,7 @@
 # Versions
 
 [![Travis](https://img.shields.io/travis/NaturalHistoryMuseum/versions.svg?style=flat-square)](https://travis-ci.org/NaturalHistoryMuseum/versions)
+[![Coveralls github](https://img.shields.io/coveralls/github/NaturalHistoryMuseum/versions.svg?style=flat-square)](https://coveralls.io/github/NaturalHistoryMuseum/versions)
 
 A library providing base classes with the functionality to create, update and query versioned data. Uses MongoDB and Elasticsearch.
 
