@@ -2,13 +2,14 @@ from datetime import datetime
 
 from pymongo import InsertOne, UpdateOne
 
-from versions import utils, config
+from versions.versioning import Versioned
+from versions import utils
 from versions.mongo import get_mongo
 
 
-class Ingester:
+class Ingester(Versioned):
 
-    def __init__(self, feeder, mongo_collection, record_to_mongo_converter, config, start):
+    def __init__(self, version, feeder, mongo_collection, record_to_mongo_converter, config, start):
         """
         :param feeder: the feeder object to get records from
         :param mongo_collection: the name of the mongo collection to upsert the records into
@@ -16,6 +17,7 @@ class Ingester:
         :param config: the config object
         :param start: the datetime the operation was started, this will be stored with all the records ingested
         """
+        super().__init__(version)
         self.feeder = feeder
         self.mongo_collection = mongo_collection
         self.record_to_mongo_converter = record_to_mongo_converter
@@ -29,9 +31,10 @@ class Ingester:
         :param insert_count:    the number of records added (i.e. new records)
         :param update_count:    the number of records updated
         """
-        with get_mongo(self.config, self.config.mongo_database, self.config.mongo_ingestion_stats_collection) as mongo:
+        with get_mongo(self.config, collection=self.config.mongo_ingestion_stats_collection) as mongo:
             end = datetime.now()
             stats = {
+                'version': self.version,
                 'source': self.feeder.source,
                 'target_collection': self.mongo_collection,
                 'start': self.start,

@@ -7,6 +7,7 @@ versions/config.py
 versions/importing.py
 versions/mongo.py
 versions/utils.py
+versions/versioning.py
 versions.egg-info/PKG-INFO
 versions.egg-info/SOURCES.txt
 versions.egg-info/dependency_links.txt

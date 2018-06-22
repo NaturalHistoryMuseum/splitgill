@@ -1,7 +1,10 @@
-from versions.utils import version_critical
 
 
 class MongoToElasticsearchConverter(object):
+    """
+    This class is not a subclass of Versioned because a different version is passed through with each call rather than
+    the same version being used throughout the objects life.
+    """
 
     def __init__(self, elasticsearch_index):
         self.elasticsearch_index = elasticsearch_index
@@ -18,7 +21,6 @@ class MongoToElasticsearchConverter(object):
             }
         }
 
-    @version_critical
     def create_index_document(self, data, version, next_version):
         # TODO: decide if this is the best way to structure the index document
         return {
@@ -26,7 +28,6 @@ class MongoToElasticsearchConverter(object):
             'data': data
         }
 
-    @version_critical
     def create_metadata(self, version, next_version=None):
         metadata = {
             'versions': {

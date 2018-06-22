@@ -1,19 +1,17 @@
 import abc
 
-from versions.utils import version_critical
+from versions.versioning import Versioned
 
 
-class BaseRecord(metaclass=abc.ABCMeta):
+class BaseRecord(Versioned, metaclass=abc.ABCMeta):
 
-    @version_critical
     @abc.abstractmethod
-    def convert(self, version):
+    def convert(self):
         """
         Extract the data from this record returning it as a dict. The data should be presented with respect to the
         version. The version does not need to be included in the dict returned by this function as it is stored
         elsewhere when the record's information is written to mongo.
 
-        :param version: the version of this record, this value can be None in which case it can be ignored
         :return: a dict of data
         """
         return {}
@@ -30,9 +28,10 @@ class BaseRecord(metaclass=abc.ABCMeta):
         return None
 
 
-class Feeder(metaclass=abc.ABCMeta):
+class Feeder(Versioned, metaclass=abc.ABCMeta):
 
-    def __init__(self):
+    def __init__(self, version):
+        super().__init__(version)
         self.monitors = []
 
     @property
@@ -60,10 +59,6 @@ class Feeder(metaclass=abc.ABCMeta):
         :param monitoring_function: a function to be called whilst this feeder is reading the records
         """
         self.monitors.append(monitoring_function)
-
-    @property
-    def version(self):
-        return None
 
     def read(self):
         """
