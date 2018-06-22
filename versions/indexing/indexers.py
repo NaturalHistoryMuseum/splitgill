@@ -6,6 +6,7 @@ from itertools import chain
 import dictdiffer
 import requests
 
+from versions.versioning import Versioned
 from versions import utils
 from versions.mongo import get_mongo
 
@@ -36,7 +37,7 @@ def serialise_for_elasticsearch(data):
     return json.dumps(data, default=non_standard_type_converter)
 
 
-class Indexer(object):
+class Indexer(Versioned):
     """
     Class encapsulating the functionality required to index a specific version of the records.
     """
@@ -51,8 +52,8 @@ class Indexer(object):
         :param start: the start time of the import operation (just used for stats)
         :param mongo_to_elasticsearch_converter: the object to convert a mongo document to an elasticsearch document
         :param elasticsearch_mapping_definer: the elasticsearch mapping definer object
-        :param current_alias_prefix: a prefix which will be used to create the "current" alias of the index
         """
+        super().__init__(version)
         self.version = version
         self.mongo_collection = mongo_collection
         self.elasticsearch_index = elasticsearch_index

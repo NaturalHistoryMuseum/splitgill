@@ -1,22 +1,22 @@
 import dictdiffer
 
-from versions.utils import version_critical
+from versions.versioning import Versioned
 
 
-class RecordToMongoConverter:
+class RecordToMongoConverter(Versioned):
     """
     This class provides functions to convert a record into a document to be inserted into mongo.
     """
 
     def __init__(self, version, ingestion_time):
         """
-        :param version:         the version of this record, or None if versioning is not to be used with this record
+        :param version:         the current version
         :param ingestion_time:  the time of the ingestion operation
         """
+        super().__init__(version)
         self.version = version
         self.ingestion_time = ingestion_time
 
-    @version_critical
     def for_insert(self, record):
         """
         Returns the dictionary that should be inserted into mongo to add the record's information to the collection.
@@ -55,7 +55,6 @@ class RecordToMongoConverter:
             })
         return mongo_doc
 
-    @version_critical
     def for_update(self, record, mongo_doc):
         """
         Returns a dict to update the mongo representation of the given record with the new record version.

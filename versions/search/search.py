@@ -1,14 +1,11 @@
 import requests
 
-from versions.utils import version_critical
-
 
 class Searcher(object):
 
     def __init__(self, config):
         self.config = config
 
-    @version_critical
     def pre_process(self, index, search, version):
         if search is None:
             search = {
@@ -20,7 +17,6 @@ class Searcher(object):
             index = f'{self.config.elasticsearch_current_alias_prefix}{index}'
         return index, search, version
 
-    @version_critical
     def post_process(self, index, search, version, response, raise_error=True):
         if raise_error:
             response.raise_for_status()
