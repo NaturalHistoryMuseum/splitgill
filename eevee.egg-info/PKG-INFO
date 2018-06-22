@@ -1,8 +1,8 @@
 Metadata-Version: 1.2
-Name: versions
+Name: eevee
 Version: 0.1
 Summary: Versioned search library
-Home-page: https://github.com/NaturalHistoryMuseum/versions
+Home-page: https://github.com/NaturalHistoryMuseum/eevee
 Author: Josh Humphries
 Author-email: data@nhm.ac.uk
 License: MIT

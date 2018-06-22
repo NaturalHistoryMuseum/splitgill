@@ -1,6 +1,6 @@
 import abc
 
-from versions.versioning import Versioned
+from eevee.versioning import Versioned
 
 
 class BaseRecord(Versioned, metaclass=abc.ABCMeta):

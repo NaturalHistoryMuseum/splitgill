@@ -3,9 +3,9 @@
 
 from setuptools import find_packages, setup
 
-NAME = 'versions'
+NAME = 'eevee'
 DESCRIPTION = 'Versioned search library'
-URL = 'https://github.com/NaturalHistoryMuseum/versions'
+URL = 'https://github.com/NaturalHistoryMuseum/eevee'
 EMAIL = 'data@nhm.ac.uk'
 AUTHOR = 'Josh Humphries'
 # TODO: needs to be 2.7.x compatible

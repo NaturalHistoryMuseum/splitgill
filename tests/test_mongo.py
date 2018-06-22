@@ -1,7 +1,7 @@
 from pymongo.collection import Collection
 from pymongo.database import Database
 
-from versions.mongo import get_mongo
+from eevee.mongo import get_mongo
 from tests.helpers import Bunch
 
 from pymongo import MongoClient

@@ -2,9 +2,9 @@ from datetime import datetime
 
 from pymongo import InsertOne, UpdateOne
 
-from versions.versioning import Versioned
-from versions import utils
-from versions.mongo import get_mongo
+from eevee.versioning import Versioned
+from eevee import utils
+from eevee.mongo import get_mongo
 
 
 class Ingester(Versioned):

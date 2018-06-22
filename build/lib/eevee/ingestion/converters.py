@@ -1,6 +1,6 @@
 import dictdiffer
 
-from versions.versioning import Versioned
+from eevee.versioning import Versioned
 
 
 class RecordToMongoConverter(Versioned):

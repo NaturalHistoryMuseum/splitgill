@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from versions.versioning import Versioned
+from eevee.versioning import Versioned
 
 
 def test_version_matches():

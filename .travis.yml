@@ -9,5 +9,5 @@ install:
     - pip install -r tests/requirements.txt
 script:
     - tox
-    - pytest --cov=versions
+    - pytest --cov=eevee
 after_success: coveralls

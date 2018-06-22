@@ -1,4 +1,4 @@
-from versions.utils import chunk_iterator
+from eevee.utils import chunk_iterator
 
 
 def test_chunk_iterator_when_iterator_len_equals_chunk_size():

@@ -1,12 +1,12 @@
 import abc
 from datetime import datetime
 
-from versions.config import Config
-from versions.indexing.converters import MongoToElasticsearchConverter
-from versions.indexing.indexers import Indexer
-from versions.indexing.mappers import ElasticsearchMappingDefiner
-from versions.ingestion.converters import RecordToMongoConverter
-from versions.ingestion.ingesters import Ingester
+from eevee.config import Config
+from eevee.indexing.converters import MongoToElasticsearchConverter
+from eevee.indexing.indexers import Indexer
+from eevee.indexing.mappers import ElasticsearchMappingDefiner
+from eevee.ingestion.converters import RecordToMongoConverter
+from eevee.ingestion.ingesters import Ingester
 
 
 class Importer(metaclass=abc.ABCMeta):
