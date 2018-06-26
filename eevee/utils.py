@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+# encoding: utf-8
 
 
 def chunk_iterator(iterator_function, chunk_size=1000):

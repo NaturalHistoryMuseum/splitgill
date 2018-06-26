@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# encoding: utf-8
+
 from pymongo.collection import Collection
 from pymongo.database import Database
 

@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# encoding: utf-8
+
 from datetime import datetime, timedelta
 
 from eevee.versioning import Versioned
