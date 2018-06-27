@@ -81,8 +81,6 @@ class Ingester(Versioned):
             # same record id in case entries in the source are duplicated. Only the first operation against an id is
             # run, the other entries are ignored
             operations = {}
-            insert_count = 0
-            update_count = 0
 
             with get_mongo(self.config, self.config.mongo_database, self.mongo_collection) as mongo:
                 # create a lookup of the current documents in mongo, keyed on their ids
