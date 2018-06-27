@@ -27,6 +27,19 @@ class Ingester(Versioned):
         self.config = config
         self.start = start
 
+    def ensure_mongo_indexes_exist(self):
+        """
+        To improve performance we need some mongo indexes, this function ensures the indexes we want exist. If
+        overriding ensure this function is called as well to avoid potentially lower ingestion/indexing performance.
+        """
+        with get_mongo(self.config, collection=self.mongo_collection) as mongo:
+            # index id for quick access to specific records
+            mongo.create_index('id', unique=True)
+            # index versions for faster searches for records that were updated in specific versions
+            mongo.create_index('versions')
+            # index latest_version for faster searches for records that were last updated in a specific version
+            mongo.create_index('latest_version')
+
     def report_stats(self, insert_count, update_count):
         """
         Reports the statistics of a completed ingestion to both the ingestion stats collection and stdout.
@@ -57,6 +70,9 @@ class Ingester(Versioned):
 
         :return:
         """
+        # make sure the indexes we want exist first
+        self.ensure_mongo_indexes_exist()
+
         insert_count = 0
         update_count = 0
 
