@@ -28,7 +28,7 @@ class RecordToMongoConverter(Versioned):
         :return: a dict
         """
         # convert the record to a dict according to the records requirements
-        converted_record = record.convert(self.version)
+        converted_record = record.convert()
         mongo_doc = {
             'id': record.id,
             # keep a record of when this record was first ingested and last ingested, these are the actual times not
@@ -71,7 +71,7 @@ class RecordToMongoConverter(Versioned):
         pushes = {}
 
         # convert the record to a dict according to the records requirements
-        converted_record = record.convert(self.version)
+        converted_record = record.convert()
 
         if self.version:
             # generate a diff of the new record against the existing version in mongo
