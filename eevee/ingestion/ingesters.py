@@ -76,7 +76,7 @@ class Ingester(Versioned):
         insert_count = 0
         update_count = 0
 
-        for chunk in utils.chunk_iterator(self.feeder.read):
+        for chunk in utils.chunk_iterator(self.feeder.read()):
             # keep a dict of operations so that we can do them in bulk and also avoid attempting to act twice on the
             # same record id in case entries in the source are duplicated. Only the first operation against an id is
             # run, the other entries are ignored

@@ -2,16 +2,16 @@
 # encoding: utf-8
 
 
-def chunk_iterator(iterator_function, chunk_size=1000):
+def chunk_iterator(iterator, chunk_size=1000):
     """
-    Iterates over a iterator function, yielding lists of size chunk_size until the iterator is exhausted.
+    Iterates over an iterator, yielding lists of size chunk_size until the iterator is exhausted.
     The final list could be smaller than chunk_size but will always have a length > 0.
 
-    :param iterator_function:   the iterator to chunk up
-    :param chunk_size:          the maximum size of each yielded chunk
+    :param iterator: the iterator to chunk up
+    :param chunk_size: the maximum size of each yielded chunk
     """
     chunk = []
-    for element in iterator_function:
+    for element in iterator:
         chunk.append(element)
         if len(chunk) == chunk_size:
             yield chunk
