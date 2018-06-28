@@ -9,7 +9,7 @@ URL = 'https://github.com/NaturalHistoryMuseum/eevee'
 EMAIL = 'data@nhm.ac.uk'
 AUTHOR = 'Josh Humphries'
 # TODO: needs to be 2.7.x compatible
-REQUIRES_PYTHON = '>=3.6.0'
+REQUIRES_PYTHON = '>=3.7.0'
 VERSION = '0.1'
 
 with open('requirements.txt', 'r') as req_file:
@@ -32,7 +32,7 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: Implementation :: CPython'
         ]
     )
