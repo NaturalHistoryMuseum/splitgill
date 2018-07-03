@@ -7,3 +7,5 @@ docs/_build
 .tox
 .pytest_cache
 .coverage
+build
+dist
