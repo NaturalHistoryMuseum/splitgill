@@ -40,19 +40,20 @@ class Ingester(Versioned):
             # index latest_version for faster searches for records that were last updated in a specific version
             mongo.create_index('latest_version')
 
-    def report_stats(self, insert_count, update_count):
+    def report_stats(self, mongo_collections, insert_count, update_count):
         """
         Reports the statistics of a completed ingestion to both the ingestion stats collection and stdout.
 
-        :param insert_count:    the number of records added (i.e. new records)
-        :param update_count:    the number of records updated
+        :param mongo_collections: the collections modified in this run, must be a list
+        :param insert_count: the number of records added (i.e. new records)
+        :param update_count: the number of records updated
         """
         with get_mongo(self.config, collection=self.config.mongo_ingestion_stats_collection) as mongo:
             end = datetime.now()
             stats = {
                 'version': self.version,
                 'source': self.feeder.source,
-                'target_collection': self.mongo_collection,
+                'target_collection': mongo_collections,
                 'start': self.start,
                 'end': end,
                 'duration': (end - self.start).total_seconds(),
@@ -108,4 +109,4 @@ class Ingester(Versioned):
                     update_count += bulk_result.modified_count
 
         # report the stats
-        self.report_stats(insert_count, update_count)
+        self.report_stats([self.mongo_collection], insert_count, update_count)
