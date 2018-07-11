@@ -30,6 +30,16 @@ class BaseRecord(Versioned, metaclass=abc.ABCMeta):
         """
         return None
 
+    @property
+    @abc.abstractmethod
+    def mongo_collection(self):
+        """
+        The name of the mongo collection that this record should be inserted into/updated in.
+
+        :return: the name of the mongo collection
+        """
+        return None
+
 
 class Feeder(Versioned, metaclass=abc.ABCMeta):
 
