@@ -48,20 +48,23 @@ class Ingester(Versioned):
 
         :param operations: a dict describing the operations that occurred
         """
-        with get_mongo(self.config, collection=self.config.mongo_ingestion_stats_collection) as mongo:
-            end = datetime.now()
-            stats = {
-                'version': self.version,
-                'source': self.feeder.source,
-                'start': self.start,
-                'end': end,
-                'duration': (end - self.start).total_seconds(),
-                'operations': operations,
-            }
+        # generate a stats dict
+        end = datetime.now()
+        stats = {
+            'version': self.version,
+            'source': self.feeder.source,
+            'start': self.start,
+            'end': end,
+            'duration': (end - self.start).total_seconds(),
+            'operations': operations,
+        }
 
+        # insert the stats dict into the mongo ingestion stats collection
+        with get_mongo(self.config, collection=self.config.mongo_ingestion_stats_collection) as mongo:
             mongo.insert_one(stats)
-            report_line = ", ".join("{}={}".format(key, value) for key, value in stats.items())
-            print(f'Source {self.feeder.source} successfully ingested, details: {report_line}')
+
+        # return the stats dict
+        return stats
 
     def ingest(self):
         """
@@ -115,5 +118,5 @@ class Ingester(Versioned):
                         stats[collection]['inserted'] += bulk_result.inserted_count
                         stats[collection]['updated'] += bulk_result.modified_count
 
-        # report the stats
-        self.report_stats(stats)
+        # report the stats and return the stats dict
+        return self.report_stats(stats)
