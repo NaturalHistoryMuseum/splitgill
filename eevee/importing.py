@@ -5,7 +5,7 @@ import abc
 from datetime import datetime
 
 from eevee.config import Config
-from eevee.indexing.converters import MongoToElasticsearchConverter
+from eevee.indexing.converters import SingleIndexConverter
 from eevee.indexing.indexers import Indexer
 from eevee.indexing.mappers import ElasticsearchMappingDefiner
 from eevee.ingestion.converters import RecordToMongoConverter
@@ -33,7 +33,7 @@ class Importer(metaclass=abc.ABCMeta):
 
     @property
     def mongo_to_elasticsearch_converter(self):
-        return MongoToElasticsearchConverter(self.elasticsearch_index)
+        return SingleIndexConverter(self.elasticsearch_index)
 
     @property
     def elasticsearch_mapping_definer(self):
