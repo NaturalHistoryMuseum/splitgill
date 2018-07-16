@@ -16,6 +16,7 @@ class MongoToElasticsearchConverter(metaclass=abc.ABCMeta):
 
         :param chunk_index_data: a list of IndexData objects
         """
+        self.augment_data(chunk_index_data)
         for index_data in chunk_index_data:
             # note that we don't yield a tuple, we yield twice per single IndexData object
             yield self.create_action(index_data)
@@ -30,6 +31,14 @@ class MongoToElasticsearchConverter(metaclass=abc.ABCMeta):
         :return: the name of the elasticsearch index
         """
         return None
+
+    def augment_data(self, chunk_data_index):
+        """
+        Empty hook function allowing in place modification of the data by subclasses.
+
+        :param chunk_data_index: the list of data index objects
+        """
+        pass
 
     def create_action(self, index_data):
         """
