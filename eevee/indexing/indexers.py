@@ -46,7 +46,7 @@ class Indexer(Versioned):
     """
 
     def __init__(self, version, mongo_collection, elasticsearch_index, config, start, mongo_to_elasticsearch_converter,
-                 elasticsearch_mapping_definer):
+                 elasticsearch_mapping_definer, condition=None):
         """
         :param version: the version to index
         :param mongo_collection: the mongo collection to read the records from
@@ -55,6 +55,7 @@ class Indexer(Versioned):
         :param start: the start time of the import operation (just used for stats)
         :param mongo_to_elasticsearch_converter: the object to convert a mongo document to an elasticsearch document
         :param elasticsearch_mapping_definer: the elasticsearch mapping definer object
+        :param condition: the filter condition which will be passed to mongo when retrieving documents
         """
         super().__init__(version)
         self.version = version
@@ -64,6 +65,7 @@ class Indexer(Versioned):
         self.start = start
         self.converter = mongo_to_elasticsearch_converter
         self.mapper = elasticsearch_mapping_definer
+        self.condition = condition if condition else {}
 
     def report_stats(self, count):
         """
@@ -114,11 +116,8 @@ class Indexer(Versioned):
 
         indexed = 0
         with get_mongo(self.config, self.config.mongo_database, self.mongo_collection) as mongo:
-            # if we have a version, index the data ingested in it, if not index everything again
-            # TODO: what about records that have been removed?
-            condition = {'latest_version': self.version} if self.version else {}
             # loop over all the documents returned by the condition
-            for chunk in utils.chunk_iterator(mongo.find(condition)):
+            for chunk in utils.chunk_iterator(mongo.find(self.condition)):
                 # this list will be populated with a set of commands to index the contents of this chunk
                 commands = []
 
