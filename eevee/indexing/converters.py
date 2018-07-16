@@ -32,11 +32,11 @@ class MongoToElasticsearchConverter(metaclass=abc.ABCMeta):
         """
         return None
 
-    def augment_data(self, chunk_data_index):
+    def augment_data(self, chunk_index_data):
         """
         Empty hook function allowing in place modification of the data by subclasses.
 
-        :param chunk_data_index: the list of data index objects
+        :param chunk_index_data: the list of data index objects
         """
         pass
 
