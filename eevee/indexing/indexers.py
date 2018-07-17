@@ -144,7 +144,7 @@ class Indexer:
 
         with get_mongo(self.config, collection=self.mongo_collection) as mongo:
             # work out the total number of documents we're going to go through and index for monitoring purposes
-            total_records_to_index = mongo.count_documents(self.condition)
+            total_records_to_index = mongo.count(self.condition)
             # keep a count of the number of documents indexed so far
             total_indexed_so_far = 0
 
