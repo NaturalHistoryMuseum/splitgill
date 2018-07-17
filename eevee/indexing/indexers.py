@@ -30,7 +30,12 @@ class Indexer:
         self.config = config
         self.indexes = indexes
         self.condition = condition if condition else {}
+
+        self.monitors = []
         self.start = datetime.now()
+
+    def register_monitor(self, monitor_function):
+        self.monitors.append(monitor_function)
 
     def report_stats(self, operations, latest_version):
         """
@@ -132,9 +137,17 @@ class Indexer:
         stats = defaultdict(Counter)
 
         with get_mongo(self.config, self.mongo_collection) as mongo:
+            # work out the total number of documents we're going to go through and index for monitoring purposes
+            total_records_to_index = mongo.count_documents(self.condition)
+            # keep a count of the number of documents indexed so far
+            total_indexed_so_far = 0
+
             # loop over all the documents returned by the condition
             for chunk in utils.chunk_iterator(mongo.find(self.condition)):
                 for mongo_doc in chunk:
+                    # increment the indexed count
+                    total_indexed_so_far += 1
+
                     # get all the versions of the record
                     versions = mongo_doc['versions']
 
@@ -163,6 +176,10 @@ class Indexer:
 
                 # send the data to elasticsearch for indexing
                 self.send_to_elasticsearch(stats)
+
+                # update the monitoring functions with progress
+                for monitor in self.monitors:
+                    monitor(total_indexed_so_far / total_records_to_index)
 
         # turn the latest version back into a string
         latest_version = str(latest_version)
