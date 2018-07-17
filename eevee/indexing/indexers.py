@@ -59,7 +59,7 @@ class Indexer:
             'duration': (end - self.start).total_seconds(),
             'operations': operations
         }
-        with get_mongo(self.config, self.config.mongo_indexing_stats_collection) as mongo:
+        with get_mongo(self.config, collection=self.config.mongo_indexing_stats_collection) as mongo:
             mongo.insert_one(stats)
         return stats
 
@@ -142,7 +142,7 @@ class Indexer:
         # store for stats about the indexing operations that occur on each index
         stats = defaultdict(Counter)
 
-        with get_mongo(self.config, self.mongo_collection) as mongo:
+        with get_mongo(self.config, collection=self.mongo_collection) as mongo:
             # work out the total number of documents we're going to go through and index for monitoring purposes
             total_records_to_index = mongo.count_documents(self.condition)
             # keep a count of the number of documents indexed so far
