@@ -45,15 +45,15 @@ class Index:
                     'properties': {
                         'versions': {
                             'type': 'date_range',
-                            'format': 'yyyy-MM-dd'
+                            'format': 'epoch_second'
                         },
                         'version': {
                             'type': 'date',
-                            'format': 'yyyy-MM-dd'
+                            'format': 'epoch_second'
                         },
                         'next_version': {
                             'type': 'date',
-                            'format': 'yyyy-MM-dd'
+                            'format': 'epoch_second'
                         }
                     }
                 }
