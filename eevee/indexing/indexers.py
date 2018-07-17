@@ -65,11 +65,26 @@ class Indexer:
 
     def define_mappings(self):
         """
-        Calls on each index to provide a mapping and then sets those mappings in elasticsearch.
+        Calls on each index to provide a mapping and then sets those mappings in elasticsearch, if necessary.
         """
         for index in self.indexes:
-            # TODO: only do this if the index doesn't exist/if we're doing an update
-            requests.put(f'{self.config.elasticsearch_url}/{index.name}', json=index.get_mapping())
+            mapping = index.get_mapping()
+            if mapping:
+                # TODO: only do this if the index doesn't exist/if we're doing an update
+                requests.put(f'{self.config.elasticsearch_url}/{index.name}', json=mapping)
+
+    def update_aliases(self, latest_version):
+        """
+        Update the aliases for each index (if necessary).
+
+        :param latest_version: the latest version that has been indexed
+        """
+        for index in self.indexes:
+            alias_operations = index.get_alias_operations(latest_version)
+            if alias_operations:
+                response = requests.post(f'{self.config.elasticsearch_url}/_aliases', json=alias_operations)
+                # TODO: deal with error
+                response.raise_for_status()
 
     def send_to_elasticsearch(self, stats):
         """
@@ -149,11 +164,9 @@ class Indexer:
                 # send the data to elasticsearch for indexing
                 self.send_to_elasticsearch(stats)
 
+        # turn the latest version back into a string
         latest_version = str(latest_version)
-
         # update the aliases
-        for index in self.indexes:
-            index.update_aliases(latest_version)
-
+        self.update_aliases(latest_version)
         # report the statistics of the indexing operation back into mongo
         return self.report_stats(stats, latest_version)

@@ -60,10 +60,11 @@ class Index:
             }
         }
 
-    def update_aliases(self, latest_version):
+    def get_alias_operations(self, latest_version):
         """
-        Updates the aliases associated with the index. This will by default just remove and recreate the "current" alias
-        which allows easy searching of the current data without knowledge of what the current version is.
+        Returns a set of alias commands which will be used to update the aliases on this index. This will by default
+        just remove and recreate the "current" alias which allows easy searching of the current data without knowledge
+        of what the current version is.
 
         :param latest_version: the latest version of the data that is in the index, this will be used to create the
                                current alias
@@ -75,14 +76,12 @@ class Index:
             }
         }
         # remove and add the alias in one op so that there is no downtime for the "current" alias (it's atomic)
-        body = {
+        return {
             'actions': [
                 {'remove': {'index': self.name, 'alias': alias_name}},
                 {'add': {'index': self.name, 'alias': alias_name, 'filter': alias_filter}}
             ]
         }
-        response = requests.post(f'{self.config.elasticsearch_url}/_aliases', json=body)
-        response.raise_for_status()
 
     def get_bulk_commands(self):
         """
