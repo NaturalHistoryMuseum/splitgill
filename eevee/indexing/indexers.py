@@ -35,6 +35,12 @@ class Indexer:
         self.start = datetime.now()
 
     def register_monitor(self, monitor_function):
+        """
+        Register a monitoring function with the indexer which receive updates after each chunk is indexed. The function
+        should take a single parameter, a percentage complete so far represented as a decimal value between 0 and 1.
+
+        :param monitor_function: the function to be called during indexing with details for monitoring
+        """
         self.monitors.append(monitor_function)
 
     def report_stats(self, operations, latest_version):
