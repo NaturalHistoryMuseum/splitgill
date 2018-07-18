@@ -30,3 +30,15 @@ def version_critical(func):
     :return: the function, this decorator performs no actions
     """
     return func
+
+
+def to_timestamp(moment):
+    """
+    Converts a datetime into a timestamp value. The timestamp returned is an int. The timestamp value is the number of
+    milliseconds that have elapsed between the UNIX epoch and the given moment.
+
+    :param moment: a datetime object
+    :return: the timestamp (number of milliseconds between the UNIX epoch and the moment) as an int
+    """
+    # multiply by 1000 to get the time in milliseconds and use int to remove any decimal places
+    return int(moment.timestamp() * 1000)

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # encoding: utf-8
+from datetime import datetime, timezone
 
-from eevee.utils import chunk_iterator
+from eevee.utils import chunk_iterator, to_timestamp
 
 
 def test_chunk_iterator_when_iterator_len_equals_chunk_size():
@@ -53,3 +54,10 @@ def test_chunk_iterator_when_iterator_is_empty():
     chunks = list(chunk_iterator(iterator, chunk_size=10))
 
     assert len(chunks) == 0
+
+
+def test_to_timestamp():
+    # check that dates are treated as utc
+    assert to_timestamp(datetime.strptime('19700101', '%Y%m%d').replace(tzinfo=timezone.utc)) == 0
+    # check a later date too
+    assert to_timestamp(datetime.strptime('20180713', '%Y%m%d').replace(tzinfo=timezone.utc)) == 1531440000000

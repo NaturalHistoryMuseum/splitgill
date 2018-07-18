@@ -157,8 +157,8 @@ class Indexer:
                     # get all the versions of the record
                     versions = mongo_doc['versions']
 
-                    # update the latest version, convert each version to an int to ensure correct numerical comparison
-                    chunk_latest_version = max(map(int, versions))
+                    # update the latest version
+                    chunk_latest_version = max(versions)
                     if not latest_version or latest_version < chunk_latest_version:
                         latest_version = chunk_latest_version
 
@@ -172,10 +172,11 @@ class Indexer:
                         # iterate over the versions in pairs. The second part of the final pair will always be None to
                         # indicate there is no "next_version" as the "version" is the current one
                         for version, next_version in zip(versions, chain(versions[1:], [None])):
+                            diff = mongo_doc['diffs'].get(str(version), None)
                             # sanity check
-                            if version in mongo_doc['diffs']:
+                            if diff:
                                 # update the data dict with the diff
-                                dictdiffer.patch(mongo_doc['diffs'][version], data, in_place=True)
+                                dictdiffer.patch(diff, data, in_place=True)
                                 # assign the data to an index. Note that we pass a deep copy of the data object through
                                 # to avoid any nasty side effects if it is modified later
                                 self.assign_to_index(IndexData(mongo_doc, copy.deepcopy(data), version, next_version))
@@ -187,8 +188,6 @@ class Indexer:
                 for monitor in self.monitors:
                     monitor(total_indexed_so_far / total_records_to_index)
 
-        # turn the latest version back into a string
-        latest_version = str(latest_version)
         # update the aliases
         self.update_aliases(latest_version)
         # report the statistics of the indexing operation back into mongo

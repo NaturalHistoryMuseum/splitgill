@@ -1,6 +1,3 @@
-import requests
-
-
 class Index:
 
     def __init__(self, config, name):
@@ -37,25 +34,41 @@ class Index:
 
         :return: a dict
         """
-        # TODO: which date format should we use?
         # TODO: handle geolocations
         return {
             'mappings': {
                 '_doc': {
                     'properties': {
-                        'versions': {
+                        'meta.versions': {
                             'type': 'date_range',
-                            'format': 'epoch_second'
+                            'format': 'epoch_millis'
                         },
-                        'version': {
+                        'meta.version': {
                             'type': 'date',
-                            'format': 'epoch_second'
+                            'format': 'epoch_millis'
                         },
-                        'next_version': {
+                        'meta.next_version': {
                             'type': 'date',
-                            'format': 'epoch_second'
+                            'format': 'epoch_millis'
+                        },
+                        # the values of each field will be copied into this field easy querying
+                        "meta.all": {
+                            "type": "text"
                         }
-                    }
+                    },
+                    'dynamic_templates': [
+                        {
+                            # we want to be able to filter by all fields so we need to use keywords for everything and
+                            # then copy the values to an text type "all" field which is then used for free querying
+                            "create_all_and_force_keyword": {
+                                "path_match": "data.*",
+                                "mapping": {
+                                    "type": "keyword",
+                                    "copy_to": "meta.all",
+                                }
+                            }
+                        }
+                    ]
                 }
             }
         }
@@ -72,7 +85,7 @@ class Index:
         alias_name = f'{self.config.elasticsearch_current_alias_prefix}{self.name}'
         alias_filter = {
             'term': {
-                'versions': latest_version
+                'meta.versions': latest_version
             }
         }
         # remove and add the alias in one op so that there is no downtime for the "current" alias (it's atomic)
@@ -123,7 +136,6 @@ class Index:
         :param index_data: the IndexData object
         :return: a dictionary
         """
-        # TODO: decide if this is the best way to structure the index document
         return {
             'data': self.create_data(index_data),
             'meta': self.create_metadata(index_data),

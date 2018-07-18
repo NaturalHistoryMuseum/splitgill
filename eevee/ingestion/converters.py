@@ -51,8 +51,9 @@ class RecordToMongoConverter(Versioned):
                 'latest_version': self.version,
                 # sorted list of versions, with the oldest first, newest last
                 'versions': [self.version],
-                # a dict of the incremental changes made by each version
-                'diffs': {self.version: list(dictdiffer.diff({}, converted_record))},
+                # a dict of the incremental changes made by each version, note that the integer version is converted to
+                # a string here because mongo can't handle non-string keys
+                'diffs': {str(self.version): list(dictdiffer.diff({}, converted_record))},
                 # deletes list
                 'deletes': []
             })

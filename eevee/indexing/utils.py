@@ -57,21 +57,25 @@ def get_data_at_version(mongo_doc, target_version):
     older than the first version of the data then an empty dictionary is returned.
 
     :param mongo_doc: the document from mongo
-    :param target_version: the version we want, this should be a timestamp in seconds from the UNIX epoch
+    :param target_version: the version we want, this should be an integer timestamp in milliseconds from the UNIX epoch
     :return: a dictionary of the data at the given target version
     """
     # this variable will hold the actual data of the record and will be updated with the diffs as we
     # go through them. It is important, therefore, that it starts off as an empty dict because this
     # is the starting point assumed by the ingestion code when creating a records first diff
     data = {}
-    # iterate over the versions in pairs. The second part of the final pair will always be None to
-    # indicate there is no "next_version" as the "version" is the current one
+    # iterate over the versions
     for version in mongo_doc['versions']:
+        # retrieve the diff (if there is one). Note the use of a string version.
+        diff = mongo_doc['diffs'].get(str(version), None)
         # sanity check
-        if version in mongo_doc['diffs']:
+        if diff:
             # compare the versions in int form otherwise lexical ordering will be used
-            if int(target_version) < int(version):
+            if target_version < version:
                 return data
             # update the data dict with the diff
-            dictdiffer.patch(mongo_doc['diffs'][version], data, in_place=True)
+            dictdiffer.patch(diff, data, in_place=True)
+
+    # if we get here the target version is beyond the latest version of this record and therefore we can return the data
+    # dict we've built
     return data
