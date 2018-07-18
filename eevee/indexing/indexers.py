@@ -68,11 +68,11 @@ class Indexer:
         Searches through the available indexes until one will accept the given index data. When one does, the data is
         assigned to that index.
 
+        If the data isn't assigned to an index then it is just ignored as this is not a problem.
+
         :param index_data: the IndexData object
         """
-        if not any(index.assign(index_data) for index in self.indexes):
-            # TODO: what to do if the data isn't matched to an index?
-            pass
+        any(index.assign(index_data) for index in self.indexes)
 
     def define_mappings(self):
         """
