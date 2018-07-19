@@ -2,6 +2,7 @@
 # encoding: utf-8
 
 import copy
+import itertools
 from collections import Counter, defaultdict
 from datetime import datetime
 from itertools import chain
@@ -63,16 +64,17 @@ class Indexer:
             mongo.insert_one(stats)
         return stats
 
-    def assign_to_index(self, index_data):
+    def assign_to_index(self, groups, index_data):
         """
-        Searches through the available indexes until one will accept the given index data. When one does, the data is
+        Searches through the groups provided until one will accept the given index data. When one does, the data is
         assigned to that index.
 
-        If the data isn't assigned to an index then it is just ignored as this is not a problem.
+        If the data isn't assigned to a group then it is just ignored as this is not a problem.
 
+        :param groups: the groups to attempt to assign the data to
         :param index_data: the IndexData object
         """
-        any(index.assign(index_data) for index in self.indexes)
+        any(group.assign(index_data) for group in groups)
 
     def define_mappings(self):
         """
@@ -97,20 +99,19 @@ class Indexer:
                 # TODO: deal with error
                 response.raise_for_status()
 
-    def send_to_elasticsearch(self, stats):
+    def send_to_elasticsearch(self, groups, stats):
         """
         Sends the data in each index object to elasticsearch and updates the passed stats object with the results. Note
         that this function just sends the data for a chunk of data stored in the indexes in self.indexes.
 
+        :param groups: the groups which hold the data that should be sent to elasticsearch
         :param stats: the stats object, which by default is a defaultdict of counters
         """
         # create all the commands necessary to index the data
         commands = []
-        for index in self.indexes:
+        for group in groups:
             # get the commands from the index
-            commands.extend(index.get_bulk_commands())
-            # now that we've yielded the commands for the group data on the index, reset it for the next chunk
-            index.reset()
+            commands.extend(itertools.chain.from_iterable(group.get_bulk_commands()))
 
         if commands:
             # use the special content-type required by elasticsearch
@@ -150,6 +151,9 @@ class Indexer:
 
             # loop over all the documents returned by the condition
             for chunk in utils.chunk_iterator(mongo.find(self.condition)):
+                # get a new bunch of groups
+                groups = [index.get_new_group() for index in self.indexes]
+
                 for mongo_doc in chunk:
                     # increment the indexed count
                     total_indexed_so_far += 1
@@ -163,7 +167,7 @@ class Indexer:
                         latest_version = chunk_latest_version
 
                     if not versions:
-                        self.assign_to_index(IndexData(mongo_doc, mongo_doc['data']))
+                        self.assign_to_index(groups, IndexData(mongo_doc, mongo_doc['data']))
                     else:
                         # this variable will hold the actual data of the record and will be updated with the diffs as we
                         # go through them. It is important, therefore, that it starts off as an empty dict because this
@@ -179,10 +183,11 @@ class Indexer:
                                 dictdiffer.patch(diff, data, in_place=True)
                                 # assign the data to an index. Note that we pass a deep copy of the data object through
                                 # to avoid any nasty side effects if it is modified later
-                                self.assign_to_index(IndexData(mongo_doc, copy.deepcopy(data), version, next_version))
+                                index_data = IndexData(mongo_doc, copy.deepcopy(data), version, next_version)
+                                self.assign_to_index(groups, index_data)
 
                 # send the data to elasticsearch for indexing
-                self.send_to_elasticsearch(stats)
+                self.send_to_elasticsearch(groups, stats)
 
                 # update the monitoring functions with progress
                 for monitor in self.monitors:

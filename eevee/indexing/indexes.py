@@ -1,32 +1,115 @@
+import abc
+
+
+class IndexGroup(metaclass=abc.ABCMeta):
+    """
+    Represents a group of data which should be added to a specific index. There is no meaning to the grouping, merely
+    a side effect of chunking to avoid being a memory hog but the requirement to allow subclasses to use the data in
+    chunks so that any further calls to mongo or any other service can be chunked.
+    """
+
+    def __init__(self, index):
+        """
+        :param index: the index object this group is associated with
+        """
+        self.index = index
+
+    @abc.abstractmethod
+    def assign(self, index_data):
+        """
+        Assigns the index_data object to this group. This function should return a boolean value to indicate whether the
+        value was accepted into the group or not (True indicates it was, False that it was not).
+
+        :param index_data: the IndexData object to assign
+        :return: True if the index_data parameter was added to this group, False if not
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_bulk_commands(self):
+        """
+        Yields the bulk commands necessary to index each data item in the group into elasticsearch. The commands should
+        be yielded as tuples - (action, data).
+        """
+        pass
+
+    def create_action(self, index_data):
+        """
+        Creates a dictionary containing the action information for elasticsearch. This tells elasticsearch what to do,
+        i.e. index, delete, create etc.
+
+        :param index_data: the IndexData object
+        :return: a dictionary
+        """
+        if index_data.version:
+            # create an id for the document which is unique by using the record id and the version
+            index_doc_id = f'{index_data.record_id}:{index_data.version}'
+        else:
+            # just use the record id when we have no version
+            index_doc_id = index_data.record_id
+        # build and return the dictionary. Note that the document type is fixed as _doc as this parameter is no longer
+        # used and will be removed in future versions of elasticsearch
+        return {
+            'index': {
+                '_id': index_doc_id,
+                '_type': '_doc',
+                '_index': self.index.name,
+            }
+        }
+
+    def create_index_document(self, index_data):
+        """
+        Creates the index dictionary for elasticsearch. This contains the actual data to be indexed.
+
+        :param index_data: the IndexData object
+        :return: a dictionary
+        """
+        return {
+            'data': self.create_data(index_data),
+            'meta': self.create_metadata(index_data),
+        }
+
+    def create_data(self, index_data):
+        """
+        Returns the data to be indexed in elasticsearch.
+
+        :param index_data: the IndexData object
+        :return: a dictionary of the actual data that will be indexed in elasticsearch
+        """
+        return index_data.data
+
+    def create_metadata(self, index_data):
+        """
+        Returns a dictionary of metadata to be stored in elasticsearch along with the data.
+
+        :param index_data: the IndexData object
+        :return: a dictionary of metadata information
+        """
+        metadata = {
+            'versions': {
+                'gte': index_data.version,
+            },
+            'version': index_data.version,
+        }
+        if index_data.next_version:
+            metadata['versions']['lt'] = index_data.next_version
+            metadata['next_version'] = index_data.next_version
+        return metadata
+
+
 class Index:
 
-    def __init__(self, config, name):
+    def __init__(self, config, name, index_group_factory):
         """
         :param config: the config object
         :param name: the elasticsearch index name that the data held in this object will be indexed into
         """
         self.config = config
         self.name = name
-        self.group = []
+        self.index_group_factory = index_group_factory
 
-    def reset(self):
-        """
-        Resets this indexes' current group data ready for the next chunk.
-        """
-        self.group = []
-
-    def assign(self, index_data):
-        """
-        Adds the index_data object to the group list, but only if it should be added. The default function just adds the
-        data without performing any filtering and therefore subclasses should override this function to provide their
-        own filtering. If the passed index_data should not be included in the group it should not be added to the group
-        list and False should be returned.
-
-        :param index_data: the IndexData object to check for assignment
-        :return: True if the index_data parameter was added to this group, False if not
-        """
-        self.group.append(index_data)
-        return True
+    def get_new_group(self):
+        return self.index_group_factory(self)
 
     def get_mapping(self):
         """
@@ -96,74 +179,26 @@ class Index:
             ]
         }
 
+
+class SimpleIndexGroup(IndexGroup):
+    """
+    Simple example subclass of the IndexGroup class.
+    """
+
+    def __init__(self, index):
+        super().__init__(index)
+        self.group = []
+
+    def assign(self, index_data):
+        """
+        Accept everything.
+        """
+        self.group.append(index_data)
+        return True
+
     def get_bulk_commands(self):
         """
-        Yields the bulk commands necessary to index each data item in the group.
+        Simply yield the action and data dicts as a tuple, no extra work is undertaken.
         """
         for index_data in self.group:
-            # note that we don't yield a tuple, we yield twice per single IndexData object
-            yield self.create_action(index_data)
-            yield self.create_index_document(index_data)
-
-    def create_action(self, index_data):
-        """
-        Creates a dictionary containing the action information for elasticsearch. This tells elasticsearch what to do,
-        i.e. index, delete, create etc
-
-        :param index_data: the IndexData object
-        :return: a dictionary
-        """
-        if index_data.version:
-            # create an id for the document which is unique by using the record id and the version
-            index_doc_id = f'{index_data.record_id}:{index_data.version}'
-        else:
-            # just use the record id when we have no version
-            index_doc_id = index_data.record_id
-        # build and return the dictionary. Note that the document type is fixed as _doc as this parameter is no longer
-        # used and will be removed in future versions of elasticsearch
-        return {
-            'index': {
-                '_id': index_doc_id,
-                '_type': '_doc',
-                '_index': self.name,
-            }
-        }
-
-    def create_index_document(self, index_data):
-        """
-        Creates the index dictionary for elasticsearch. This contains the actual data to be indexed.
-
-        :param index_data: the IndexData object
-        :return: a dictionary
-        """
-        return {
-            'data': self.create_data(index_data),
-            'meta': self.create_metadata(index_data),
-        }
-
-    def create_data(self, index_data):
-        """
-        Returns the data to be indexed in elasticsearch.
-
-        :param index_data: the IndexData object
-        :return: a dictionary of the actual data that will be indexed in elasticsearch
-        """
-        return index_data.data
-
-    def create_metadata(self, index_data):
-        """
-        Returns a dictionary of metadata to be stored in elasticsearch along with the data.
-
-        :param index_data: the IndexData object
-        :return: a dictionary of metadata information
-        """
-        metadata = {
-            'versions': {
-                'gte': index_data.version,
-            },
-            'version': index_data.version,
-        }
-        if index_data.next_version:
-            metadata['versions']['lt'] = index_data.next_version
-            metadata['next_version'] = index_data.next_version
-        return metadata
+            yield self.create_action(index_data), self.create_index_document(index_data)
