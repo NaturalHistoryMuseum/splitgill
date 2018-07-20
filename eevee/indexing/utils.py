@@ -1,27 +1,60 @@
+import copy
+import itertools
 import json
 from datetime import datetime
 
 import dictdiffer
 
 
-class IndexData:
-    """
-    Class containing information about what should be indexed for a specific version of a record.
-    """
+class VersionedRecord:
 
-    def __init__(self, mongo_doc, data, version=None, next_version=None):
+    def __init__(self, mongo_doc):
         """
         :param mongo_doc: the original (whole) mongo document
-        :param data: the dictionary of data that should be indexed
-        :param version: the version of the data
-        :param next_version: the version that the data is valid until
         """
         self.mongo_doc = mongo_doc
+
+    @property
+    def id(self):
+        return self.mongo_doc['id']
+
+    @property
+    def versions(self):
+        return self.mongo_doc['versions']
+
+    @property
+    def diffs(self):
+        return self.mongo_doc['diffs']
+
+    def get_data(self):
+        if not self.versions:
+            # TODO: sort out "versionless" data
+            yield IndexData(self.id, copy.deepcopy(self.mongo_doc['data']))
+        else:
+            # this variable will hold the actual data of the record and will be updated with the diffs as we
+            # go through them. It is important, therefore, that it starts off as an empty dict because this
+            # is the starting point assumed by the ingestion code when creating a records first diff
+            data = {}
+            # iterate over the versions in pairs. The second part of the final pair will always be None to
+            # indicate there is no "next_version" as the "version" is the current one
+            for version, next_version in zip(self.versions, itertools.chain(self.versions[1:], [None])):
+                diff = self.diffs.get(str(version), None)
+                # sanity check
+                if diff:
+                    # update the data dict with the diff
+                    dictdiffer.patch(diff, data, in_place=True)
+                    # note that we use a deep copy of the data object to avoid any confusing side effects if it is
+                    # modified later
+                    yield IndexData(self.id, copy.deepcopy(data), version, next_version)
+
+
+class IndexData:
+
+    def __init__(self, record_id, data, version=None, next_version=None):
+        self.record_id = record_id
         self.data = data
         self.version = version
         self.next_version = next_version
-        # extract the record id for convenient access
-        self.record_id = mongo_doc['id']
 
 
 def non_standard_type_converter(data):

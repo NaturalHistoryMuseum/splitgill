@@ -15,13 +15,13 @@ class IndexGroup(metaclass=abc.ABCMeta):
         self.index = index
 
     @abc.abstractmethod
-    def assign(self, index_data):
+    def assign(self, versioned_record):
         """
-        Assigns the index_data object to this group. This function should return a boolean value to indicate whether the
-        value was accepted into the group or not (True indicates it was, False that it was not).
+        Assigns the versioned_record object to this group. This function should return a boolean value to indicate
+        whether the value was accepted into the group or not (True indicates it was, False that it was not).
 
-        :param index_data: the IndexData object to assign
-        :return: True if the index_data parameter was added to this group, False if not
+        :param versioned_record: the VersionedRecord object to assign
+        :return: True if the versioned_record parameter was added to this group, False if not
         """
         pass
 
@@ -167,8 +167,10 @@ class Index:
         """
         alias_name = f'{self.config.elasticsearch_current_alias_prefix}{self.name}'
         alias_filter = {
-            'term': {
-                'meta.versions': latest_version
+            "bool": {
+                "filter": [
+                    {"term": {"meta.versions": latest_version}},
+                ]
             }
         }
         # remove and add the alias in one op so that there is no downtime for the "current" alias (it's atomic)
@@ -189,11 +191,11 @@ class SimpleIndexGroup(IndexGroup):
         super().__init__(index)
         self.group = []
 
-    def assign(self, index_data):
+    def assign(self, versioned_record):
         """
         Accept everything.
         """
-        self.group.append(index_data)
+        self.group.extend(versioned_record.get_data())
         return True
 
     def get_bulk_commands(self):

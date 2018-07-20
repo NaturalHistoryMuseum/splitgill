@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
 # encoding: utf-8
 
-import copy
 import itertools
 from collections import Counter, defaultdict
 from datetime import datetime
-from itertools import chain
 
-import dictdiffer
 import requests
 
 from eevee import utils
-from eevee.indexing.utils import IndexData, serialise_for_elasticsearch
+from eevee.indexing.utils import serialise_for_elasticsearch, VersionedRecord
 from eevee.mongo import get_mongo
 
 
@@ -64,7 +61,7 @@ class Indexer:
             mongo.insert_one(stats)
         return stats
 
-    def assign_to_index(self, groups, index_data):
+    def assign_to_index(self, groups, versioned_record):
         """
         Searches through the groups provided until one will accept the given index data. When one does, the data is
         assigned to that index.
@@ -72,9 +69,9 @@ class Indexer:
         If the data isn't assigned to a group then it is just ignored as this is not a problem.
 
         :param groups: the groups to attempt to assign the data to
-        :param index_data: the IndexData object
+        :param versioned_record: the VersionedRecord object
         """
-        any(group.assign(index_data) for group in groups)
+        any(group.assign(versioned_record) for group in groups)
 
     def define_mappings(self):
         """
@@ -136,10 +133,8 @@ class Indexer:
         Indexes a specific version of a set of records from mongo into Elasticsearch.
         """
         self.define_mappings()
-
         # keep a record of the latest version seen as this will be used to update the current version alias
         latest_version = None
-
         # store for stats about the indexing operations that occur on each index
         stats = defaultdict(Counter)
 
@@ -157,38 +152,17 @@ class Indexer:
                 for mongo_doc in chunk:
                     # increment the indexed count
                     total_indexed_so_far += 1
-
-                    # get all the versions of the record
-                    versions = mongo_doc['versions']
-
+                    # create a versioned record object to store all the data pieces together
+                    versioned_record = VersionedRecord(mongo_doc)
                     # update the latest version
-                    chunk_latest_version = max(versions)
+                    chunk_latest_version = max(versioned_record.versions)
                     if not latest_version or latest_version < chunk_latest_version:
                         latest_version = chunk_latest_version
-
-                    if not versions:
-                        self.assign_to_index(groups, IndexData(mongo_doc, mongo_doc['data']))
-                    else:
-                        # this variable will hold the actual data of the record and will be updated with the diffs as we
-                        # go through them. It is important, therefore, that it starts off as an empty dict because this
-                        # is the starting point assumed by the ingestion code when creating a records first diff
-                        data = {}
-                        # iterate over the versions in pairs. The second part of the final pair will always be None to
-                        # indicate there is no "next_version" as the "version" is the current one
-                        for version, next_version in zip(versions, chain(versions[1:], [None])):
-                            diff = mongo_doc['diffs'].get(str(version), None)
-                            # sanity check
-                            if diff:
-                                # update the data dict with the diff
-                                dictdiffer.patch(diff, data, in_place=True)
-                                # assign the data to an index. Note that we pass a deep copy of the data object through
-                                # to avoid any nasty side effects if it is modified later
-                                index_data = IndexData(mongo_doc, copy.deepcopy(data), version, next_version)
-                                self.assign_to_index(groups, index_data)
+                    # assign the record to an index
+                    self.assign_to_index(groups, versioned_record)
 
                 # send the data to elasticsearch for indexing
                 self.send_to_elasticsearch(groups, stats)
-
                 # update the monitoring functions with progress
                 for monitor in self.monitors:
                     monitor(total_indexed_so_far / total_records_to_index)
