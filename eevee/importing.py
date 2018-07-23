@@ -6,7 +6,7 @@ from datetime import datetime
 
 from eevee.config import Config
 from eevee.indexing.indexers import Indexer
-from eevee.indexing.indexes import Index, SimpleIndexGroup
+from eevee.indexing.indexes import Index
 from eevee.ingestion.converters import RecordToMongoConverter
 from eevee.ingestion.ingesters import Ingester
 
@@ -32,7 +32,7 @@ class Importer(metaclass=abc.ABCMeta):
 
     @property
     def elasticsearch_indexes(self):
-        return [Index(self.config, self.elasticsearch_index, SimpleIndexGroup)]
+        return [Index(self.config, self.elasticsearch_index)]
 
     def ingest(self):
         ingester = Ingester(self.version, self.feeder, self.record_to_mongo_converter, self.config, self.start)

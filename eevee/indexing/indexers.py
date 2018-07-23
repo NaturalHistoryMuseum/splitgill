@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 # encoding: utf-8
-
+import copy
 import itertools
 from collections import Counter, defaultdict
 from datetime import datetime
 
-import requests
+import dictdiffer
 
 from eevee import utils
-from eevee.indexing.utils import serialise_for_elasticsearch, VersionedRecord
+from eevee.indexing import elasticsearch
+from eevee.indexing.utils import DataToIndex
 from eevee.mongo import get_mongo
 
 
@@ -17,17 +18,19 @@ class Indexer:
     Class encapsulating the functionality required to index records.
     """
 
-    def __init__(self, config, mongo_collection, indexes, condition=None):
+    def __init__(self, config, mongo_collection, indexes, condition=None, mongo_chunk_size=1000):
         """
         :param config: the config object
         :param mongo_collection: the mongo collection to read the records from
         :param indexes: the indexes that the mongo collection will be indexed into
         :param condition: the filter condition which will be passed to mongo when retrieving documents
+        :param mongo_chunk_size: the number of documents to retrieve per chunk
         """
         self.mongo_collection = mongo_collection
         self.config = config
         self.indexes = indexes
         self.condition = condition if condition else {}
+        self.mongo_chunk_size = mongo_chunk_size
 
         self.monitors = []
         self.start = datetime.now()
@@ -61,68 +64,23 @@ class Indexer:
             mongo.insert_one(stats)
         return stats
 
-    def assign_to_index(self, groups, versioned_record):
+    def send_to_elasticsearch(self, data_to_index_chunk, stats):
         """
-        Searches through the groups provided until one will accept the given index data. When one does, the data is
-        assigned to that index.
+        Uses the indexes to convert the passed chunk into commands which will be sent to elasticsearch. The passed stats
+        object is updated with the results.
 
-        If the data isn't assigned to a group then it is just ignored as this is not a problem.
-
-        :param groups: the groups to attempt to assign the data to
-        :param versioned_record: the VersionedRecord object
-        """
-        any(group.assign(versioned_record) for group in groups)
-
-    def define_mappings(self):
-        """
-        Calls on each index to provide a mapping and then sets those mappings in elasticsearch, if necessary.
-        """
-        for index in self.indexes:
-            mapping = index.get_mapping()
-            if mapping:
-                # TODO: only do this if the index doesn't exist/if we're doing an update
-                requests.put(f'{self.config.elasticsearch_url}/{index.name}', json=mapping)
-
-    def update_aliases(self, latest_version):
-        """
-        Update the aliases for each index (if necessary).
-
-        :param latest_version: the latest version that has been indexed
-        """
-        for index in self.indexes:
-            alias_operations = index.get_alias_operations(latest_version)
-            if alias_operations:
-                response = requests.post(f'{self.config.elasticsearch_url}/_aliases', json=alias_operations)
-                # TODO: deal with error
-                response.raise_for_status()
-
-    def send_to_elasticsearch(self, groups, stats):
-        """
-        Sends the data in each index object to elasticsearch and updates the passed stats object with the results. Note
-        that this function just sends the data for a chunk of data stored in the indexes in self.indexes.
-
-        :param groups: the groups which hold the data that should be sent to elasticsearch
+        :param data_to_index_chunk: the chunk of data to index in elasticsearch
         :param stats: the stats object, which by default is a defaultdict of counters
         """
         # create all the commands necessary to index the data
         commands = []
-        for group in groups:
+        for index in self.indexes:
             # get the commands from the index
-            commands.extend(itertools.chain.from_iterable(group.get_bulk_commands()))
+            commands.extend(itertools.chain.from_iterable(index.get_bulk_commands(data_to_index_chunk)))
 
-        if commands:
-            # use the special content-type required by elasticsearch
-            headers = {'Content-Type': 'application/x-ndjson'}
-            # format the commands as required by elasticsearch
-            data = '\n'.join(map(serialise_for_elasticsearch, commands))
-            # there must be a new line at the end of the command list
-            data += '\n'
-            # send the commands to elasticsearch
-            r = requests.post(f'{self.config.elasticsearch_url}/_bulk', headers=headers, data=data)
-            # TODO: handle errors?
-            r.raise_for_status()
+        for response in elasticsearch.send_bulk_index(self.config, commands):
             # extract stats from the elasticsearch response
-            for action_response in r.json()['items']:
+            for action_response in response.json()['items']:
                 # each item in the items list is a dict with a single key and value, we're interested in the value
                 info = next(iter(action_response.values()))
                 # update the stats
@@ -130,9 +88,11 @@ class Indexer:
 
     def index(self):
         """
-        Indexes a specific version of a set of records from mongo into Elasticsearch.
+        Indexes a set of records from mongo into elasticsearch.
         """
+        # define the mappings first
         self.define_mappings()
+
         # keep a record of the latest version seen as this will be used to update the current version alias
         latest_version = None
         # store for stats about the indexing operations that occur on each index
@@ -145,24 +105,41 @@ class Indexer:
             total_indexed_so_far = 0
 
             # loop over all the documents returned by the condition
-            for chunk in utils.chunk_iterator(mongo.find(self.condition)):
-                # get a new bunch of groups
-                groups = [index.get_new_group() for index in self.indexes]
+            for chunk in utils.chunk_iterator(mongo.find(self.condition), chunk_size=self.mongo_chunk_size):
+                data_to_index_chunk = []
 
                 for mongo_doc in chunk:
-                    # increment the indexed count
                     total_indexed_so_far += 1
-                    # create a versioned record object to store all the data pieces together
-                    versioned_record = VersionedRecord(mongo_doc)
+                    data_to_index = DataToIndex(mongo_doc)
+                    versions = mongo_doc['versions']
+
                     # update the latest version
-                    chunk_latest_version = max(versioned_record.versions)
+                    chunk_latest_version = max(versions)
                     if not latest_version or latest_version < chunk_latest_version:
                         latest_version = chunk_latest_version
-                    # assign the record to an index
-                    self.assign_to_index(groups, versioned_record)
+
+                    if not versions:
+                        # TODO: sort out "versionless" data
+                        data_to_index.add(mongo_doc['data'])
+                    else:
+                        # this variable will hold the actual data of the record and will be updated with the diffs as we
+                        # go through them. It is important, therefore, that it starts off as an empty dict because this
+                        # is the starting point assumed by the ingestion code when creating a records first diff
+                        data = {}
+                        for version in versions:
+                            diff = mongo_doc['diffs'].get(str(version), None)
+                            # sanity check
+                            if diff:
+                                # update the data dict with the diff
+                                dictdiffer.patch(diff, data, in_place=True)
+                                # note that we use a deep copy of the data object to avoid any confusing side effects if
+                                # it is modified later
+                                data_to_index.add(copy.deepcopy(data), version)
+
+                    data_to_index_chunk.append(data_to_index)
 
                 # send the data to elasticsearch for indexing
-                self.send_to_elasticsearch(groups, stats)
+                self.send_to_elasticsearch(data_to_index_chunk, stats)
                 # update the monitoring functions with progress
                 for monitor in self.monitors:
                     monitor(total_indexed_so_far / total_records_to_index)
@@ -171,3 +148,19 @@ class Indexer:
         self.update_aliases(latest_version)
         # report the statistics of the indexing operation back into mongo
         return self.report_stats(stats, latest_version)
+
+    def define_mappings(self):
+        """
+        Run through the indexes and retrieve their mappings then send them to elasticsearch.
+        """
+        for index in self.indexes:
+            elasticsearch.send_mapping(self.config, index.name, index.get_mapping())
+
+    def update_aliases(self, latest_version):
+        """
+        Run through the indexes and retrieve the alias operations then send them to elasticsearch.
+
+        :param latest_version: the latest version from the data indexed
+        """
+        for index in self.indexes:
+            elasticsearch.send_aliases(self.config, index.get_alias_operations(latest_version))

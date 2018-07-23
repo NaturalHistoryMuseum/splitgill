@@ -1,86 +1,52 @@
-import copy
-import itertools
-import json
-from datetime import datetime
+from collections import OrderedDict
 
 import dictdiffer
 
 
-class VersionedRecord:
+class DataToIndex:
+    """
+    Stores the data points for a record.
+    """
 
     def __init__(self, mongo_doc):
-        """
-        :param mongo_doc: the original (whole) mongo document
-        """
         self.mongo_doc = mongo_doc
+        # store the data in an ordered dict so that we can maintain the order of the data
+        self.data = OrderedDict()
 
     @property
     def id(self):
+        """
+        Convenience property for accessing the id of the record.
+        :return: the id of the record
+        """
         return self.mongo_doc['id']
 
     @property
     def versions(self):
-        return self.mongo_doc['versions']
+        """
+        Convenience property which returns the versions available in order (oldest first).
+        :return: the versions in order
+        """
+        return self.data.keys()
 
-    @property
-    def diffs(self):
-        return self.mongo_doc['diffs']
+    def get_data(self, version):
+        """
+        Convenience function for access to the data at a specific version from the data dict.
 
-    def get_data(self):
-        if not self.versions:
-            # TODO: sort out "versionless" data
-            yield IndexData(self.id, copy.deepcopy(self.mongo_doc['data']))
-        else:
-            # this variable will hold the actual data of the record and will be updated with the diffs as we
-            # go through them. It is important, therefore, that it starts off as an empty dict because this
-            # is the starting point assumed by the ingestion code when creating a records first diff
-            data = {}
-            # iterate over the versions in pairs. The second part of the final pair will always be None to
-            # indicate there is no "next_version" as the "version" is the current one
-            for version, next_version in zip(self.versions, itertools.chain(self.versions[1:], [None])):
-                diff = self.diffs.get(str(version), None)
-                # sanity check
-                if diff:
-                    # update the data dict with the diff
-                    dictdiffer.patch(diff, data, in_place=True)
-                    # note that we use a deep copy of the data object to avoid any confusing side effects if it is
-                    # modified later
-                    yield IndexData(self.id, copy.deepcopy(data), version, next_version)
+        :param version: the version to get
+        :return: the data dict at that version
+        """
+        return self.data[version]
 
+    def add(self, data, version=None):
+        """
+        Adds the data to this record.
 
-class IndexData:
-
-    def __init__(self, record_id, data, version=None, next_version=None):
-        self.record_id = record_id
-        self.data = data
-        self.version = version
-        self.next_version = next_version
-
-
-def non_standard_type_converter(data):
-    """
-    Handles non-standard types that the default json dumper can't handle. Anything that is not handled in this function
-    throws a TypeError. Currently this function only handles datetime objects which are converted into ISO format and
-    returned.
-
-    :param data:    the data to handle
-    :return: the converted data
-    """
-    if isinstance(data, datetime):
-        # elasticsearch by default can read the ISO format for dates so this is a decent default
-        return data.isoformat()
-    raise TypeError(f'Unable to serialize {repr(data)} (type: {type(data)})')
-
-
-def serialise_for_elasticsearch(data):
-    """
-    Helper that serialises the given dict into a json string ensuring that datetime objects are serialised into the ISO
-    format which can be read into Elasticsearch as a date type by default.
-
-    :param data:    a dict
-    :return: a json string
-    """
-    return json.dumps(data, default=non_standard_type_converter)
+        :param data: the data dict
+        :param version: the version of this data dict
+        """
+        # TODO: sort out "versionless" data
+        self.data[version] = data
 
 
 def get_data_at_version(mongo_doc, target_version):
