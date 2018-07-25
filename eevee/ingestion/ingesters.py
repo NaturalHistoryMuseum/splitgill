@@ -75,7 +75,8 @@ class Ingester(Versioned):
         # store for stats about the insert and update operations that occur on each collection
         stats = defaultdict(Counter)
 
-        for chunk in utils.chunk_iterator(self.feeder.read()):
+        # limit the chunk size to 1000 as otherwise we will exceed the maximum number of operations per bulk write
+        for chunk in utils.chunk_iterator(self.feeder.read(), chunk_size=1000):
             # map all of the records to the collections they should be inserted into first
             collection_mapping = defaultdict(list)
             for record in chunk:
