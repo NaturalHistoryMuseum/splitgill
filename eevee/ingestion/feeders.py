@@ -19,6 +19,16 @@ class BaseRecord(Versioned, metaclass=abc.ABCMeta):
         """
         return {}
 
+    def modify_metadata(self, metadata):
+        """
+        Modify the metadata dict with any data required. This allows storage of record level information outside of the
+        versioned data. By default the metadata dict is an empty dict and this method does nothing.
+
+        :param metadata: the current metadata dict
+        :return: the modified metadata dict
+        """
+        return metadata
+
     @property
     @abc.abstractmethod
     def id(self):

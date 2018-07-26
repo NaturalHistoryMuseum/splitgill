@@ -39,6 +39,8 @@ class RecordToMongoConverter(Versioned):
             # current data if it is. This is a little wasteful if versioning is occurring but shouldn't really cause
             # any unreasonable strain
             'data': converted_record,
+            # store any extra metadata for the record, the default starting metadata value is an empty dict
+            'metadata': record.modify_metadata({}),
         }
         # store some extra details if the ingested data should be versioned
         if self.version:
@@ -85,6 +87,8 @@ class RecordToMongoConverter(Versioned):
                     'last_ingested': self.ingestion_time,
                     'data': converted_record,
                     f'diffs.{self.version}': diff,
+                    # allow modification of the metadata dict
+                    'metadata': record.modify_metadata(mongo_doc['metadata']),
                 })
                 # add the new version to the end of the versions array to ensure the sort order is maintained
                 pushes.update({'versions': self.version})
