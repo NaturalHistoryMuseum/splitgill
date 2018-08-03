@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # encoding: utf-8
+import abc
 import copy
 import itertools
 from collections import Counter, defaultdict
@@ -13,23 +14,81 @@ from eevee.indexing.utils import DataToIndex
 from eevee.mongo import get_mongo
 
 
+class IndexFeeder(metaclass=abc.ABCMeta):
+    """
+    Provides a stream of documents for indexing.
+    """
+
+    def __init__(self, config, mongo_collection):
+        """
+        :param config: the config object
+        :param mongo_collection: the collection to pull documents from
+        """
+        self.config = config
+        self.mongo_collection = mongo_collection
+
+    @abc.abstractmethod
+    def documents(self):
+        """
+        Generator function which should yield the documents to be indexed.
+        """
+        pass
+
+    @abc.abstractmethod
+    def total(self):
+        """
+        Returns the total number of documents that will be indexed if the documents generator is exhausted. This method
+        will always be called before the `documents` method and is purely used for monitoring purposes (currently!).
+        """
+        pass
+
+
+class ConditionalIndexFeeder(IndexFeeder):
+    """
+    Simple index feeder class which uses a condition to filter the mongo documents in the collection provided.
+    """
+
+    def __init__(self, config, mongo_collection, condition=None):
+        """
+        :param config: the config object
+        :param mongo_collection: the collection to pull records from
+        :param condition: the condition to filter the documents in mongo with (can be none in which case all documents
+                          in the collection are yielded)
+        """
+        super().__init__(config, mongo_collection)
+        self.condition = condition if condition else {}
+
+    def documents(self):
+        """
+        Iterates over the collection using the filter condition and yields each document in turn.
+        """
+        with get_mongo(self.config, collection=self.mongo_collection) as mongo:
+            for document in mongo.find(self.condition):
+                yield document
+
+    def total(self):
+        """
+        Counts and returns the number of documents which will match the condition.
+        """
+        with get_mongo(self.config, collection=self.mongo_collection) as mongo:
+            return mongo.count(self.condition)
+
+
 class Indexer:
     """
     Class encapsulating the functionality required to index records.
     """
 
-    def __init__(self, config, mongo_collection, indexes, condition=None, mongo_chunk_size=1000):
+    def __init__(self, config, feeder, indexes, mongo_chunk_size=1000):
         """
         :param config: the config object
-        :param mongo_collection: the mongo collection to read the records from
+        :param feeder: feeder object which provides the documents from mongo to inxed
         :param indexes: the indexes that the mongo collection will be indexed into
-        :param condition: the filter condition which will be passed to mongo when retrieving documents
         :param mongo_chunk_size: the number of documents to retrieve per chunk
         """
-        self.mongo_collection = mongo_collection
         self.config = config
+        self.feeder = feeder
         self.indexes = indexes
-        self.condition = condition if condition else {}
         self.mongo_chunk_size = mongo_chunk_size
 
         self.monitors = []
@@ -54,7 +113,7 @@ class Indexer:
         end = datetime.now()
         stats = {
             'latest_version': latest_version,
-            'source': self.mongo_collection,
+            'source': self.feeder.mongo_collection,
             'start': self.start,
             'end': end,
             'duration': (end - self.start).total_seconds(),
@@ -98,51 +157,51 @@ class Indexer:
         # store for stats about the indexing operations that occur on each index
         stats = defaultdict(Counter)
 
-        with get_mongo(self.config, collection=self.mongo_collection) as mongo:
-            # work out the total number of documents we're going to go through and index for monitoring purposes
-            total_records_to_index = mongo.count(self.condition)
-            # keep a count of the number of documents indexed so far
-            total_indexed_so_far = 0
+        # work out the total number of documents we're going to go through and index, for monitoring purposes
+        total_records_to_index = self.feeder.total()
+        # keep a count of the number of documents indexed so far
+        total_indexed_so_far = 0
 
-            # loop over all the documents returned by the condition
-            for chunk in utils.chunk_iterator(mongo.find(self.condition), chunk_size=self.mongo_chunk_size):
-                data_to_index_chunk = []
+        # loop over all the documents returned by the feeder
+        for chunk in utils.chunk_iterator(self.feeder.documents(), chunk_size=self.mongo_chunk_size):
+            data_to_index_chunk = []
 
-                for mongo_doc in chunk:
-                    total_indexed_so_far += 1
-                    data_to_index = DataToIndex(mongo_doc)
-                    versions = mongo_doc['versions']
+            for mongo_doc in chunk:
+                total_indexed_so_far += 1
+                # wrap the mongo doc in a useful container object
+                data_to_index = DataToIndex(mongo_doc)
+                versions = mongo_doc['versions']
 
-                    # update the latest version
-                    chunk_latest_version = max(versions)
-                    if not latest_version or latest_version < chunk_latest_version:
-                        latest_version = chunk_latest_version
+                # update the latest version
+                latest_version_in_chunk = max(versions)
+                if not latest_version or latest_version < latest_version_in_chunk:
+                    latest_version = latest_version_in_chunk
 
-                    if not versions:
-                        # TODO: sort out "versionless" data
-                        data_to_index.add(mongo_doc['data'])
-                    else:
-                        # this variable will hold the actual data of the record and will be updated with the diffs as we
-                        # go through them. It is important, therefore, that it starts off as an empty dict because this
-                        # is the starting point assumed by the ingestion code when creating a records first diff
-                        data = {}
-                        for version in versions:
-                            diff = mongo_doc['diffs'].get(str(version), None)
-                            # sanity check
-                            if diff:
-                                # update the data dict with the diff
-                                dictdiffer.patch(diff, data, in_place=True)
-                                # note that we use a deep copy of the data object to avoid any confusing side effects if
-                                # it is modified later
-                                data_to_index.add(copy.deepcopy(data), version)
+                if not versions:
+                    # TODO: sort out "versionless" data
+                    data_to_index.add(mongo_doc['data'])
+                else:
+                    # this variable will hold the actual data of the record and will be updated with the diffs as we
+                    # go through them. It is important, therefore, that it starts off as an empty dict because this
+                    # is the starting point assumed by the ingestion code when creating a records first diff
+                    data = {}
+                    for version in versions:
+                        diff = mongo_doc['diffs'].get(str(version), None)
+                        # sanity check
+                        if diff:
+                            # update the data dict with the diff
+                            dictdiffer.patch(diff, data, in_place=True)
+                            # note that we use a deep copy of the data object to avoid any confusing side effects if
+                            # it is modified later
+                            data_to_index.add(copy.deepcopy(data), version)
 
-                    data_to_index_chunk.append(data_to_index)
+                data_to_index_chunk.append(data_to_index)
 
-                # send the data to elasticsearch for indexing
-                self.send_to_elasticsearch(data_to_index_chunk, stats)
-                # update the monitoring functions with progress
-                for monitor in self.monitors:
-                    monitor(total_indexed_so_far / total_records_to_index)
+            # send the data to elasticsearch for indexing
+            self.send_to_elasticsearch(data_to_index_chunk, stats)
+            # update the monitoring functions with progress
+            for monitor in self.monitors:
+                monitor(total_indexed_so_far / total_records_to_index)
 
         # update the aliases
         self.update_aliases(latest_version)
