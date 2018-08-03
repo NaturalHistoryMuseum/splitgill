@@ -12,20 +12,19 @@ from eevee.versioning import Versioned
 
 class Ingester(Versioned):
 
-    def __init__(self, version, feeder, record_to_mongo_converter, config, start, chunk_size=1000):
+    def __init__(self, version, feeder, record_to_mongo_converter, config, chunk_size=1000):
         """
         :param feeder: the feeder object to get records from
         :param record_to_mongo_converter: the object to use to convert the records to dicts ready for storage in mongo
         :param config: the config object
-        :param start: the datetime the operation was started, this will be stored with all the records ingested
         :param chunk_size: chunks of data will be read from the feeder and processed together in lists of this size
         """
         super().__init__(version)
         self.feeder = feeder
         self.record_to_mongo_converter = record_to_mongo_converter
         self.config = config
-        self.start = start
         self.chunk_size = chunk_size
+        self.start = datetime.now()
 
     def ensure_mongo_indexes_exist(self, mongo_collection):
         """
@@ -55,6 +54,7 @@ class Ingester(Versioned):
         stats = {
             'version': self.version,
             'source': self.feeder.source,
+            'ingestion_time': self.record_to_mongo_converter.ingestion_time,
             'start': self.start,
             'end': end,
             'duration': (end - self.start).total_seconds(),

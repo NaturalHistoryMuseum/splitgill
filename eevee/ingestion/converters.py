@@ -14,11 +14,22 @@ class RecordToMongoConverter(Versioned):
     def __init__(self, version, ingestion_time):
         """
         :param version:         the current version
-        :param ingestion_time:  the time of the ingestion operation
+        :param ingestion_time:  the time of the ingestion operation which will be attached to all records
+                                created/updated through this converter
         """
         super().__init__(version)
         self.version = version
-        self.ingestion_time = ingestion_time
+        self._ingestion_time = ingestion_time
+
+    @property
+    def ingestion_time(self):
+        """
+        Returns the ingestion time datetime object which will be attached to all records create/modified by this
+        converter. This allows easy understanding of which records were modified at the same time (or at least another
+        way of finding this out aside from the versions).
+        :return: a datetime object
+        """
+        return self._ingestion_time
 
     def for_insert(self, record):
         """
