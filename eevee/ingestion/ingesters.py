@@ -75,7 +75,7 @@ class Ingester(Versioned):
         :return:
         """
         # store for stats about the insert and update operations that occur on each collection
-        stats = defaultdict(Counter)
+        op_stats = defaultdict(Counter)
 
         for chunk in utils.chunk_iterator(self.feeder.read(), chunk_size=self.chunk_size):
             # map all of the records to the collections they should be inserted into first
@@ -116,9 +116,9 @@ class Ingester(Versioned):
                     if operations:
                         # run the operations in bulk on mongo
                         bulk_result = mongo.bulk_write(list(operations.values()), ordered=False)
-                        # extract stats
-                        stats[collection]['inserted'] += bulk_result.inserted_count
-                        stats[collection]['updated'] += bulk_result.modified_count
+                        # extract operation stats
+                        op_stats[collection]['inserted'] += bulk_result.inserted_count
+                        op_stats[collection]['updated'] += bulk_result.modified_count
 
-        # report the stats and return the stats dict
-        return self.report_stats(stats)
+        # report the operation stats then return the stats dict produced
+        return self.report_stats(op_stats)

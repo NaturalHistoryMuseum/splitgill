@@ -35,7 +35,7 @@ class Importer(metaclass=abc.ABCMeta):
         return [Index(self.config, self.elasticsearch_index)]
 
     def ingest(self):
-        ingester = Ingester(self.version, self.feeder, self.record_to_mongo_converter, self.config, self.start)
+        ingester = Ingester(self.version, self.feeder, self.record_to_mongo_converter, self.config)
         ingester.ingest()
 
     def index(self):
