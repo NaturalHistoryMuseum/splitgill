@@ -9,7 +9,7 @@ import dictdiffer
 
 from eevee import utils
 from eevee.indexing import elasticsearch
-from eevee.indexing.utils import DataToIndex
+from eevee.indexing.utils import DataToIndex, get_versions_and_data
 from eevee.mongo import get_mongo
 
 
@@ -120,19 +120,9 @@ class Indexer:
                     # TODO: sort out "versionless" data
                     data_to_index.add(mongo_doc['data'])
                 else:
-                    # this variable will hold the actual data of the record and will be updated with the diffs as we
-                    # go through them. It is important, therefore, that it starts off as an empty dict because this
-                    # is the starting point assumed by the ingestion code when creating a records first diff
-                    data = {}
-                    for version in versions:
-                        diff = mongo_doc['diffs'].get(str(version), None)
-                        # sanity check
-                        if diff:
-                            # update the data dict with the diff
-                            dictdiffer.patch(diff, data, in_place=True)
-                            # note that we use a deep copy of the data object to avoid any confusing side effects if
-                            # it is modified later
-                            data_to_index.add(copy.deepcopy(data), version)
+                    # add all the versions and data to data_to_index
+                    for version, data in get_versions_and_data(mongo_doc):
+                        data_to_index.add(data, version)
 
                 data_to_index_chunk.append(data_to_index)
 

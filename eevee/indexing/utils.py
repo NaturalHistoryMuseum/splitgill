@@ -49,32 +49,25 @@ class DataToIndex:
         self.data[version] = data
 
 
-def get_data_at_version(mongo_doc, target_version):
+def get_versions_and_data(mongo_doc):
     """
-    Convenience utility function which will return the data from the passed mongo_doc as it looked at the given version.
-    If the version passed is newer than the versions available then the latest version is returned. If the version is
-    older than the first version of the data then an empty dictionary is returned.
+    Returns a generator which will yield, in order, the versions and data from the given record as a tuple.
 
-    :param mongo_doc: the document from mongo
-    :param target_version: the version we want, this should be an integer timestamp in milliseconds from the UNIX epoch
-    :return: a dictionary of the data at the given target version
+    :param mongo_doc: the mongo doc
+    :return: a generator
     """
-    # this variable will hold the actual data of the record and will be updated with the diffs as we
-    # go through them. It is important, therefore, that it starts off as an empty dict because this
-    # is the starting point assumed by the ingestion code when creating a records first diff
+    # this variable will hold the actual data of the record and will be updated with the diffs as we go through them.
+    # It is important, therefore, that it starts off as an empty dict because this is the starting point assumed by the
+    # ingestion code when creating a records first diff
     data = {}
-    # iterate over the versions
+    # iterate over the versions (they are stored in the versions field in ascending order)
     for version in mongo_doc['versions']:
         # retrieve the diff (if there is one). Note the use of a string version.
         diff = mongo_doc['diffs'].get(str(version), None)
         # sanity check
         if diff:
-            # compare the versions in int form otherwise lexical ordering will be used
-            if target_version < version:
-                return data
-            # update the data dict with the diff
-            dictdiffer.patch(diff, data, in_place=True)
-
-    # if we get here the target version is beyond the latest version of this record and therefore we can return the data
-    # dict we've built
-    return data
+            # using in_place=False forces dictdiffer to produce a new dict rather than altering the existing one, this
+            # is necessary so that each data dict is isolated and changing one won't change them all
+            data = dictdiffer.patch(diff, data, in_place=False)
+            # yield the version and data
+            yield version, data
