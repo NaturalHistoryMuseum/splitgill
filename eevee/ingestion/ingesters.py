@@ -12,18 +12,23 @@ from eevee.versioning import Versioned
 
 class Ingester(Versioned):
 
-    def __init__(self, version, feeder, record_to_mongo_converter, config, chunk_size=1000):
+    def __init__(self, version, feeder, record_to_mongo_converter, config, chunk_size=1000, insert_op_name='inserted',
+                 update_op_name='updated'):
         """
         :param feeder: the feeder object to get records from
         :param record_to_mongo_converter: the object to use to convert the records to dicts ready for storage in mongo
         :param config: the config object
         :param chunk_size: chunks of data will be read from the feeder and processed together in lists of this size
+        :param insert_op_name: the name of the insert operation (for stats)
+        :param update_op_name: the name of the update operation (for stats)
         """
         super().__init__(version)
         self.feeder = feeder
         self.record_to_mongo_converter = record_to_mongo_converter
         self.config = config
         self.chunk_size = chunk_size
+        self.insert_op_name = insert_op_name
+        self.update_op_name = update_op_name
         self.start = datetime.now()
 
     def ensure_mongo_indexes_exist(self, mongo_collection):
@@ -120,8 +125,8 @@ class Ingester(Versioned):
                         # run the operations in bulk on mongo
                         bulk_result = mongo.bulk_write(list(operations.values()), ordered=False)
                         # extract operation stats
-                        op_stats[collection]['inserted'] += bulk_result.inserted_count
-                        op_stats[collection]['updated'] += bulk_result.modified_count
+                        op_stats[collection][self.insert_op_name] += bulk_result.inserted_count
+                        op_stats[collection][self.update_op_name] += bulk_result.modified_count
 
         # report the operation stats then return the stats dict produced
         return self.report_stats(op_stats)
