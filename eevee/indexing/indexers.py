@@ -1,34 +1,60 @@
 #!/usr/bin/env python3
 # encoding: utf-8
-import copy
-import itertools
 from collections import Counter, defaultdict
 from datetime import datetime
 
-import dictdiffer
-
-from eevee import utils
 from eevee.indexing import elasticsearch
-from eevee.indexing.utils import DataToIndex, get_versions_and_data
 from eevee.mongo import get_mongo
+from eevee.utils import OpBuffer
+from eevee.versioning import Versioned
 
 
-class Indexer:
+class BulkIndexOpBuffer(OpBuffer):
+    """
+    OpBuffer implementation which sends bulk index operations to elasticsearch.
+    """
+
+    def __init__(self, config, size=1000):
+        """
+        :param config: the config object
+        :param size: the maximum size the buffer can reach before it is handled and flushed, defaults to 1000
+        """
+        super().__init__(size)
+        self.config = config
+        # this is for keeping track of what we index
+        self.stats = defaultdict(Counter)
+
+    def handle_ops(self):
+        """
+        Handles the ops in the buffer by passing them to the elasticsearch module's send_bulk_index function. The stats
+        object is updated on response.
+        """
+        response = elasticsearch.send_bulk_index(self.config, self.ops)
+        # extract stats from the elasticsearch response
+        for action_response in response.json()['items']:
+            # each item in the items list is a dict with a single key and value, we're interested in the value
+            info = next(iter(action_response.values()))
+            # update the stats
+            self.stats[info['_index']][info['result']] += 1
+
+
+class Indexer(Versioned):
     """
     Class encapsulating the functionality required to index records.
     """
 
-    def __init__(self, config, feeder, indexes, mongo_chunk_size=1000):
+    def __init__(self, version, config, feeder, indexes, elasticsearch_bulk_size=1000):
         """
         :param config: the config object
         :param feeder: feeder object which provides the documents from mongo to inxed
         :param indexes: the indexes that the mongo collection will be indexed into
         :param mongo_chunk_size: the number of documents to retrieve per chunk
         """
+        super().__init__(version)
         self.config = config
         self.feeder = feeder
         self.indexes = indexes
-        self.mongo_chunk_size = mongo_chunk_size
+        self.elasticsearch_bulk_size = elasticsearch_bulk_size
 
         self.monitors = []
         self.start = datetime.now()
@@ -42,16 +68,15 @@ class Indexer:
         """
         self.monitors.append(monitor_function)
 
-    def report_stats(self, operations, latest_version):
+    def report_stats(self, operations):
         """
         Records statistics about the indexing run into the mongo index stats collection.
 
         :param operations: a dict describing the operations that occurred
-        :param latest_version: the latest version that we have no indexed up until
         """
         end = datetime.now()
         stats = {
-            'latest_version': latest_version,
+            'version': self.version,
             'source': self.feeder.mongo_collection,
             'start': self.start,
             'end': end,
@@ -62,28 +87,6 @@ class Indexer:
             mongo.insert_one(stats)
         return stats
 
-    def send_to_elasticsearch(self, data_to_index_chunk, stats):
-        """
-        Uses the indexes to convert the passed chunk into commands which will be sent to elasticsearch. The passed stats
-        object is updated with the results.
-
-        :param data_to_index_chunk: the chunk of data to index in elasticsearch
-        :param stats: the stats object, which by default is a defaultdict of counters
-        """
-        # create all the commands necessary to index the data
-        commands = []
-        for index in self.indexes:
-            # get the commands from the index
-            commands.extend(itertools.chain.from_iterable(index.get_bulk_commands(data_to_index_chunk)))
-
-        for response in elasticsearch.send_bulk_index(self.config, commands):
-            # extract stats from the elasticsearch response
-            for action_response in response.json()['items']:
-                # each item in the items list is a dict with a single key and value, we're interested in the value
-                info = next(iter(action_response.values()))
-                # update the stats
-                stats[info['_index']][info['result']] += 1
-
     def index(self):
         """
         Indexes a set of records from mongo into elasticsearch.
@@ -91,51 +94,31 @@ class Indexer:
         # define the mappings first
         self.define_mappings()
 
-        # keep a record of the latest version seen as this will be used to update the current version alias
-        latest_version = None
-        # store for stats about the indexing operations that occur on each index
-        stats = defaultdict(Counter)
-
         # work out the total number of documents we're going to go through and index, for monitoring purposes
         total_records_to_index = self.feeder.total()
         # keep a count of the number of documents indexed so far
         total_indexed_so_far = 0
 
-        # loop over all the documents returned by the feeder
-        for chunk in utils.chunk_iterator(self.feeder.documents(), chunk_size=self.mongo_chunk_size):
-            data_to_index_chunk = []
-
-            for mongo_doc in chunk:
+        with BulkIndexOpBuffer(self.config) as op_buffer:
+            for mongo_doc in self.feeder.documents():
                 total_indexed_so_far += 1
-                # wrap the mongo doc in a useful container object
-                data_to_index = DataToIndex(mongo_doc)
-                versions = mongo_doc['versions']
 
-                # update the latest version
-                latest_version_in_chunk = max(versions)
-                if not latest_version or latest_version < latest_version_in_chunk:
-                    latest_version = latest_version_in_chunk
+                for index in self.indexes:
+                    op_buffer.add(index.get_bulk_commands(mongo_doc))
 
-                if not versions:
-                    # TODO: sort out "versionless" data
-                    data_to_index.add(mongo_doc['data'])
-                else:
-                    # add all the versions and data to data_to_index
-                    for version, data in get_versions_and_data(mongo_doc):
-                        data_to_index.add(data, version)
+                if total_indexed_so_far % 1000 == 0:
+                    # update the monitoring functions with progress
+                    for monitor in self.monitors:
+                        monitor(total_indexed_so_far / total_records_to_index)
 
-                data_to_index_chunk.append(data_to_index)
-
-            # send the data to elasticsearch for indexing
-            self.send_to_elasticsearch(data_to_index_chunk, stats)
-            # update the monitoring functions with progress
-            for monitor in self.monitors:
-                monitor(total_indexed_so_far / total_records_to_index)
+        # signal to all the monitors that we're done
+        for monitor in self.monitors:
+            monitor(1)
 
         # update the aliases
-        self.update_aliases(latest_version)
+        self.update_aliases(self.version)
         # report the statistics of the indexing operation back into mongo
-        return self.report_stats(stats, latest_version)
+        return self.report_stats(op_buffer.stats)
 
     def define_mappings(self):
         """

@@ -39,7 +39,7 @@ class Importer(metaclass=abc.ABCMeta):
         ingester.ingest()
 
     def index(self):
-        indexer = Indexer(self.config, self.mongo_collection, self.elasticsearch_indexes)
+        indexer = Indexer(self.version, self.config, self.mongo_collection, self.elasticsearch_indexes)
         indexer.index()
 
     def run(self):

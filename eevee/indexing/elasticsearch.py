@@ -1,9 +1,11 @@
+import itertools
 import json
 from datetime import datetime
 
 import requests
 
 from eevee import utils
+from eevee.utils import OpBuffer
 
 
 def non_standard_type_converter(data):
@@ -59,19 +61,18 @@ def send_aliases(config, alias_operations):
 
 def send_bulk_index(config, commands):
     """
-    Send the bulk commands to elasticsearch and yield each response as we go.
+    Send the bulk commands to elasticsearch and return the response. The commands should be an iterable where each
+    element is a 2-tuple of (action, data).
 
     :param config: the config object
     :param commands: the bulk commands
-    :return: yields the response objects after each is sent
+    :return: the response from the bulk request
     """
-    for chunk in utils.chunk_iterator(commands, chunk_size=1000):
-        # use the special content-type required by elasticsearch
-        headers = {'Content-Type': 'application/x-ndjson'}
-        # format the commands as required by elasticsearch
-        data = '\n'.join(map(serialise_for_elasticsearch, chunk))
-        # there must be a new line at the end of the command list
-        data += '\n'
-        # send the commands to elasticsearch
-        response = requests.post(f'{config.elasticsearch_url}/_bulk', headers=headers, data=data)
-        yield response
+    # use the special content-type required by elasticsearch
+    headers = {'Content-Type': 'application/x-ndjson'}
+    # format the commands as required by elasticsearch (also unpack the command tuples)
+    data = '\n'.join(map(serialise_for_elasticsearch, itertools.chain.from_iterable(commands)))
+    # there must be a new line at the end of the command list
+    data += '\n'
+    # send the commands to elasticsearch
+    return requests.post(f'{config.elasticsearch_url}/_bulk', headers=headers, data=data)

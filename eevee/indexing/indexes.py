@@ -1,5 +1,8 @@
 import itertools
 
+from eevee.indexing.utils import get_versions_and_data
+from eevee.utils import iter_pairs
+
 
 class Index:
     """
@@ -14,19 +17,16 @@ class Index:
         self.config = config
         self.name = name
 
-    def get_bulk_commands(self, data_to_index_chunk):
+    def get_commands(self, mongo_doc):
         """
-        Yields the action and data dicts as a tuple for the given chunk of data.
+        Yields all the action and data dicts as a tuple for the given mongo doc.
 
-        :param data_to_index_chunk: the chunk of data to get index commands for
+        :param mongo_doc: the mongo doc to handle
         """
-        for data_to_index in data_to_index_chunk:
-            # get the versions in order
-            versions = data_to_index.versions
-            # iterate over each version and the next version in the versions, the last version pairs with None
-            for version, next_version in zip(versions, itertools.chain(versions[1:], [None])):
-                yield (self.create_action(data_to_index.id, version),
-                       self.create_index_document(data_to_index.get_data(version), version, next_version))
+        # iterate over the data in pairs so that we can retrieve the next version too, use (None, None) as the final
+        # pair's partner so that we can use unpacking
+        for (version, data), (next_version, _next_data) in iter_pairs(get_versions_and_data(mongo_doc), (None, None)):
+            yield self.create_action(mongo_doc['id'], version), self.create_index_document(data, version, next_version)
 
     def create_action(self, record_id, version):
         """
@@ -37,17 +37,12 @@ class Index:
         :param version: the version of the record
         :return: a dictionary
         """
-        if version:
-            # create an id for the document which is unique by using the record id and the version
-            index_doc_id = f'{record_id}:{version}'
-        else:
-            # just use the record id when we have no version
-            index_doc_id = record_id
         # build and return the dictionary. Note that the document type is fixed as _doc as this parameter is no longer
         # used and will be removed in future versions of elasticsearch
         return {
             'index': {
-                '_id': index_doc_id,
+                # create an id for the document which is unique by using the record id and the version
+                '_id': f'{record_id}:{version}',
                 '_type': '_doc',
                 '_index': self.name,
             }
