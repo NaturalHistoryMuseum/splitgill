@@ -104,8 +104,11 @@ class Ingester(Versioned):
                             # see if there is a version of this record already in mongo
                             mongo_doc = current_docs.get(record.id, None)
                             if not mongo_doc:
-                                # record needs adding to the collection, add an insert operation to our list
-                                operations[record.id] = InsertOne(self.record_to_mongo_converter.for_insert(record))
+                                # record needs adding to the collection, add an insert operation to our list if the
+                                # converter returns one
+                                insert_doc = self.record_to_mongo_converter.for_insert(record)
+                                if insert_doc:
+                                    operations[record.id] = InsertOne(insert_doc)
                             else:
                                 # record might need updating
                                 update_doc = self.record_to_mongo_converter.for_update(record, mongo_doc)
