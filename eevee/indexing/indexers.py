@@ -99,7 +99,7 @@ class Indexer(Versioned):
         # keep a count of the number of documents indexed so far
         total_indexed_so_far = 0
 
-        with BulkIndexOpBuffer(self.config) as op_buffer:
+        with BulkIndexOpBuffer(self.config, size=self.elasticsearch_bulk_size) as op_buffer:
             for mongo_doc in self.feeder.documents():
                 total_indexed_so_far += 1
 
