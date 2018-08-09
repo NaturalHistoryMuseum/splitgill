@@ -104,7 +104,7 @@ class Indexer(Versioned):
                 total_indexed_so_far += 1
 
                 for index in self.indexes:
-                    op_buffer.add(index.get_bulk_commands(mongo_doc))
+                    op_buffer.add(index.get_commands(mongo_doc))
 
                 if total_indexed_so_far % 1000 == 0:
                     # update the monitoring functions with progress
