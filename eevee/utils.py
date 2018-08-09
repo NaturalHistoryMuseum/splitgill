@@ -4,16 +4,16 @@ import abc
 import itertools
 
 
-def chunk_iterator(iterator, chunk_size=1000):
+def chunk_iterator(iterable, chunk_size=1000):
     """
-    Iterates over an iterator, yielding lists of size chunk_size until the iterator is exhausted.
+    Iterates over an iterable, yielding lists of size chunk_size until the iterable is exhausted.
     The final list could be smaller than chunk_size but will always have a length > 0.
 
-    :param iterator: the iterator to chunk up
+    :param iterable: the iterable to chunk up
     :param chunk_size: the maximum size of each yielded chunk
     """
     chunk = []
-    for element in iterator:
+    for element in iterable:
         chunk.append(element)
         if len(chunk) == chunk_size:
             yield chunk
