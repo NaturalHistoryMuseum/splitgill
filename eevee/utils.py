@@ -34,10 +34,11 @@ def to_timestamp(moment):
     return int(moment.timestamp() * 1000)
 
 
-def iter_pairs(full_list, final_partner=None):
+def iter_pairs(iterable, final_partner=None):
     """
-    Produces a generator that iterates over the list provided, yielding a tuple of consecutive items. When the final
-    item in the list is reached, it is yielded with the final partner parameter. For example, printing the result of:
+    Produces a generator that iterates over the iterable provided, yielding a tuple of consecutive items. When the final
+    item in the iterable is reached, it is yielded with the final partner parameter. For example, printing the result
+    of:
 
         iter_pairs([1,2,3,4])
 
@@ -48,12 +49,12 @@ def iter_pairs(full_list, final_partner=None):
         (3, 4)
         (4, None)
 
-    :param full_list: the list to pair up
-    :param final_partner: the value that will partner the final item in the list (defaults to None)
+    :param iterable: the iterable or iterator to pair up
+    :param final_partner: the value that will partner the final item in the iterable (defaults to None)
     :return: a generator object
     """
-    full_list = list(full_list)
-    return zip(full_list, itertools.chain(full_list[1:], [final_partner]))
+    i1, i2 = itertools.tee(iterable)
+    return zip(i1, itertools.chain(itertools.islice(i2, 1, None), [final_partner]))
 
 
 class OpBuffer(metaclass=abc.ABCMeta):

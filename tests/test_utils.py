@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # encoding: utf-8
+import types
 from datetime import datetime, timezone
 
-from eevee.utils import chunk_iterator, to_timestamp
+from eevee.utils import chunk_iterator, to_timestamp, iter_pairs
 
 
 def test_chunk_iterator_when_iterator_len_equals_chunk_size():
@@ -61,3 +62,18 @@ def test_to_timestamp():
     assert to_timestamp(datetime.strptime('19700101', '%Y%m%d').replace(tzinfo=timezone.utc)) == 0
     # check a later date too
     assert to_timestamp(datetime.strptime('20180713', '%Y%m%d').replace(tzinfo=timezone.utc)) == 1531440000000
+
+
+def test_iter_pairs():
+    # check the default final_partner is None
+    assert list(iter_pairs([1, 2, 3, 4])) == [(1, 2), (2, 3), (3, 4), (4, None)]
+    # check simple scenario
+    assert list(iter_pairs([1, 2, 3, 4], 'final')) == [(1, 2), (2, 3), (3, 4), (4, 'final')]
+    # check empty iterator
+    assert list(iter_pairs([], 'final')) == []
+    # check scenario when final partner is itself a sequence
+    assert list(iter_pairs([1, 2, 3], (1, 2))) == [(1, 2), (2, 3), (3, (1, 2))]
+    # check when everything is None
+    assert list(iter_pairs([None, None, None], 'final')) == [(None, None), (None, None), (None, 'final')]
+    # check that it can handle iterators too
+    assert list(iter_pairs(range(0, 4), 'final')) == [(0, 1), (1, 2), (2, 3), (3, 'final')]
