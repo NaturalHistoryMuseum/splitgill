@@ -1,4 +1,3 @@
-import types
 from collections import OrderedDict
 
 import dictdiffer
@@ -23,12 +22,7 @@ def test_get_versions_and_data():
         }
     }
 
-    generator = get_versions_and_data(mongo_doc)
-    # check it's a generator, this is important because this function is designed to be used lazily and therefore if it
-    # was changed to not be a lazy generator it could have a knock-on performance impact
-    assert isinstance(generator, types.GeneratorType)
-
     # check all the versions and data values match the test data
-    for (result_version, result_data), (test_version, test_data) in zip(generator, data.items()):
+    for (result_version, result_data), (test_version, test_data) in zip(get_versions_and_data(mongo_doc), data.items()):
         assert result_version == test_version
         assert result_data == test_data
