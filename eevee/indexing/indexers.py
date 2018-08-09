@@ -30,6 +30,7 @@ class BulkIndexOpBuffer(OpBuffer):
         object is updated on response.
         """
         response = elasticsearch.send_bulk_index(self.config, self.ops)
+        response.raise_for_status()
         # extract stats from the elasticsearch response
         for action_response in response.json()['items']:
             # each item in the items list is a dict with a single key and value, we're interested in the value
