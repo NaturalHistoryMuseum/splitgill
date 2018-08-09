@@ -14,7 +14,7 @@ class BulkIndexOpBuffer(OpBuffer):
     OpBuffer implementation which sends bulk index operations to elasticsearch.
     """
 
-    def __init__(self, config, size=1000):
+    def __init__(self, config, size):
         """
         :param config: the config object
         :param size: the maximum size the buffer can reach before it is handled and flushed, defaults to 1000
@@ -43,12 +43,12 @@ class Indexer(Versioned):
     Class encapsulating the functionality required to index records.
     """
 
-    def __init__(self, version, config, feeder, indexes, elasticsearch_bulk_size=1000):
+    def __init__(self, version, config, feeder, indexes, elasticsearch_bulk_size=500):
         """
         :param config: the config object
         :param feeder: feeder object which provides the documents from mongo to inxed
         :param indexes: the indexes that the mongo collection will be indexed into
-        :param mongo_chunk_size: the number of documents to retrieve per chunk
+        :param elasticsearch_bulk_size: the number of pairs of commands to send to elasticsearch in one bulk request
         """
         super().__init__(version)
         self.config = config
