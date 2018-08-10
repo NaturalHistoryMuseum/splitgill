@@ -32,7 +32,7 @@ class Importer(metaclass=abc.ABCMeta):
 
     @property
     def elasticsearch_indexes(self):
-        return [Index(self.config, self.elasticsearch_index)]
+        return [Index(self.config, self.elasticsearch_index, self.version)]
 
     def ingest(self):
         ingester = Ingester(self.version, self.feeder, self.record_to_mongo_converter, self.config)

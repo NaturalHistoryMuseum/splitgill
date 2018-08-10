@@ -1,5 +1,3 @@
-import itertools
-
 from eevee.indexing.utils import get_versions_and_data
 from eevee.utils import iter_pairs
 
@@ -9,13 +7,15 @@ class Index:
     Represents an index in elasticsearch.
     """
 
-    def __init__(self, config, name):
+    def __init__(self, config, name, version):
         """
         :param config: the config object
         :param name: the elasticsearch index name that the data held in this object will be indexed into
+        :param version: the version we're indexing up to
         """
         self.config = config
         self.name = name
+        self.version = version
 
     def get_commands(self, mongo_doc):
         """
