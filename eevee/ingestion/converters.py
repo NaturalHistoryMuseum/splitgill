@@ -31,6 +31,19 @@ class RecordToMongoConverter(Versioned):
         """
         return self._ingestion_time
 
+    def diff_data(self, existing_data, new_data):
+        """
+        Diffs the two data dicts, returning a 2-tuple where the first element indicates whether a change has occurred
+        and the second element is the actual diff.
+
+        :param existing_data: the data as it was
+        :param new_data: the data as it is now
+        :return: a tuple
+        """
+        diff = list(dictdiffer.diff(existing_data, new_data))
+        # in the base function, indicate that there was a change by checking if the diff is empty or not
+        return bool(diff), diff
+
     def for_insert(self, record):
         """
         Returns the dictionary that should be inserted into mongo to add the record's information to the collection.
@@ -40,6 +53,7 @@ class RecordToMongoConverter(Versioned):
         """
         # convert the record to a dict according to the records requirements
         converted_record = record.convert()
+        diff = self.diff_data({}, converted_record)[1]
         mongo_doc = {
             'id': record.id,
             # keep a record of when this record was first ingested and last ingested, these are the actual times not
@@ -59,9 +73,8 @@ class RecordToMongoConverter(Versioned):
             # sorted list of versions, with the oldest first, newest last
             'versions': [self.version],
             # a dict of the incremental changes made by each version, note that the integer version is converted to
-            # a string here because mongo can't handle non-string keys and that we let the record specify if any keys
-            # should be ignored during the diffing
-            'diffs': {str(self.version): list(dictdiffer.diff({}, converted_record, ignore=record.keys_to_ignore()))},
+            # a string here because mongo can't handle non-string keys
+            'diffs': {str(self.version): diff},
         }
         return mongo_doc
 
@@ -81,9 +94,8 @@ class RecordToMongoConverter(Versioned):
         converted_record = record.convert()
 
         # generate a diff of the new record against the existing version in mongo
-        diff = list(dictdiffer.diff(mongo_doc['data'], converted_record, ignore=record.keys_to_ignore()))
-        # if the record itself has changed, we'll make updates, if not we won't
-        if diff:
+        should_update, diff = self.diff_data(mongo_doc['data'], converted_record)
+        if should_update:
             # set some new values
             sets.update({
                 'latest_version': self.version,

@@ -50,15 +50,6 @@ class BaseRecord(Versioned, metaclass=abc.ABCMeta):
         """
         return None
 
-    def keys_to_ignore(self):
-        """
-        Returns a set of keys which should be ignored when diffing the converted output of this record with a previous
-        version. By default, this set is empty and no keys are ignored.
-
-        :return: a set of keys to ignore during diffing
-        """
-        return set()
-
 
 class IngestionFeeder(Versioned, metaclass=abc.ABCMeta):
 
