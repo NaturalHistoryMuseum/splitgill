@@ -123,7 +123,7 @@ class Ingester(Versioned):
 
                     if operations:
                         # run the operations in bulk on mongo
-                        bulk_result = mongo.bulk_write(list(operations.values()), ordered=False)
+                        bulk_result = mongo.bulk_write(list(operations.values()))
                         # extract operation stats
                         op_stats[collection][self.insert_op_name] += bulk_result.inserted_count
                         op_stats[collection][self.update_op_name] += bulk_result.modified_count
