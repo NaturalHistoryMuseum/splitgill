@@ -59,8 +59,9 @@ class RecordToMongoConverter(Versioned):
             # sorted list of versions, with the oldest first, newest last
             'versions': [self.version],
             # a dict of the incremental changes made by each version, note that the integer version is converted to
-            # a string here because mongo can't handle non-string keys
-            'diffs': {str(self.version): list(dictdiffer.diff({}, converted_record))},
+            # a string here because mongo can't handle non-string keys and that we let the record specify if any keys
+            # should be ignored during the diffing
+            'diffs': {str(self.version): list(dictdiffer.diff({}, converted_record, ignore=record.keys_to_ignore()))},
         }
         return mongo_doc
 
@@ -80,7 +81,7 @@ class RecordToMongoConverter(Versioned):
         converted_record = record.convert()
 
         # generate a diff of the new record against the existing version in mongo
-        diff = list(dictdiffer.diff(mongo_doc['data'], converted_record))
+        diff = list(dictdiffer.diff(mongo_doc['data'], converted_record, ignore=record.keys_to_ignore()))
         # if the record itself has changed, we'll make updates, if not we won't
         if diff:
             # set some new values
