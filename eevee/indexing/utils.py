@@ -32,5 +32,6 @@ def get_version_condition(version):
     return {"term": {"meta.versions": version}},
 
 
-def get_elasticsearch_client(config):
-    return Elasticsearch(hosts=config.elasticsearch_hosts)
+def get_elasticsearch_client(config, **kwargs):
+    return Elasticsearch(hosts=config.elasticsearch_hosts, sniff_on_start=True, sniff_on_connection_fail=True,
+                         sniffer_timeout=10, **kwargs)
