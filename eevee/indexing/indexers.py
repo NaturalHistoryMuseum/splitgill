@@ -4,8 +4,6 @@ import itertools
 from collections import Counter, defaultdict
 from datetime import datetime
 
-from elasticsearch import Elasticsearch
-
 from eevee.indexing.utils import DOC_TYPE, get_elasticsearch_client
 from eevee.mongo import get_mongo
 from eevee.utils import OpBuffer
