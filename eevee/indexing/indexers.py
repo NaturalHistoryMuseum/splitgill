@@ -130,6 +130,8 @@ class Indexer(Versioned):
         Run through the indexes and retrieve their mappings then send them to elasticsearch.
         """
         for index in self.indexes:
+            if not self.elasticsearch.indices.exists(index.name):
+                self.elasticsearch.indices.create(index.name)
             self.elasticsearch.indices.put_mapping(DOC_TYPE, index.get_mapping(), index=index.name)
 
     def update_statuses(self):
