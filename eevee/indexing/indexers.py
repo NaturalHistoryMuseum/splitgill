@@ -138,7 +138,13 @@ class Indexer(Versioned):
         """
         Run through the indexes and update the statuses for each.
         """
-        mapping = {
+        index_definition = {
+            'settings': {
+                'index': {
+                    'number_of_shards': 1,
+                    'number_of_replicas': 1
+                }
+            },
             'mappings': {
                 DOC_TYPE: {
                     'properties': {
@@ -152,7 +158,7 @@ class Indexer(Versioned):
         }
         # ensure the status index exists with the correct mapping
         if not self.elasticsearch.indices.exists(self.config.elasticsearch_status_index_name):
-            self.elasticsearch.indices.create(self.config.elasticsearch_status_index_name, body=mapping)
+            self.elasticsearch.indices.create(self.config.elasticsearch_status_index_name, body=index_definition)
 
         for index in self.indexes:
             status_doc = {'name': index.unprefixed_name, 'index_name': index.name, 'latest_version': self.version}
