@@ -58,7 +58,8 @@ class Indexer(Versioned):
         self.indexes = indexes
         self.elasticsearch_bulk_size = elasticsearch_bulk_size
 
-        self.elasticsearch = get_elasticsearch_client(self.config, http_compress=True)
+        self.elasticsearch = get_elasticsearch_client(self.config, sniff_on_start=True, sniff_on_connection_fail=True,
+                                                      sniffer_timeout=60, sniff_timeout=10, http_compress=True)
         self.monitors = []
         self.start = datetime.now()
 

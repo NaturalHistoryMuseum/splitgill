@@ -1,4 +1,4 @@
-from eevee.indexing.utils import get_versions_and_data, get_version_condition, DOC_TYPE
+from eevee.indexing.utils import get_versions_and_data, DOC_TYPE
 from eevee.utils import iter_pairs
 
 

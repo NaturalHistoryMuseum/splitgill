@@ -28,10 +28,13 @@ def get_versions_and_data(mongo_doc):
             yield version, data
 
 
-def get_version_condition(version):
-    return {"term": {"meta.versions": version}},
-
-
 def get_elasticsearch_client(config, **kwargs):
-    return Elasticsearch(hosts=config.elasticsearch_hosts, sniff_on_start=True, sniff_on_connection_fail=True,
-                         sniffer_timeout=10, **kwargs)
+    """
+    Returns an elasticsearch client created using the hosts attribute of the passed config object. All kwargs are passed
+    on to the elasticsearch client constructor to allow for more precise control over the client object.
+
+    :param config: the config object
+    :param kwargs: kwargs for the elasticsearch client constructor
+    :return: a new elasticsearch client object
+    """
+    return Elasticsearch(hosts=config.elasticsearch_hosts, **kwargs)
