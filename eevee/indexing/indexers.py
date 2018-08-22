@@ -148,6 +148,12 @@ class Indexer(Versioned):
             'mappings': {
                 DOC_TYPE: {
                     'properties': {
+                        'name': {
+                            'type': 'keyword'
+                        },
+                        'index_name': {
+                            'type': 'keyword'
+                        },
                         'latest_version': {
                             'type': 'date',
                             'format': 'epoch_millis'
