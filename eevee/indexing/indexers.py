@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 # encoding: utf-8
+import itertools
 from collections import Counter, defaultdict
 from datetime import datetime
 
-from eevee.indexing import elasticsearch
+from elasticsearch import Elasticsearch
+
+from eevee.indexing.utils import DOC_TYPE, get_elasticsearch_client
 from eevee.mongo import get_mongo
 from eevee.utils import OpBuffer
 from eevee.versioning import Versioned
@@ -14,13 +17,14 @@ class BulkIndexOpBuffer(OpBuffer):
     OpBuffer implementation which sends bulk index operations to elasticsearch.
     """
 
-    def __init__(self, config, size):
+    def __init__(self, config, size, elasticsearch):
         """
         :param config: the config object
         :param size: the maximum size the buffer can reach before it is handled and flushed, defaults to 1000
         """
         super().__init__(size)
         self.config = config
+        self.elasticsearch = elasticsearch
         # this is for keeping track of what we index
         self.stats = defaultdict(Counter)
 
@@ -29,10 +33,9 @@ class BulkIndexOpBuffer(OpBuffer):
         Handles the ops in the buffer by passing them to the elasticsearch module's send_bulk_index function. The stats
         object is updated on response.
         """
-        response = elasticsearch.send_bulk_index(self.config, self.ops)
-        response.raise_for_status()
+        response = self.elasticsearch.bulk(itertools.chain.from_iterable(self.ops))
         # extract stats from the elasticsearch response
-        for action_response in response.json()['items']:
+        for action_response in response['items']:
             # each item in the items list is a dict with a single key and value, we're interested in the value
             info = next(iter(action_response.values()))
             # update the stats
@@ -57,6 +60,7 @@ class Indexer(Versioned):
         self.indexes = indexes
         self.elasticsearch_bulk_size = elasticsearch_bulk_size
 
+        self.elasticsearch = get_elasticsearch_client(self.config)
         self.monitors = []
         self.start = datetime.now()
 
@@ -100,7 +104,7 @@ class Indexer(Versioned):
         # keep a count of the number of documents indexed so far
         total_indexed_so_far = 0
 
-        with BulkIndexOpBuffer(self.config, size=self.elasticsearch_bulk_size) as op_buffer:
+        with BulkIndexOpBuffer(self.config, self.elasticsearch_bulk_size, self.elasticsearch) as op_buffer:
             for mongo_doc in self.feeder.documents():
                 total_indexed_so_far += 1
 
@@ -119,7 +123,7 @@ class Indexer(Versioned):
             monitor(1)
 
         # update the aliases
-        self.update_aliases(self.version)
+        self.update_statuses()
         # report the statistics of the indexing operation back into mongo
         return self.report_stats(op_buffer.stats)
 
@@ -128,13 +132,26 @@ class Indexer(Versioned):
         Run through the indexes and retrieve their mappings then send them to elasticsearch.
         """
         for index in self.indexes:
-            elasticsearch.send_mapping(self.config, index.name, index.get_mapping())
+            self.elasticsearch.indices.put_mapping(DOC_TYPE, index.get_mapping(), index=index.name)
 
-    def update_aliases(self, latest_version):
+    def update_statuses(self):
         """
-        Run through the indexes and retrieve the alias operations then send them to elasticsearch.
-
-        :param latest_version: the latest version from the data indexed
+        Run through the indexes and update the statuses for each.
         """
+        mapping = {
+            'mappings': {
+                DOC_TYPE: {
+                    'properties': {
+                        'latest_version': {
+                            'type': 'date',
+                            'format': 'epoch_millis'
+                        }
+                    }
+                }
+            }
+        }
+        # ensure the mapping exists for the status index
+        self.elasticsearch.indices.put_mapping(DOC_TYPE, mapping, index=self.config.elasticsearch_status_index_name)
         for index in self.indexes:
-            elasticsearch.send_aliases(self.config, index.get_alias_operations(latest_version))
+            status_doc = {'name': index.unprefixed_name, 'index_name': index.name, 'latest_version': self.version}
+            self.elasticsearch.index(index.name, DOC_TYPE, status_doc)

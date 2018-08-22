@@ -1,4 +1,7 @@
 import dictdiffer
+from elasticsearch import Elasticsearch
+
+DOC_TYPE = '_doc'
 
 
 def get_versions_and_data(mongo_doc):
@@ -23,3 +26,11 @@ def get_versions_and_data(mongo_doc):
             data = dictdiffer.patch(diff, data, in_place=False)
             # yield the version and data
             yield version, data
+
+
+def get_version_condition(version):
+    return {"term": {"meta.versions": version}},
+
+
+def get_elasticsearch_client(config):
+    return Elasticsearch(hosts=config.elasticsearch_hosts)

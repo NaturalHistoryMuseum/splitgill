@@ -1,4 +1,4 @@
-from eevee.indexing.utils import get_versions_and_data
+from eevee.indexing.utils import get_versions_and_data, get_version_condition, DOC_TYPE
 from eevee.utils import iter_pairs
 
 
@@ -10,11 +10,14 @@ class Index:
     def __init__(self, config, name, version):
         """
         :param config: the config object
-        :param name: the elasticsearch index name that the data held in this object will be indexed into
+        :param name: the elasticsearch index name that the data held in this object will be indexed into, note that this
+                     name will be prefixed with the config.elasticsearch_index_prefix value and stored in the name
+                     attribute whereas the name without the prefix will be stored in the unprefixed_name attribute
         :param version: the version we're indexing up to
         """
         self.config = config
-        self.name = name
+        self.unprefixed_name = name
+        self.name = f'{config.elasticsearch_index_prefix}{name}'
         self.version = version
 
     def get_commands(self, mongo_doc):
@@ -43,7 +46,7 @@ class Index:
             'index': {
                 # create an id for the document which is unique by using the record id and the version
                 '_id': f'{record_id}:{version}',
-                '_type': '_doc',
+                '_type': DOC_TYPE,
                 '_index': self.name,
             }
         }
@@ -99,7 +102,7 @@ class Index:
         # TODO: handle geolocations
         return {
             'mappings': {
-                '_doc': {
+                DOC_TYPE: {
                     'properties': {
                         'meta.versions': {
                             'type': 'date_range',
@@ -133,29 +136,4 @@ class Index:
                     ]
                 }
             }
-        }
-
-    def get_alias_operations(self, latest_version):
-        """
-        Returns a set of alias commands which will be used to update the aliases on this index. This will by default
-        just remove and recreate the "current" alias which allows easy searching of the current data without knowledge
-        of what the current version is.
-
-        :param latest_version: the latest version of the data that is in the index, this will be used to create the
-                               current alias
-        """
-        alias_name = f'{self.config.elasticsearch_current_alias_prefix}{self.name}'
-        alias_filter = {
-            "bool": {
-                "filter": [
-                    {"term": {"meta.versions": latest_version}},
-                ]
-            }
-        }
-        # remove and add the alias in one op so that there is no downtime for the "current" alias (it's atomic)
-        return {
-            'actions': [
-                {'remove': {'index': self.name, 'alias': alias_name}},
-                {'add': {'index': self.name, 'alias': alias_name, 'filter': alias_filter}}
-            ]
         }
