@@ -150,8 +150,10 @@ class Indexer(Versioned):
                 }
             }
         }
-        # ensure the mapping exists for the status index
-        self.elasticsearch.indices.put_mapping(DOC_TYPE, mapping, index=self.config.elasticsearch_status_index_name)
+        # ensure the status index exists with the correct mapping
+        if not self.elasticsearch.indices.exists(self.config.elasticsearch_status_index_name):
+            self.elasticsearch.indices.create(self.config.elasticsearch_status_index_name, body=mapping)
+
         for index in self.indexes:
             status_doc = {'name': index.unprefixed_name, 'index_name': index.name, 'latest_version': self.version}
-            self.elasticsearch.index(index.name, DOC_TYPE, status_doc)
+            self.elasticsearch.index(self.config.elasticsearch_status_index_name, DOC_TYPE, status_doc)

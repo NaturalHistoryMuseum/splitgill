@@ -101,39 +101,35 @@ class Index:
         """
         # TODO: handle geolocations
         return {
-            'mappings': {
-                DOC_TYPE: {
-                    'properties': {
-                        'meta.versions': {
-                            'type': 'date_range',
-                            'format': 'epoch_millis'
-                        },
-                        'meta.version': {
-                            'type': 'date',
-                            'format': 'epoch_millis'
-                        },
-                        'meta.next_version': {
-                            'type': 'date',
-                            'format': 'epoch_millis'
-                        },
-                        # the values of each field will be copied into this field easy querying
-                        "meta.all": {
-                            "type": "text"
-                        }
-                    },
-                    'dynamic_templates': [
-                        {
-                            # we want to be able to filter by all fields so we need to use keywords for everything and
-                            # then copy the values to an text type "all" field which is then used for free querying
-                            "create_all_and_force_keyword": {
-                                "path_match": "data.*",
-                                "mapping": {
-                                    "type": "keyword",
-                                    "copy_to": "meta.all",
-                                }
-                            }
-                        }
-                    ]
+            'properties': {
+                'meta.versions': {
+                    'type': 'date_range',
+                    'format': 'epoch_millis'
+                },
+                'meta.version': {
+                    'type': 'date',
+                    'format': 'epoch_millis'
+                },
+                'meta.next_version': {
+                    'type': 'date',
+                    'format': 'epoch_millis'
+                },
+                # the values of each field will be copied into this field easy querying
+                "meta.all": {
+                    "type": "text"
                 }
-            }
+            },
+            'dynamic_templates': [
+                {
+                    # we want to be able to filter by all fields so we need to use keywords for everything and
+                    # then copy the values to an text type "all" field which is then used for free querying
+                    "create_all_and_force_keyword": {
+                        "path_match": "data.*",
+                        "mapping": {
+                            "type": "keyword",
+                            "copy_to": "meta.all",
+                        }
+                    }
+                }
+            ]
         }
