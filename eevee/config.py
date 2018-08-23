@@ -8,7 +8,7 @@ class Config(object):
                  elasticsearch_status_index_name='status', mongo_host='localhost', mongo_port=27017,
                  mongo_database='nhm',
                  mongo_ingestion_stats_collection='ingestion_stats', mongo_indexing_stats_collection='indexing_stats',
-                 search_from=0, search_size=100):
+                 search_from=0, search_size=100, search_default_indexes=None):
         """
         :param elasticsearch_hosts:
         :param elasticsearch_index_prefix:
@@ -20,6 +20,7 @@ class Config(object):
         :param mongo_indexing_stats_collection:
         :param search_from:
         :param search_size:
+        :param search_default_indexes:
         """
         # elasticsearch
         self.elasticsearch_hosts = elasticsearch_hosts if elasticsearch_hosts else ['http://localhost:9200']
@@ -36,3 +37,4 @@ class Config(object):
         # searching
         self.search_from = search_from
         self.search_size = search_size
+        self.search_default_indexes = search_default_indexes if search_default_indexes is not None else ['*']
