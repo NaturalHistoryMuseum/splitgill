@@ -144,14 +144,11 @@ class Indexer(Versioned):
                     # update the monitoring functions with progress
                     for monitor in self.monitors:
                         monitor(total_indexed_so_far / total_records_to_index)
-
-        except KeyboardInterrupt:
-            pass
-
-        # send a sentinel to indicate that we're done putting indexing commands on the queue
-        queue.put(None)
-        # wait for all indexing commands to be sent
-        bulk_writer.join()
+        finally:
+            # send a sentinel to indicate that we're done putting indexing commands on the queue
+            queue.put(None)
+            # wait for all indexing commands to be sent
+            bulk_writer.join()
 
         # signal to all the monitors that we're done
         for monitor in self.monitors:
