@@ -117,7 +117,7 @@ class Indexer(Versioned):
         Indexes a set of records from mongo into elasticsearch.
         """
         # define the mappings first
-        self.define_mappings()
+        self.define_indexes()
 
         # work out the total number of documents we're going to go through and index, for monitoring purposes
         total_records_to_index = self.feeder.total()
@@ -159,14 +159,13 @@ class Indexer(Versioned):
         # report the statistics of the indexing operation back into mongo
         return self.report_stats(bulk_writer.stats)
 
-    def define_mappings(self):
+    def define_indexes(self):
         """
-        Run through the indexes and retrieve their mappings then send them to elasticsearch.
+        Run through the indexes, ensuring they exist and creating them if they don't.
         """
         for index in self.indexes:
             if not self.elasticsearch.indices.exists(index.name):
-                self.elasticsearch.indices.create(index.name)
-            self.elasticsearch.indices.put_mapping(DOC_TYPE, index.get_mapping(), index=index.name)
+                self.elasticsearch.indices.create(index.name, body=index.get_index_create_body())
 
     def update_statuses(self):
         """

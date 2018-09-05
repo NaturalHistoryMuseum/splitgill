@@ -93,43 +93,72 @@ class Index:
             metadata['next_version'] = next_version
         return metadata
 
-    def get_mapping(self):
+    def get_index_create_body(self):
         """
-        Returns the mapping dict which should be used for this index.
+        Returns a dict which will be passed to elasticsearch when the index is initialised.
 
         :return: a dict
         """
-        # TODO: handle geolocations
         return {
-            'properties': {
-                'meta.versions': {
-                    'type': 'date_range',
-                    'format': 'epoch_millis'
-                },
-                'meta.version': {
-                    'type': 'date',
-                    'format': 'epoch_millis'
-                },
-                'meta.next_version': {
-                    'type': 'date',
-                    'format': 'epoch_millis'
-                },
-                # the values of each field will be copied into this field easy querying
-                "meta.all": {
-                    "type": "text"
-                }
-            },
-            'dynamic_templates': [
-                {
-                    # we want to be able to filter by all fields so we need to use keywords for everything and
-                    # then copy the values to an text type "all" field which is then used for free querying
-                    "create_all_and_force_keyword": {
-                        "path_match": "data.*",
-                        "mapping": {
-                            "type": "keyword",
-                            "copy_to": "meta.all",
+            'settings': {
+                "analysis": {
+                    "normalizer": {
+                        "lowercase_normalizer": {
+                            "type": "custom",
+                            "char_filter": [],
+                            "filter": ["lowercase"]
                         }
                     }
                 }
-            ]
+            },
+            # TODO: handle geolocations
+            'mappings': {
+                DOC_TYPE: {
+                    'properties': {
+                        'meta.versions': {
+                            'type': 'date_range',
+                            'format': 'epoch_millis'
+                        },
+                        'meta.version': {
+                            'type': 'date',
+                            'format': 'epoch_millis'
+                        },
+                        'meta.next_version': {
+                            'type': 'date',
+                            'format': 'epoch_millis'
+                        },
+                        # the values of each field will be copied into this field easy querying
+                        "meta.all": {
+                            "type": "text"
+                        }
+                    },
+                    'dynamic_templates': [
+                        {
+                            # for all fields we want to:
+                            #  - store them as a text type so that we can do free searches on them
+                            #  - store them as a keyword type so that we can do keyword searches on them (available at
+                            #    <field_name>.keyword)
+                            #  - copy them to the meta.all field so that we can do queries across all fields easily
+                            # this dynamic mapping accomplishes these three things
+                            "standard_field": {
+                                "path_match": "data.*",
+                                "mapping": {
+                                    "type": "text",
+                                    "fields": {
+                                        # index a keyword version of the field at <field_name>.keyword
+                                        "keyword": {
+                                            "type": "keyword",
+                                            # ensure it's indexed lowercase so that it's easier to search
+                                            "normalizer": "lowercase_normalizer",
+                                            # 256 is the standard limit in elasticsearch
+                                            "ignore_above": 256
+                                        }
+                                    },
+                                    "copy_to": "meta.all",
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
         }
