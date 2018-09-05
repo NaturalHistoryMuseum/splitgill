@@ -130,21 +130,24 @@ class Indexer(Versioned):
         # create and then start a thread to send the commands to elasticsearch
         bulk_writer = ElasticsearchBulkWriterThread(self.indexes, self.elasticsearch, queue,
                                                     self.elasticsearch_bulk_size)
-        bulk_writer.start()
+        try:
+            bulk_writer.start()
+            for mongo_doc in self.feeder.documents():
+                total_indexed_so_far += 1
 
-        for mongo_doc in self.feeder.documents():
-            total_indexed_so_far += 1
+                for index in self.indexes:
+                    # add each of the commands to the op buffer
+                    for command in index.get_commands(mongo_doc):
+                        # queue the command, waiting if necessary for the queue to not be full
+                        queue.put(command)
 
-            for index in self.indexes:
-                # add each of the commands to the op buffer
-                for command in index.get_commands(mongo_doc):
-                    # queue the command, waiting if necessary for the queue to not be full
-                    queue.put(command)
+                if total_indexed_so_far % 1000 == 0:
+                    # update the monitoring functions with progress
+                    for monitor in self.monitors:
+                        monitor(total_indexed_so_far / total_records_to_index)
 
-            if total_indexed_so_far % 1000 == 0:
-                # update the monitoring functions with progress
-                for monitor in self.monitors:
-                    monitor(total_indexed_so_far / total_records_to_index)
+        except KeyboardInterrupt:
+            pass
 
         # send a sentinel to indicate that we're done putting indexing commands on the queue
         queue.put(None)
