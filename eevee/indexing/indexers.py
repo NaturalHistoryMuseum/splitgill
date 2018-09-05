@@ -17,16 +17,15 @@ class ElasticsearchBulkWriterThread(Thread):
     Thread which iterates over a queue of elasticsearch indexing commands, sending them off to elasticsearch in batches.
     """
 
-    def __init__(self, indexes, elasticsearch, queue, bulk_size, *args, **kwargs):
+    def __init__(self, indexes, elasticsearch, queue, bulk_size, **kwargs):
         """
         :param indexes: the index objects we're indexing into
         :param elasticsearch: the elasticsearch client object to use
         :param queue: the queue object to take the commands from
         :param bulk_size: how many commands to send to elasticsearch in one request
-        :param args: Thread.__init__ args
         :param kwargs: Thread.__init__ kwargs
         """
-        super().__init__(*args, **kwargs)
+        super().__init__(**kwargs)
         self.indexes = indexes
         self.elasticsearch = elasticsearch
         self.queue = queue
