@@ -3,6 +3,8 @@
 
 import dictdiffer
 
+from eevee.indexing.utils import get_versions_and_data
+from eevee.utils import serialise_diff
 from eevee.versioning import Versioned
 
 
@@ -70,11 +72,11 @@ class RecordToMongoConverter(Versioned):
             # permitted and therefore "versions.-1" doesn't work. This field just makes it easier to query the mongo
             # collection later
             'latest_version': self.version,
-            # sorted list of versions, with the oldest first, newest last
+            # list of versions for this record
             'versions': [self.version],
             # a dict of the incremental changes made by each version, note that the integer version is converted to
             # a string here because mongo can't handle non-string keys
-            'diffs': {str(self.version): diff},
+            'diffs': {str(self.version): serialise_diff(diff)},
         }
         return mongo_doc
 
@@ -88,7 +90,7 @@ class RecordToMongoConverter(Versioned):
         """
         # use a pair of dicts to record any updates required on the mongo document
         sets = {}
-        pushes = {}
+        add_to_sets = {}
 
         # convert the record to a dict according to the records requirements
         converted_record = record.convert()
@@ -100,18 +102,17 @@ class RecordToMongoConverter(Versioned):
             sets.update({
                 'latest_version': self.version,
                 'last_ingested': self.ingestion_time,
-                'data': converted_record,
-                f'diffs.{self.version}': diff,
+                f'diffs.{self.version}': serialise_diff(diff),
                 # allow modification of the metadata dict
                 'metadata': record.modify_metadata(mongo_doc['metadata']),
             })
-            # add the new version to the end of the versions array to ensure the sort order is maintained
-            pushes.update({'versions': self.version})
+            # add the new version to the versions array, ensuring there are no duplicates
+            add_to_sets.update({'versions': self.version})
 
         # create a mongo update operation if there are changes
         update = {}
         if sets:
             update['$set'] = sets
-        if pushes:
-            update['$push'] = pushes
+        if add_to_sets:
+            update['$addToSet'] = add_to_sets
         return update
