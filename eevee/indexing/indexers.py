@@ -17,7 +17,7 @@ class ElasticsearchBulkWriterThread(Thread):
     Thread which iterates over a queue of elasticsearch indexing commands, sending them off to elasticsearch in batches.
     """
 
-    def __init__(self, elasticsearch, queue, bulk_size, *args, **kwargs):
+    def __init__(self, indexes, elasticsearch, queue, bulk_size, *args, **kwargs):
         """
         :param indexes: the index objects we're indexing into
         :param elasticsearch: the elasticsearch client object to use
@@ -27,6 +27,7 @@ class ElasticsearchBulkWriterThread(Thread):
         :param kwargs: Thread.__init__ kwargs
         """
         super().__init__(*args, **kwargs)
+        self.indexes = indexes
         self.elasticsearch = elasticsearch
         self.queue = queue
         self.bulk_size = bulk_size
@@ -38,15 +39,26 @@ class ElasticsearchBulkWriterThread(Thread):
         When the thread is started this function is run. It pulls commands from the queue in batches and then sends
         those commands to elasticsearch.
         """
-        # read commands off the queue and process them in turn
-        for commands in chunk_iterator(iter(self.queue.get, None), chunk_size=self.bulk_size):
-            response = self.elasticsearch.bulk(itertools.chain.from_iterable(commands))
-            # extract stats from the elasticsearch response
-            for action_response in response['items']:
-                # each item in the items list is a dict with a single key and value, we're interested in the value
-                info = next(iter(action_response.values()))
-                # update the stats
-                self.stats[info['_index']][info['result']] += 1
+        try:
+            # change the refresh interval to -1 which means don't refresh at all. This is good for bulk indexing but
+            # also means that any changes to the index aren't visible until we reset this value which essentially
+            # provides a commit mechanic ensuring all the new data is visible at the same time
+            for index in self.indexes:
+                self.elasticsearch.indices.put_settings({"index": {"refresh_interval": -1}}, index.name)
+
+            # read commands off the queue and process them in turn
+            for commands in chunk_iterator(iter(self.queue.get, None), chunk_size=self.bulk_size):
+                response = self.elasticsearch.bulk(itertools.chain.from_iterable(commands))
+                # extract stats from the elasticsearch response
+                for action_response in response['items']:
+                    # each item in the items list is a dict with a single key and value, we're interested in the value
+                    info = next(iter(action_response.values()))
+                    # update the stats
+                    self.stats[info['_index']][info['result']] += 1
+        finally:
+            # ensure we put the refresh interval back to the default
+            for index in self.indexes:
+                self.elasticsearch.indices.put_settings({"index": {"refresh_interval": None}}, index.name)
 
 
 class Indexer(Versioned):
@@ -116,7 +128,8 @@ class Indexer(Versioned):
         # create a queue for elasticsearch commands
         queue = Queue(maxsize=self.queue_size)
         # create and then start a thread to send the commands to elasticsearch
-        bulk_writer = ElasticsearchBulkWriterThread(self.elasticsearch, queue, self.elasticsearch_bulk_size)
+        bulk_writer = ElasticsearchBulkWriterThread(self.indexes, self.elasticsearch, queue,
+                                                    self.elasticsearch_bulk_size)
         bulk_writer.start()
 
         for mongo_doc in self.feeder.documents():
