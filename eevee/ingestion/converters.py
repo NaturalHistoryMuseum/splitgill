@@ -99,6 +99,7 @@ class RecordToMongoConverter(Versioned):
         if should_update:
             # set some new values
             sets.update({
+                'data': converted_record,
                 'latest_version': self.version,
                 'last_ingested': self.ingestion_time,
                 f'diffs.{self.version}': serialise_diff(diff),
