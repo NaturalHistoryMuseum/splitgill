@@ -3,7 +3,6 @@
 
 import dictdiffer
 
-from eevee.indexing.utils import get_versions_and_data
 from eevee.utils import serialise_diff
 from eevee.versioning import Versioned
 
