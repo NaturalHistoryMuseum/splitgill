@@ -27,8 +27,10 @@ class Index:
         :param mongo_doc: the mongo doc to handle
         """
         # iterate over the data in pairs so that we can retrieve the next version too, use (None, None) as the final
-        # pair's partner so that we can use unpacking
-        for (version, data), (next_version, _next_data) in iter_pairs(get_versions_and_data(mongo_doc), (None, None)):
+        # pair's partner so that we can use unpacking. in_place is set to False for two reasons: 1. we're iterating over
+        # pairs and 2. the data isn't serialised until it's sent to elasticsearch, after all the data has been generated
+        data_generator = get_versions_and_data(mongo_doc, in_place=False)
+        for (version, data), (next_version, _next_data) in iter_pairs(data_generator, (None, None)):
             yield self.create_action(mongo_doc['id'], version), self.create_index_document(data, version, next_version)
 
     def create_action(self, record_id, version):
