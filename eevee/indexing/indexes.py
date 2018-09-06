@@ -1,5 +1,6 @@
+import copy
+
 from eevee.indexing.utils import get_versions_and_data, DOC_TYPE
-from eevee.utils import iter_pairs
 
 
 class Index:
@@ -26,12 +27,12 @@ class Index:
 
         :param mongo_doc: the mongo doc to handle
         """
-        # iterate over the data in pairs so that we can retrieve the next version too, use (None, None) as the final
-        # pair's partner so that we can use unpacking. in_place is set to False for two reasons: 1. we're iterating over
-        # pairs and 2. the data isn't serialised until it's sent to elasticsearch, after all the data has been generated
-        data_generator = get_versions_and_data(mongo_doc, in_place=False)
-        for (version, data), (next_version, _next_data) in iter_pairs(data_generator, (None, None)):
-            yield self.create_action(mongo_doc['id'], version), self.create_index_document(data, version, next_version)
+        # iterate over the mongo_docs versions and send them to elasticsearch
+        for version, data, next_version in get_versions_and_data(mongo_doc):
+            yield (self.create_action(mongo_doc['id'], version),
+                   # pass a deep copy of the data dict for indexing as the indexing occurs lazily (if we didn't do this
+                   # all the data dicts for each mongo doc that we send to elasticsearch would be the same)
+                   self.create_index_document(copy.deepcopy(data), version, next_version))
 
     def create_action(self, record_id, version):
         """
