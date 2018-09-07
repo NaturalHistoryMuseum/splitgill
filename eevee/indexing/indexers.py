@@ -201,4 +201,4 @@ class Indexer(Versioned):
 
         for index in self.indexes:
             status_doc = {'name': index.unprefixed_name, 'index_name': index.name, 'latest_version': self.version}
-            self.elasticsearch.index(self.config.elasticsearch_status_index_name, DOC_TYPE, status_doc)
+            self.elasticsearch.index(self.config.elasticsearch_status_index_name, DOC_TYPE, status_doc, id=index.name)
