@@ -14,7 +14,7 @@ eevee.egg-info/dependency_links.txt
 eevee.egg-info/requires.txt
 eevee.egg-info/top_level.txt
 eevee/indexing/__init__.py
-eevee/indexing/elasticsearch.py
+eevee/indexing/feeders.py
 eevee/indexing/indexers.py
 eevee/indexing/indexes.py
 eevee/indexing/utils.py
