@@ -117,7 +117,7 @@ class Searcher:
         if indexes is None:
             indexes = self.config.search_default_indexes
         # add the prefix to all the indexes
-        indexes = [f'{self.config.elasticsearch_index_prefix}{index}' for index in indexes]
+        indexes = ['{}{}'.format(self.config.elasticsearch_index_prefix, index) for index in indexes]
 
         # if no search has been specified, specify one which searches everything
         if search is None:

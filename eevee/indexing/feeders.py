@@ -1,9 +1,12 @@
 import abc
 
+import six
+
 from eevee.mongo import get_mongo
 
 
-class IndexFeeder(metaclass=abc.ABCMeta):
+@six.add_metaclass(abc.ABCMeta)
+class IndexFeeder(object):
     """
     Provides a stream of documents for indexing.
     """
@@ -44,7 +47,7 @@ class ConditionalIndexFeeder(IndexFeeder):
         :param condition: the condition to filter the documents in mongo with (can be none in which case all documents
                           in the collection are yielded)
         """
-        super().__init__(config, mongo_collection)
+        super(ConditionalIndexFeeder, self).__init__(config, mongo_collection)
         self.condition = condition if condition else {}
 
     def documents(self):

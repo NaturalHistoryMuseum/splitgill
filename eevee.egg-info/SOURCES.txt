@@ -4,7 +4,6 @@ requirements.txt
 setup.py
 eevee/__init__.py
 eevee/config.py
-eevee/importing.py
 eevee/mongo.py
 eevee/utils.py
 eevee/versioning.py

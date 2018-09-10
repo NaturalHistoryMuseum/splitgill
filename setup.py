@@ -8,8 +8,7 @@ DESCRIPTION = 'Versioned search library'
 URL = 'https://github.com/NaturalHistoryMuseum/eevee'
 EMAIL = 'data@nhm.ac.uk'
 AUTHOR = 'Josh Humphries'
-# TODO: needs to be 2.7.x compatible
-REQUIRES_PYTHON = '>=3.7.0'
+REQUIRES_PYTHON = '>=2.7,!=3.0.*,!=3.1.*'
 VERSION = '0.1'
 
 with open('requirements.txt', 'r') as req_file:
@@ -30,9 +29,7 @@ setup(
     license='MIT',
     classifiers=[
         'License :: OSI Approved :: MIT License',
-        'Programming Language :: Python',
+        'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: Implementation :: CPython'
         ]
     )

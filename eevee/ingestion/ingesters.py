@@ -22,7 +22,7 @@ class Ingester(Versioned):
         :param insert_op_name: the name of the insert operation (for stats)
         :param update_op_name: the name of the update operation (for stats)
         """
-        super().__init__(version)
+        super(Ingester, self).__init__(version)
         self.feeder = feeder
         self.record_to_mongo_converter = record_to_mongo_converter
         self.config = config

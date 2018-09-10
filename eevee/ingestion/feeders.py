@@ -3,10 +3,13 @@
 
 import abc
 
+import six
+
 from eevee.versioning import Versioned
 
 
-class BaseRecord(Versioned, metaclass=abc.ABCMeta):
+@six.add_metaclass(abc.ABCMeta)
+class BaseRecord(Versioned):
 
     @abc.abstractmethod
     def convert(self):
@@ -54,7 +57,7 @@ class BaseRecord(Versioned, metaclass=abc.ABCMeta):
 class IngestionFeeder(Versioned, metaclass=abc.ABCMeta):
 
     def __init__(self, version):
-        super().__init__(version)
+        super(IngestionFeeder, self).__init__(version)
         self.monitors = []
 
     @property

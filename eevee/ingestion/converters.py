@@ -18,7 +18,7 @@ class RecordToMongoConverter(Versioned):
         :param ingestion_time:  the time of the ingestion operation which will be attached to all records
                                 created/updated through this converter
         """
-        super().__init__(version)
+        super(RecordToMongoConverter, self).__init__(version)
         self.version = version
         self._ingestion_time = ingestion_time
 
@@ -102,7 +102,7 @@ class RecordToMongoConverter(Versioned):
                 'data': converted_record,
                 'latest_version': self.version,
                 'last_ingested': self.ingestion_time,
-                f'diffs.{self.version}': serialise_diff(diff),
+                'diffs.{}'.format(self.version): serialise_diff(diff),
                 # allow modification of the metadata dict
                 'metadata': record.modify_metadata(mongo_doc['metadata']),
             })

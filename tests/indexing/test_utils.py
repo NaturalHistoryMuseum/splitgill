@@ -1,10 +1,14 @@
-import math as maths
 from collections import OrderedDict
 
 import dictdiffer
+import six
 
 from eevee.indexing.utils import get_versions_and_data
 from eevee.utils import serialise_diff
+
+if six.PY2:
+    # the builtin version of zip in python 2 returns a list, we need an iterator so we have to use the itertools version
+    from itertools import izip as zip
 
 
 def test_get_versions_and_data():
@@ -15,7 +19,7 @@ def test_get_versions_and_data():
         (21, {'a': 22, 'x': 4002, 't': 'llamas', 'c': False}),
     ])
     mongo_doc = {
-        'versions': sorted(data.keys()),
+        'versions': list(data.keys()),
         'diffs': {
             '3': serialise_diff(list(dictdiffer.diff({}, data[3]))),
             '5': serialise_diff(list(dictdiffer.diff(data[3], data[5]))),
@@ -24,7 +28,7 @@ def test_get_versions_and_data():
         }
     }
 
-    next_versions = list(data.keys())[1:] + [maths.inf]
+    next_versions = list(data.keys())[1:] + [float("inf")]
     # check all the versions and data values match the test data
     for (rv, rd, rnv), (tv, td), tnv in zip(get_versions_and_data(mongo_doc), data.items(), next_versions):
         assert rv == tv

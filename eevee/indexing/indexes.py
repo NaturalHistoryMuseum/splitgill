@@ -18,7 +18,7 @@ class Index:
         """
         self.config = config
         self.unprefixed_name = name
-        self.name = f'{config.elasticsearch_index_prefix}{name}'
+        self.name = '{}{}'.format(config.elasticsearch_index_prefix, name)
         self.version = version
 
     def get_commands(self, mongo_doc):
@@ -48,7 +48,7 @@ class Index:
         return {
             'index': {
                 # create an id for the document which is unique by using the record id and the version
-                '_id': f'{record_id}:{version}',
+                '_id': '{}:{}'.format(record_id, version),
                 '_type': DOC_TYPE,
                 '_index': self.name,
             }

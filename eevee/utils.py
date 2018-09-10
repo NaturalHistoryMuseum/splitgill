@@ -1,8 +1,16 @@
 #!/usr/bin/env python3
 # encoding: utf-8
 import abc
+import calendar
 import itertools
 import ujson
+
+import six
+
+
+if six.PY2:
+    # the builtin version of zip in python 2 returns a list, we need an iterator so we have to use the itertools version
+    from itertools import izip as zip
 
 
 def chunk_iterator(iterable, chunk_size=1000):
@@ -31,8 +39,12 @@ def to_timestamp(moment):
     :param moment: a datetime object
     :return: the timestamp (number of milliseconds between the UNIX epoch and the moment) as an int
     """
+    if six.PY2:
+        ts = (calendar.timegm(moment.timetuple()) + moment.microsecond / 1000000.0)
+    else:
+        ts = moment.timestamp()
     # multiply by 1000 to get the time in milliseconds and use int to remove any decimal places
-    return int(moment.timestamp() * 1000)
+    return int(ts * 1000)
 
 
 def iter_pairs(iterable, final_partner=None):
@@ -58,7 +70,8 @@ def iter_pairs(iterable, final_partner=None):
     return zip(i1, itertools.chain(itertools.islice(i2, 1, None), [final_partner]))
 
 
-class OpBuffer(metaclass=abc.ABCMeta):
+@six.add_metaclass(abc.ABCMeta)
+class OpBuffer(object):
     """
     Convenience class and context manager which allows buffering operations and then handling them in bulk.
     """
@@ -82,7 +95,7 @@ class OpBuffer(metaclass=abc.ABCMeta):
         # out of sequence
         if len(self.ops) >= self.size:
             self.handle_ops()
-            self.ops.clear()
+            self.ops = []
             return True
         return False
 
@@ -92,7 +105,7 @@ class OpBuffer(metaclass=abc.ABCMeta):
         """
         if self.ops:
             self.handle_ops()
-            self.ops.clear()
+            self.ops = []
 
     @abc.abstractmethod
     def handle_ops(self):

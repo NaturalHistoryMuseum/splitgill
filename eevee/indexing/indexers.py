@@ -3,13 +3,18 @@
 import itertools
 from collections import Counter, defaultdict
 from datetime import datetime
-from queue import Queue
 from threading import Thread
-
+import six
 from eevee.indexing.utils import DOC_TYPE, get_elasticsearch_client
 from eevee.mongo import get_mongo
 from eevee.utils import chunk_iterator
 from eevee.versioning import Versioned
+
+
+if six.PY2:
+    from Queue import Queue
+else:
+    from queue import Queue
 
 
 class ElasticsearchBulkWriterThread(Thread):
@@ -25,7 +30,7 @@ class ElasticsearchBulkWriterThread(Thread):
         :param bulk_size: how many commands to send to elasticsearch in one request
         :param kwargs: Thread.__init__ kwargs
         """
-        super().__init__(**kwargs)
+        super(ElasticsearchBulkWriterThread, self).__init__(**kwargs)
         self.index = index
         self.elasticsearch = elasticsearch
         self.queue = queue
@@ -72,7 +77,7 @@ class Indexer(Versioned):
         :param elasticsearch_bulk_size: the number of pairs of commands to send to elasticsearch in one bulk request
         :param queue_size: the maximum size of the elasticsearch command queue
         """
-        super().__init__(version)
+        super(Indexer).__init__(version)
         self.config = config
         self.feeders_and_indexes = feeders_and_indexes
         self.feeders, self.indexes = zip(*feeders_and_indexes)

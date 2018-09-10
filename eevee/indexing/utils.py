@@ -1,5 +1,3 @@
-import math as maths
-
 import dictdiffer
 from elasticsearch import Elasticsearch
 
@@ -8,7 +6,7 @@ from eevee.utils import deserialise_diff, iter_pairs
 DOC_TYPE = '_doc'
 
 
-def get_versions_and_data(mongo_doc, future_next_version=maths.inf):
+def get_versions_and_data(mongo_doc, future_next_version=float("inf")):
     """
     Returns a generator which will yield, in order, the version, data and next version from the given record as a
     3=tuple in that order. The next version is provided for convenience. The last version will be yielded with its data
