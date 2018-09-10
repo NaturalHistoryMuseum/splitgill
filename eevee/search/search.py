@@ -8,13 +8,12 @@ from eevee.indexing.utils import get_elasticsearch_client
 
 class SearchResult:
 
-    def __init__(self, config, result, hit_meta, aggs=None):
+    def __init__(self, config, result, hit_meta):
         self.config = config
         self.result = result
         self.data = self.result.get('data', {})
         self.meta = self.result.get('meta', {})
         self.hit_meta = hit_meta
-        self.aggs = aggs
         self.prefix_length = len(self.config.elasticsearch_index_prefix)
 
     @property
@@ -55,9 +54,13 @@ class SearchResults:
     def total(self):
         return None if self.response is None else self.response.hits.total
 
+    @property
+    def aggregations(self):
+        return self.response.aggs
+
     def results(self):
         for hit in self.hits:
-            yield SearchResult(self.config, hit.to_dict(), hit.meta, self.response.aggs)
+            yield SearchResult(self.config, hit.to_dict(), hit.meta)
 
 
 class Searcher:
