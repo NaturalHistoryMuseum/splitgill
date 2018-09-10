@@ -54,7 +54,8 @@ class BaseRecord(Versioned):
         return None
 
 
-class IngestionFeeder(Versioned, metaclass=abc.ABCMeta):
+@six.add_metaclass(abc.ABCMeta)
+class IngestionFeeder(Versioned):
 
     def __init__(self, version):
         super(IngestionFeeder, self).__init__(version)
