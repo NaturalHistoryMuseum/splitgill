@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 # encoding: utf-8
 
-import math as maths
-
 from elasticsearch_dsl import Search, Q
 
 from eevee.indexing.utils import get_elasticsearch_client
@@ -131,7 +129,7 @@ class Searcher:
             filters = []
             # if no version is passed we want to work on the latest version of each index, hence we set this variable to
             # +inf so that the min call in the loop always results in the index's latest version being used
-            comparison_version = version if version is not None else maths.inf
+            comparison_version = version if version is not None else float('inf')
             for index, latest_version in self.get_index_versions(indexes).items():
                 # figure out the version to filter on
                 version_to_filter = min(latest_version, comparison_version)
