@@ -8,11 +8,13 @@ from eevee.indexing.utils import get_elasticsearch_client
 
 class SearchResult:
 
-    def __init__(self, config, data, meta, hit_meta):
+    def __init__(self, config, result, hit_meta, aggs=None):
         self.config = config
-        self.data = data
-        self.meta = meta
+        self.result = result
+        self.data = self.result.get('data', {})
+        self.meta = self.result.get('meta', {})
         self.hit_meta = hit_meta
+        self.aggs = aggs
         self.prefix_length = len(self.config.elasticsearch_index_prefix)
 
     @property
@@ -54,12 +56,9 @@ class SearchResults:
         return None if self.response is None else self.response.hits.total
 
     def results(self):
+        aggs = self.response.get('aggregations', None)
         for hit in self.hits:
-            result = hit.to_dict()
-            # we permit data and meta to be absent from the search result in case the searcher has removed them using
-            # the _source elasticsearch field, if the user wants to be strict about these existing they can override
-            # the pre_search functionality of the Searcher below
-            yield SearchResult(self.config, result.get('data', {}), result.get('meta', {}), hit.meta)
+            yield SearchResult(self.config, hit.to_dict(), hit.meta, aggs)
 
 
 class Searcher:
