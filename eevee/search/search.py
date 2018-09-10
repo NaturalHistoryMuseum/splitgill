@@ -56,7 +56,10 @@ class SearchResults:
     def results(self):
         for hit in self.hits:
             result = hit.to_dict()
-            yield SearchResult(self.config, result['data'], result['meta'], hit.meta)
+            # we permit data and meta to be absent from the search result in case the searcher has removed them using
+            # the _source elasticsearch field, if the user wants to be strict about these existing they can override
+            # the pre_search functionality of the Searcher below
+            yield SearchResult(self.config, result.get('data', {}), result.get('meta', {}), hit.meta)
 
 
 class Searcher:
