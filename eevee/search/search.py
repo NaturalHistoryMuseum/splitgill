@@ -56,9 +56,8 @@ class SearchResults:
         return None if self.response is None else self.response.hits.total
 
     def results(self):
-        aggs = self.response.get('aggregations', None)
         for hit in self.hits:
-            yield SearchResult(self.config, hit.to_dict(), hit.meta, aggs)
+            yield SearchResult(self.config, hit.to_dict(), hit.meta, self.response.aggs)
 
 
 class Searcher:
