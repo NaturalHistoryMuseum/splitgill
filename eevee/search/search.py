@@ -56,7 +56,7 @@ class SearchResults:
 
     @property
     def aggregations(self):
-        return self.response.aggs
+        return self.response.aggs.to_dict()
 
     def results(self):
         for hit in self.hits:
