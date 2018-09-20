@@ -77,7 +77,7 @@ class Indexer(Versioned):
         :param elasticsearch_bulk_size: the number of pairs of commands to send to elasticsearch in one bulk request
         :param queue_size: the maximum size of the elasticsearch command queue
         """
-        super(Indexer).__init__(version)
+        super(Indexer, self).__init__(version)
         self.config = config
         self.feeders_and_indexes = feeders_and_indexes
         self.feeders, self.indexes = zip(*feeders_and_indexes)
