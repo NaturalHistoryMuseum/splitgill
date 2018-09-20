@@ -136,9 +136,7 @@ class Index:
                         # a geo point meta field. This is defined here but not filled in by eevee and therefore must be
                         # populated by subclassing the index process
                         'meta.geo': {
-                            'type': 'geo_point',
-                            # ignore malformed data
-                            'ignore_malformed': True,
+                            'type': 'geo_point'
                         },
                     },
                     'dynamic_templates': [

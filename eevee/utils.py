@@ -99,6 +99,15 @@ class OpBuffer(object):
             return True
         return False
 
+    def add_all(self, ops):
+        """
+        Adds all the given ops to the buffer one by one.
+
+        :param ops: the ops to add
+        :return: True if the buffer was handled whilst adding the ops, False if not
+        """
+        return any(set(map(self.add, ops)))
+
     def flush(self):
         """
         Flushes any remaining ops in the buffer.
