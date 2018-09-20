@@ -114,7 +114,6 @@ class Index:
                     }
                 }
             },
-            # TODO: handle geolocations
             'mappings': {
                 DOC_TYPE: {
                     'properties': {
@@ -133,7 +132,14 @@ class Index:
                         # the values of each field will be copied into this field easy querying
                         "meta.all": {
                             "type": "text"
-                        }
+                        },
+                        # a geo point meta field. This is defined here but not filled in by eevee and therefore must be
+                        # populated by subclassing the index process
+                        'meta.geo': {
+                            'type': 'geo_point',
+                            # ignore malformed data
+                            'ignore_malformed': True,
+                        },
                     },
                     'dynamic_templates': [
                         {
