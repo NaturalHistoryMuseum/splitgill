@@ -4,11 +4,13 @@ import itertools
 from collections import Counter, defaultdict
 from datetime import datetime
 from threading import Thread
+
 import six
+from pathos import multiprocessing
+
 from eevee.indexing.utils import DOC_TYPE, get_elasticsearch_client
 from eevee.mongo import get_mongo
 from eevee.utils import chunk_iterator
-from eevee.versioning import Versioned
 
 
 if six.PY2:
@@ -63,13 +65,14 @@ class ElasticsearchBulkWriterThread(Thread):
             self.elasticsearch.indices.put_settings({"index": {"refresh_interval": None}}, self.index.name)
 
 
-class Indexer(Versioned):
+class Indexer(object):
     """
     Class encapsulating the functionality required to index records.
     """
 
     def __init__(self, version, config, feeders_and_indexes, elasticsearch_bulk_size=2000, queue_size=100000):
         """
+        :param version: the version we're indexing up to
         :param config: the config object
         :param feeders_and_indexes: sequence of 2-tuples where each tuple is made up of a feeder object which provides
                                     the documents from mongo to index and an index object which will be used to generate
@@ -77,7 +80,7 @@ class Indexer(Versioned):
         :param elasticsearch_bulk_size: the number of pairs of commands to send to elasticsearch in one bulk request
         :param queue_size: the maximum size of the elasticsearch command queue
         """
-        super(Indexer, self).__init__(version)
+        self.version = version
         self.config = config
         self.feeders_and_indexes = feeders_and_indexes
         self.feeders, self.indexes = zip(*feeders_and_indexes)
@@ -170,7 +173,8 @@ class Indexer(Versioned):
         """
         Run through the indexes, ensuring they exist and creating them if they don't.
         """
-        for index in self.indexes:
+        # use a set to avoid repeating our work if the indexes are repeated
+        for index in set(self.indexes):
             if not self.elasticsearch.indices.exists(index.name):
                 self.elasticsearch.indices.create(index.name, body=index.get_index_create_body())
 
@@ -206,6 +210,100 @@ class Indexer(Versioned):
         if not self.elasticsearch.indices.exists(self.config.elasticsearch_status_index_name):
             self.elasticsearch.indices.create(self.config.elasticsearch_status_index_name, body=index_definition)
 
-        for index in self.indexes:
+        # use a set to avoid updating the status for an index multiple times
+        for index in set(self.indexes):
             status_doc = {'name': index.unprefixed_name, 'index_name': index.name, 'latest_version': self.version}
             self.elasticsearch.index(self.config.elasticsearch_status_index_name, DOC_TYPE, status_doc, id=index.name)
+
+
+class MultiprocessIndexer(Indexer):
+    """
+    Class encapsulating the functionality required to index records using a pool of processes. This code uses pathos and
+    to do the multiprocessing which uses dill so you should check that your code works a) in a multiprocess environment
+    and b) with dill and pathos (mainly dill).
+    """
+
+    def __init__(self, version, config, feeders_and_indexes, elasticsearch_bulk_size=2000, pool_size=3):
+        """
+        :param version: the version we're indexing up to
+        :param config: the config object
+        :param feeders_and_indexes: sequence of 2-tuples where each tuple is made up of a feeder object which provides
+                                    the documents from mongo to index and an index object which will be used to generate
+                                    the data to index from the feeder's documents
+        :param elasticsearch_bulk_size: the number of pairs of commands to send to elasticsearch in one bulk request
+        :param pool_size: the number of processes to have in the pool of workers
+        """
+        super(MultiprocessIndexer, self).__init__(version, config, feeders_and_indexes, elasticsearch_bulk_size)
+        self.pool_size = pool_size
+
+    def _index_process(self, params):
+        """
+        Function run on a separate process which does the indexing work for a given feeder and index combination.
+
+        :param params: a 2-tuple of the feeder and the index
+        :return: a 2-tuple of the number of documents processed and the stats dict
+        """
+        feeder, index = params
+        count = 0
+        # create a queue for elasticsearch commands
+        queue = Queue()
+        # create and then start a thread to send the commands to elasticsearch
+        bulk_writer = ElasticsearchBulkWriterThread(self.config, queue, self.elasticsearch_bulk_size)
+        try:
+            bulk_writer.start()
+            for mongo_doc in feeder.documents():
+                count += 1
+                # add each of the commands to the op buffer
+                for command in index.get_commands(mongo_doc):
+                    # queue the command, waiting if necessary for the queue to not be full
+                    queue.put(command)
+        finally:
+            # send a sentinel to indicate that we're done putting indexing commands on the queue
+            queue.put(None)
+            # wait for all indexing commands to be sent
+            bulk_writer.join()
+        return count, bulk_writer.stats
+
+    def index(self):
+        """
+        Indexes a set of records from mongo into elasticsearch.
+        """
+        # define the mappings first
+        self.define_indexes()
+
+        # work out the total number of documents we're going to go through and index, for monitoring purposes
+        total_records_to_index = sum(feeder.total() for feeder in self.feeders)
+        # keep a count of the number of documents indexed so far
+        total_indexed_so_far = 0
+        # total stats across all feeder/index combinations
+        stats = defaultdict(Counter)
+
+        # create a pool of workers to spread the indexing load on
+        with multiprocessing.Pool(processes=self.pool_size) as pool:
+            try:
+                # first of all, set the refresh intervals for all included indexes to -1 for faster ingestion
+                for index in set(self.indexes):
+                    self.elasticsearch.indices.put_settings({"index": {"refresh_interval": -1}}, index.name)
+
+                # now iterate submit all the feeder and index pairs to the pool. When each one completes, how many docs
+                # it handled and it's indexing stats will be returned
+                for count, pool_stats in pool.imap(self._index_process, self.feeders_and_indexes):
+                    total_indexed_so_far += count
+                    for monitor in self.monitors:
+                        monitor(total_indexed_so_far / total_records_to_index)
+                    # update the stats based on the new stats from the bulk writer
+                    for index_name, counter in pool_stats.items():
+                        stats[index_name].update(counter)
+            finally:
+                # ensure all the indexes have their refresh intervals returned to normal
+                for index in set(self.indexes):
+                    self.elasticsearch.indices.put_settings({"index": {"refresh_interval": None}}, index.name)
+
+        # signal to all the monitors that we're done
+        for monitor in self.monitors:
+            monitor(1)
+
+        # update the aliases
+        self.update_statuses()
+        # report the statistics of the indexing operation back into mongo
+        return self.report_stats(stats)
