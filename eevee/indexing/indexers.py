@@ -248,7 +248,7 @@ class MultiprocessIndexer(Indexer):
         # create a queue for elasticsearch commands
         queue = Queue()
         # create and then start a thread to send the commands to elasticsearch
-        bulk_writer = ElasticsearchBulkWriterThread(self.config, queue, self.elasticsearch_bulk_size)
+        bulk_writer = ElasticsearchBulkWriterThread(index, self.config, queue, self.elasticsearch_bulk_size)
         try:
             bulk_writer.start()
             for mongo_doc in feeder.documents():
