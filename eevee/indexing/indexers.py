@@ -23,10 +23,10 @@ class ElasticsearchBulkWriterThread(Thread):
     Thread which iterates over a queue of elasticsearch indexing commands, sending them off to elasticsearch in batches.
     """
 
-    def __init__(self, index, elasticsearch, queue, bulk_size, update_refresh=True, **kwargs):
+    def __init__(self, index, config, queue, bulk_size, update_refresh=True, **kwargs):
         """
         :param index: the index object we're indexing into
-        :param elasticsearch: the elasticsearch client object to use
+        :param config: the config object
         :param queue: the queue object to take the commands from
         :param bulk_size: how many commands to send to elasticsearch in one request
         :param update_refresh: whether to alter the refresh_interval on the index before and after indexing or not
@@ -35,12 +35,14 @@ class ElasticsearchBulkWriterThread(Thread):
         """
         super(ElasticsearchBulkWriterThread, self).__init__(**kwargs)
         self.index = index
-        self.elasticsearch = elasticsearch
+        self.config = config
         self.queue = queue
         self.bulk_size = bulk_size
         self.update_refresh = update_refresh
         # store the statistics about the indexing operations in this attribute
         self.stats = defaultdict(Counter)
+        self.elasticsearch = get_elasticsearch_client(self.config, sniff_on_start=True, sniff_on_connection_fail=True,
+                                                      sniffer_timeout=60, sniff_timeout=10, http_compress=True)
 
     def run(self):
         """
@@ -141,7 +143,7 @@ class Indexer(object):
             # create a queue for elasticsearch commands
             queue = Queue(maxsize=self.queue_size)
             # create and then start a thread to send the commands to elasticsearch
-            bulk_writer = ElasticsearchBulkWriterThread(index, self.elasticsearch, queue, self.elasticsearch_bulk_size)
+            bulk_writer = ElasticsearchBulkWriterThread(index, self.config, queue, self.elasticsearch_bulk_size)
             try:
                 bulk_writer.start()
                 for mongo_doc in feeder.documents():
@@ -227,7 +229,7 @@ class MultiprocessIndexer(Indexer):
     and b) with dill and pathos (mainly dill).
     """
 
-    def __init__(self, version, config, feeders_and_indexes, elasticsearch_bulk_size=2000, pool_size=3):
+    def __init__(self, version, config, feeders_and_indexes, elasticsearch_bulk_size=2000, pool_size=3, total=None):
         """
         :param version: the version we're indexing up to
         :param config: the config object
@@ -236,9 +238,14 @@ class MultiprocessIndexer(Indexer):
                                     the data to index from the feeder's documents
         :param elasticsearch_bulk_size: the number of pairs of commands to send to elasticsearch in one bulk request
         :param pool_size: the number of processes to have in the pool of workers
+        :param total: the total number of documents that will be fed through from the feeders. If None (default) then
+                      the total function on each feeder will be called and summed to calculate the total. This is useful
+                      to pass through if calculating the total by summing each feeder's total function return is
+                      inefficient in some way.
         """
         super(MultiprocessIndexer, self).__init__(version, config, feeders_and_indexes, elasticsearch_bulk_size)
         self.pool_size = pool_size
+        self.total = total
 
     def _index_process(self, feeder_and_index):
         """
@@ -276,8 +283,6 @@ class MultiprocessIndexer(Indexer):
         # define the mappings first
         self.define_indexes()
 
-        # work out the total number of documents we're going to go through and index, for monitoring purposes
-        total_records_to_index = sum(feeder.total() for feeder in self.feeders)
         # keep a count of the number of documents indexed so far
         total_indexed_so_far = 0
         # total stats across all feeder/index combinations
@@ -285,6 +290,10 @@ class MultiprocessIndexer(Indexer):
 
         # create a pool of workers to spread the indexing load on
         with multiprocessing.Pool(processes=self.pool_size) as pool:
+            if self.total is None:
+                # work out the total number of documents we're going to go through and index, for monitoring purposes
+                self.total = sum(pool.map(lambda feeder: feeder.total(), self.feeders))
+
             try:
                 # first of all, set the refresh intervals for all included indexes to -1 for faster ingestion
                 for index in set(self.indexes):
@@ -295,7 +304,7 @@ class MultiprocessIndexer(Indexer):
                 for count, pool_stats in pool.imap(self._index_process, self.feeders_and_indexes):
                     total_indexed_so_far += count
                     for monitor in self.monitors:
-                        monitor(total_indexed_so_far / total_records_to_index)
+                        monitor(total_indexed_so_far / self.total)
                     # update the stats based on the new stats from the bulk writer
                     for index_name, counter in pool_stats.items():
                         stats[index_name].update(counter)
