@@ -12,7 +12,6 @@ from eevee.indexing.utils import DOC_TYPE, get_elasticsearch_client
 from eevee.mongo import get_mongo
 from eevee.utils import chunk_iterator
 
-
 if six.PY2:
     from Queue import Queue
 else:
@@ -24,12 +23,14 @@ class ElasticsearchBulkWriterThread(Thread):
     Thread which iterates over a queue of elasticsearch indexing commands, sending them off to elasticsearch in batches.
     """
 
-    def __init__(self, index, elasticsearch, queue, bulk_size, **kwargs):
+    def __init__(self, index, elasticsearch, queue, bulk_size, update_refresh=True, **kwargs):
         """
         :param index: the index object we're indexing into
         :param elasticsearch: the elasticsearch client object to use
         :param queue: the queue object to take the commands from
         :param bulk_size: how many commands to send to elasticsearch in one request
+        :param update_refresh: whether to alter the refresh_interval on the index before and after indexing or not
+                               (default: true)
         :param kwargs: Thread.__init__ kwargs
         """
         super(ElasticsearchBulkWriterThread, self).__init__(**kwargs)
@@ -37,6 +38,7 @@ class ElasticsearchBulkWriterThread(Thread):
         self.elasticsearch = elasticsearch
         self.queue = queue
         self.bulk_size = bulk_size
+        self.update_refresh = update_refresh
         # store the statistics about the indexing operations in this attribute
         self.stats = defaultdict(Counter)
 
@@ -49,7 +51,8 @@ class ElasticsearchBulkWriterThread(Thread):
             # change the refresh interval to -1 which means don't refresh at all. This is good for bulk indexing but
             # also means that any changes to the index aren't visible until we reset this value which essentially
             # provides a commit mechanic ensuring all the new data is visible at the same time
-            self.elasticsearch.indices.put_settings({"index": {"refresh_interval": -1}}, self.index.name)
+            if self.update_refresh:
+                self.elasticsearch.indices.put_settings({"index": {"refresh_interval": -1}}, self.index.name)
 
             # read commands off the queue and process them in turn
             for commands in chunk_iterator(iter(self.queue.get, None), chunk_size=self.bulk_size):
@@ -62,7 +65,8 @@ class ElasticsearchBulkWriterThread(Thread):
                     self.stats[info['_index']][info['result']] += 1
         finally:
             # ensure we put the refresh interval back to the default
-            self.elasticsearch.indices.put_settings({"index": {"refresh_interval": None}}, self.index.name)
+            if self.update_refresh:
+                self.elasticsearch.indices.put_settings({"index": {"refresh_interval": None}}, self.index.name)
 
 
 class Indexer(object):
@@ -236,19 +240,20 @@ class MultiprocessIndexer(Indexer):
         super(MultiprocessIndexer, self).__init__(version, config, feeders_and_indexes, elasticsearch_bulk_size)
         self.pool_size = pool_size
 
-    def _index_process(self, params):
+    def _index_process(self, feeder_and_index):
         """
         Function run on a separate process which does the indexing work for a given feeder and index combination.
 
-        :param params: a 2-tuple of the feeder and the index
+        :param feeder_and_index: a 2-tuple of the feeder and the index
         :return: a 2-tuple of the number of documents processed and the stats dict
         """
-        feeder, index = params
+        feeder, index = feeder_and_index
         count = 0
         # create a queue for elasticsearch commands
         queue = Queue()
         # create and then start a thread to send the commands to elasticsearch
-        bulk_writer = ElasticsearchBulkWriterThread(index, self.config, queue, self.elasticsearch_bulk_size)
+        bulk_writer = ElasticsearchBulkWriterThread(index, self.config, queue, self.elasticsearch_bulk_size,
+                                                    update_refresh=False)
         try:
             bulk_writer.start()
             for mongo_doc in feeder.documents():
