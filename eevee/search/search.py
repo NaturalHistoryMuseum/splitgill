@@ -181,3 +181,17 @@ class Searcher:
         else:
             response = search.execute()
             return self.post_search(response.hits, indexes, search, version, response=response)
+
+    def get_versions(self, index, record_id, max_versions=1000):
+        """
+        Given the id of a record, returns all the available versions of that record in the given index. The versions are
+        timestamps represented by milliseconds since the UNIX epoch. They are returned as a list in ascending order.
+
+        :param index: the index name (unprefixed)
+        :param record_id: the record id
+        :param max_versions: the maximum number of versions to retrieve, defaults to 1000
+        :return: a list of sorted versions available for the given record
+        """
+        index = '{}{}'.format(self.config.elasticsearch_index_prefix, index)
+        search = Search(using=self.elasticsearch, index=index).query('term', **{'data._id': record_id})[:max_versions]
+        return sorted(hit['meta']['version'] for hit in search)
