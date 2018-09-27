@@ -119,7 +119,7 @@ class Searcher:
         if indexes is None:
             indexes = self.config.search_default_indexes
         # add the prefix to all the indexes
-        indexes = ['{}{}'.format(self.config.elasticsearch_index_prefix, index) for index in indexes]
+        indexes = list(map(self.prefix_index, indexes))
 
         # if no search has been specified, specify one which searches everything
         if search is None:
@@ -192,6 +192,15 @@ class Searcher:
         :param max_versions: the maximum number of versions to retrieve, defaults to 1000
         :return: a list of sorted versions available for the given record
         """
-        index = '{}{}'.format(self.config.elasticsearch_index_prefix, index)
+        index = self.prefix_index(index)
         search = Search(using=self.elasticsearch, index=index).query('term', **{'data._id': record_id})[:max_versions]
         return sorted(hit['meta']['version'] for hit in search)
+
+    def prefix_index(self, index):
+        """
+        Adds the prefix from the config to the index.
+
+        :param index: the index name (without the prefix)
+        :return: the prefixed index name
+        """
+        return '{}{}'.format(self.config.elasticsearch_index_prefix, index)
