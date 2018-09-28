@@ -42,7 +42,7 @@ class ElasticsearchBulkWriterThread(Thread):
         # store the statistics about the indexing operations in this attribute
         self.stats = defaultdict(Counter)
         self.elasticsearch = get_elasticsearch_client(self.config, sniff_on_start=True, sniff_on_connection_fail=True,
-                                                      sniffer_timeout=60, sniff_timeout=10, http_compress=True)
+                                                      sniffer_timeout=60, sniff_timeout=10, http_compress=False)
 
     def run(self):
         """
@@ -93,7 +93,7 @@ class Indexer(object):
         self.elasticsearch_bulk_size = elasticsearch_bulk_size
         self.queue_size = queue_size
         self.elasticsearch = get_elasticsearch_client(self.config, sniff_on_start=True, sniff_on_connection_fail=True,
-                                                      sniffer_timeout=60, sniff_timeout=10, http_compress=True)
+                                                      sniffer_timeout=60, sniff_timeout=10, http_compress=False)
         self.monitors = []
         self.start = datetime.now()
 
