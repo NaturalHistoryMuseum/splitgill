@@ -6,7 +6,7 @@ from elasticsearch_dsl import Search, Q
 from eevee.indexing.utils import get_elasticsearch_client
 
 
-class SearchResult:
+class SearchResult(object):
 
     def __init__(self, config, result, hit_meta):
         self.config = config
@@ -29,7 +29,7 @@ class SearchResult:
         return self.hit_meta.index[self.prefix_length:]
 
 
-class SearchResults:
+class SearchResults(object):
     """
     Class that represents some search results which have been retrieved from elasticsearch through standard searching or
     the scroll API.
@@ -63,7 +63,7 @@ class SearchResults:
             yield SearchResult(self.config, hit.to_dict(), hit.meta)
 
 
-class Searcher:
+class Searcher(object):
     """
     Class providing functionality for searching elasticsearch indexes which have been defined using the eevee indexing
     code. This class is threadsafe and therefore a single, global instance is the recommended way to use it.

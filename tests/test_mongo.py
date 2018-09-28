@@ -10,7 +10,7 @@ from tests.helpers import Bunch
 from pymongo import MongoClient
 
 
-class TestMongo:
+class TestMongo(object):
 
     def setup(self):
         self.config = Bunch(mongo_host='localhost', mongo_port=27017, mongo_database='test_database')

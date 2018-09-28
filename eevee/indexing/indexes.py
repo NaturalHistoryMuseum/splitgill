@@ -3,7 +3,7 @@ import copy
 from eevee.indexing.utils import get_versions_and_data, DOC_TYPE
 
 
-class Index:
+class Index(object):
     """
     Represents an index in elasticsearch.
     """
