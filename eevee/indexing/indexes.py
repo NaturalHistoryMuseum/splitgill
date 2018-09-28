@@ -91,7 +91,7 @@ class Index:
             },
             'version': version,
         }
-        if next_version:
+        if next_version and next_version != float('inf'):
             metadata['versions']['lt'] = next_version
             metadata['next_version'] = next_version
         return metadata
