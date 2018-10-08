@@ -54,7 +54,10 @@ class RecordToMongoConverter(Versioned):
         """
         # convert the record to a dict according to the records requirements
         converted_record = record.convert()
-        diff = self.diff_data({}, converted_record)[1]
+        should_insert, diff = self.diff_data({}, converted_record)
+        # if the converted doc is empty, ignore it
+        if not should_insert:
+            return None
         mongo_doc = {
             'id': record.id,
             # keep a record of when this record was first ingested and last ingested, these are the actual times not
