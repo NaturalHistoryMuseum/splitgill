@@ -131,11 +131,12 @@ class Indexer(object):
         # generate and return the report dict
         return {
             u'version': self.version,
-            u'source': sorted(set(feeder.mongo_collection for feeder in self.feeders)),
+            u'sources': sorted(set(feeder.mongo_collection for feeder in self.feeders)),
+            u'targets': sorted(set(index.name for index in self.indexes)),
             u'start': self.start,
             u'end': end,
             u'duration': (end - self.start).total_seconds(),
-            u'operations': operations
+            u'operations': operations,
         }
 
     def index(self):
