@@ -8,15 +8,18 @@ class Config(object):
                  elasticsearch_status_index_name='status', mongo_host='localhost', mongo_port=27017,
                  mongo_database='eevee', search_from=0, search_size=100, search_default_indexes=None):
         """
-        :param elasticsearch_hosts:
-        :param elasticsearch_index_prefix:
-        :param elasticsearch_status_index_name:
-        :param mongo_host:
-        :param mongo_port:
-        :param mongo_database:
-        :param search_from:
-        :param search_size:
-        :param search_default_indexes:
+        :param elasticsearch_hosts: a list of known elasticsearch servers to connect to for searching and indexing.
+                                    Defaults to ['http://localhost:9200'].
+        :param elasticsearch_index_prefix: a prefix to be added to all indexes in elasticsearch (cannot be None, but can
+                                           be an empty string
+        :param elasticsearch_status_index_name: the name of the indexing containing the status of each index
+        :param mongo_host: the mongo server host
+        :param mongo_port: the mongo server port
+        :param mongo_database: the mongo database to use
+        :param search_from: the default offset value to start a search from if one is not provided at search time
+        :param search_size: the default size of the search if one is not provided at search time
+        :param search_default_indexes: the default indices to search over (must be a list, should not be prefixed).
+                                       Defaults to ['*'] which searches everything.
         """
         # elasticsearch
         self.elasticsearch_hosts = elasticsearch_hosts if elasticsearch_hosts else ['http://localhost:9200']
