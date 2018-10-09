@@ -61,7 +61,8 @@ def test_to_timestamp():
     # check that dates are treated as utc
     assert to_timestamp(datetime.strptime('19700101', '%Y%m%d').replace(tzinfo=pytz.utc)) == 0
     # check a later date too
-    assert to_timestamp(datetime.strptime('20180713', '%Y%m%d').replace(tzinfo=pytz.utc)) == 1531440000000
+    assert to_timestamp(
+        datetime.strptime('20180713', '%Y%m%d').replace(tzinfo=pytz.utc)) == 1531440000000
 
 
 def test_iter_pairs():
@@ -74,6 +75,7 @@ def test_iter_pairs():
     # check scenario when final partner is itself a sequence
     assert list(iter_pairs([1, 2, 3], (1, 2))) == [(1, 2), (2, 3), (3, (1, 2))]
     # check when everything is None
-    assert list(iter_pairs([None, None, None], 'final')) == [(None, None), (None, None), (None, 'final')]
+    assert list(iter_pairs([None, None, None], 'final')) == [(None, None), (None, None),
+                                                             (None, 'final')]
     # check that it can handle iterators too
     assert list(iter_pairs(range(0, 4), 'final')) == [(0, 1), (1, 2), (2, 3), (3, 'final')]

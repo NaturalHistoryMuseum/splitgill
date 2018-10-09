@@ -7,7 +7,8 @@ from eevee.ingestion.converters import RecordToMongoConverter
 def test_diff_data():
     converter = RecordToMongoConverter(10, MagicMock())
 
-    assert converter.diff_data({'a': 4}, {'a': 5}) == (True, list(dictdiffer.diff({'a': 4}, {'a': 5})))
+    assert converter.diff_data({'a': 4}, {'a': 5}) == (True, list(dictdiffer.diff({'a': 4},
+                                                                                  {'a': 5})))
     assert converter.diff_data({'a': 4}, {'a': 4}) == (False, [])
     assert converter.diff_data({}, {}) == (False, [])
     assert converter.diff_data({}, {'a': 4}) == (True, list(dictdiffer.diff({}, {'a': 4})))
@@ -18,7 +19,8 @@ def test_for_insert(monkeypatch):
     mock_serialise_diff = MagicMock(return_value='serialised_the_diff')
     monkeypatch.setattr('eevee.ingestion.converters.serialise_diff', mock_serialise_diff)
     mock_diff_data = MagicMock(return_value=(True, 'the_diff'))
-    monkeypatch.setattr('eevee.ingestion.converters.RecordToMongoConverter.diff_data', mock_diff_data)
+    monkeypatch.setattr('eevee.ingestion.converters.RecordToMongoConverter.diff_data',
+                        mock_diff_data)
 
     record = MagicMock(id=3, modify_metadata=MagicMock(return_value={'metadataaaa': 'yeah!'}),
                        convert=MagicMock(return_value={'a': 4}))
@@ -41,7 +43,8 @@ def test_for_insert(monkeypatch):
 
 def test_for_insert_no_insert(monkeypatch):
     mock_diff_data = MagicMock(return_value=(False, 'the_diff'))
-    monkeypatch.setattr('eevee.ingestion.converters.RecordToMongoConverter.diff_data', mock_diff_data)
+    monkeypatch.setattr('eevee.ingestion.converters.RecordToMongoConverter.diff_data',
+                        mock_diff_data)
 
     record = MagicMock(id=3, convert=MagicMock(return_value={}))
     converter = RecordToMongoConverter(10, MagicMock())
@@ -55,7 +58,8 @@ def test_for_update(monkeypatch):
     mock_serialise_diff = MagicMock(return_value='serialised_the_diff')
     monkeypatch.setattr('eevee.ingestion.converters.serialise_diff', mock_serialise_diff)
     mock_diff_data = MagicMock(return_value=(True, 'the_diff'))
-    monkeypatch.setattr('eevee.ingestion.converters.RecordToMongoConverter.diff_data', mock_diff_data)
+    monkeypatch.setattr('eevee.ingestion.converters.RecordToMongoConverter.diff_data',
+                        mock_diff_data)
 
     record = MagicMock(id=3, modify_metadata=MagicMock(return_value={'metadataaaa': 'nope!'}),
                        convert=MagicMock(return_value={'a': 5}))
@@ -75,7 +79,8 @@ def test_for_update(monkeypatch):
 
 def test_for_update_no_update(monkeypatch):
     mock_diff_data = MagicMock(return_value=(False, 'the_diff'))
-    monkeypatch.setattr('eevee.ingestion.converters.RecordToMongoConverter.diff_data', mock_diff_data)
+    monkeypatch.setattr('eevee.ingestion.converters.RecordToMongoConverter.diff_data',
+                        mock_diff_data)
 
     record = MagicMock(id=3, convert=MagicMock(return_value={'a': 4}))
     mongo_doc = {'data': {'a': 4}}

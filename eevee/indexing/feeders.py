@@ -29,23 +29,25 @@ class IndexFeeder(object):
     @abc.abstractmethod
     def total(self):
         """
-        Returns the total number of documents that will be indexed if the documents generator is exhausted. This method
-        will always be called before the `documents` method and is purely used for monitoring purposes (currently!).
+        Returns the total number of documents that will be indexed if the documents generator is
+        exhausted. This method will always be called before the `documents` method and is purely
+        used for monitoring purposes (currently!).
         """
         pass
 
 
 class ConditionalIndexFeeder(IndexFeeder):
     """
-    Simple index feeder class which uses a condition to filter the mongo documents in the collection provided.
+    Simple index feeder class which uses a condition to filter the mongo documents in the collection
+    provided.
     """
 
     def __init__(self, config, mongo_collection, condition=None):
         """
         :param config: the config object
         :param mongo_collection: the collection to pull records from
-        :param condition: the condition to filter the documents in mongo with (can be none in which case all documents
-                          in the collection are yielded)
+        :param condition: the condition to filter the documents in mongo with (can be none in which
+                          case all documents in the collection are yielded)
         """
         super(ConditionalIndexFeeder, self).__init__(config, mongo_collection)
         self.condition = condition if condition else {}

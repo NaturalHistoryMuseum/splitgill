@@ -7,7 +7,8 @@ from eevee.indexing.utils import get_versions_and_data
 from eevee.utils import serialise_diff
 
 if six.PY2:
-    # the builtin version of zip in python 2 returns a list, we need an iterator so we have to use the itertools version
+    # the builtin version of zip in python 2 returns a list, we need an iterator so we have to use
+    # the itertools version
     from itertools import izip as zip
 
 
@@ -30,7 +31,8 @@ def test_get_versions_and_data():
 
     next_versions = list(data.keys())[1:] + [float("inf")]
     # check all the versions and data values match the test data
-    for (rv, rd, rnv), (tv, td), tnv in zip(get_versions_and_data(mongo_doc), data.items(), next_versions):
+    for (rv, rd, rnv), (tv, td), tnv in zip(get_versions_and_data(mongo_doc), data.items(),
+                                            next_versions):
         assert rv == tv
         assert rd == td
         assert rnv == tnv

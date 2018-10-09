@@ -12,13 +12,15 @@ from eevee.versioning import Versioned
 
 class Ingester(Versioned):
 
-    def __init__(self, version, feeder, record_to_mongo_converter, config, chunk_size=1000, insert_op_name='inserted',
-                 update_op_name='updated'):
+    def __init__(self, version, feeder, record_to_mongo_converter, config, chunk_size=1000,
+                 insert_op_name='inserted', update_op_name='updated'):
         """
         :param feeder: the feeder object to get records from
-        :param record_to_mongo_converter: the object to use to convert the records to dicts ready for storage in mongo
+        :param record_to_mongo_converter: the object to use to convert the records to dicts ready
+                                          for storage in mongo
         :param config: the config object
-        :param chunk_size: chunks of data will be read from the feeder and processed together in lists of this size
+        :param chunk_size: chunks of data will be read from the feeder and processed together in
+                           lists of this size
         :param insert_op_name: the name of the insert operation (for stats)
         :param update_op_name: the name of the update operation (for stats)
         """
@@ -33,8 +35,9 @@ class Ingester(Versioned):
 
     def ensure_mongo_indexes_exist(self, mongo_collection):
         """
-        To improve performance we need some mongo indexes, this function ensures the indexes we want exist. If
-        overriding ensure this function is called as well to avoid potentially lower ingestion/indexing performance.
+        To improve performance we need some mongo indexes, this function ensures the indexes we want
+        exist. If overriding ensure this function is called as well to avoid potentially lower
+        ingestion/indexing performance.
 
         :param mongo_collection: the name of the mongo collection to add the indexes to
         """
@@ -43,13 +46,15 @@ class Ingester(Versioned):
             mongo.create_index('id', unique=True)
             # index versions for faster searches for records that were updated in specific versions
             mongo.create_index('versions')
-            # index latest_version for faster searches for records that were last updated in a specific version
+            # index latest_version for faster searches for records that were last updated in a
+            # specific version
             mongo.create_index('latest_version')
 
     def get_stats(self, operations):
         """
-        Returns the statistics of a completed ingestion in the form of a dict. The operations parameter is expected to
-        be a dict of the form {mongo_collection -> {inserts: #, updates: #}} but can take any form as long as it can be
+        Returns the statistics of a completed ingestion in the form of a dict. The operations
+        parameter is expected to be a dict of the form
+        {mongo_collection -> {inserts: #, updates: #}} but can take any form as long as it can be
         handled sensibly by any downstream functions.
 
         :param operations: a dict describing the operations that occurred
@@ -81,20 +86,23 @@ class Ingester(Versioned):
             for record in chunk:
                 collection_mapping[record.mongo_collection].append(record)
 
-            # then iterate over the collections and their records, inserting/updating the records into each collection
-            # in turn
+            # then iterate over the collections and their records, inserting/updating the records
+            # into each collection in turn
             for collection, records in collection_mapping.items():
                 # make sure the indexes we want exist for this collection
                 self.ensure_mongo_indexes_exist(collection)
 
                 with get_mongo(self.config, self.config.mongo_database, collection) as mongo:
-                    # keep a dict of operations so that we can do them in bulk and also avoid attempting to act twice on
-                    # the same record id in case entries in the source are duplicated. Only the first operation against
-                    # an id is run, the other entries are ignored
+                    # keep a dict of operations so that we can do them in bulk and also avoid
+                    # attempting to act twice on the same record id in case entries in the source
+                    # are duplicated. Only the first operation against an id is run, the other
+                    # entries are ignored
                     operations = {}
 
-                    # create a lookup of the current documents in this collection, keyed on their ids
-                    current_docs = {doc['id']: doc for doc in mongo.find({'id': {'$in': [r.id for r in records]}})}
+                    # create a lookup of the current documents in this collection, keyed on their
+                    # ids
+                    current_docs = {doc['id']: doc for doc in
+                                    mongo.find({'id': {'$in': [r.id for r in records]}})}
 
                     for record in records:
                         # ignore ids we've already dealt with
@@ -102,14 +110,15 @@ class Ingester(Versioned):
                             # see if there is a version of this record already in mongo
                             mongo_doc = current_docs.get(record.id, None)
                             if not mongo_doc:
-                                # record needs adding to the collection, add an insert operation to our list if the
-                                # converter returns one
+                                # record needs adding to the collection, add an insert operation to
+                                # our list if the converter returns one
                                 insert_doc = self.record_to_mongo_converter.for_insert(record)
                                 if insert_doc:
                                     operations[record.id] = InsertOne(insert_doc)
                             else:
                                 # record might need updating
-                                update_doc = self.record_to_mongo_converter.for_update(record, mongo_doc)
+                                update_doc = self.record_to_mongo_converter.for_update(record,
+                                                                                       mongo_doc)
                                 if update_doc:
                                     # an update is required, add the update operation to our list
                                     operations[record.id] = UpdateOne({'id': record.id}, update_doc)

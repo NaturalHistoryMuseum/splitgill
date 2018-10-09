@@ -11,9 +11,11 @@ class Index(object):
     def __init__(self, config, name, version):
         """
         :param config: the config object
-        :param name: the elasticsearch index name that the data held in this object will be indexed into, note that this
-                     name will be prefixed with the config.elasticsearch_index_prefix value and stored in the name
-                     attribute whereas the name without the prefix will be stored in the unprefixed_name attribute
+        :param name: the elasticsearch index name that the data held in this object will be indexed
+                     into, note that this name will be prefixed with the
+                     config.elasticsearch_index_prefix value and stored in the name attribute
+                     whereas the name without the prefix will be stored in the unprefixed_name
+                     attribute
         :param version: the version we're indexing up to
         """
         self.config = config
@@ -30,24 +32,26 @@ class Index(object):
         # iterate over the mongo_docs versions and send them to elasticsearch
         for version, data, next_version in get_versions_and_data(mongo_doc):
             yield (self.create_action(mongo_doc['id'], version),
-                   # pass a deep copy of the data dict for indexing as the indexing occurs lazily (if we didn't do this
-                   # all the data dicts for each mongo doc that we send to elasticsearch would be the same)
+                   # pass a deep copy of the data dict for indexing as the indexing occurs lazily
+                   # (if we didn't do this all the data dicts for each mongo doc that we send to
+                   # elasticsearch would be the same)
                    self.create_index_document(copy.deepcopy(data), version, next_version))
 
     def create_action(self, record_id, version):
         """
-        Creates a dictionary containing the action information for elasticsearch. This tells elasticsearch what to do,
-        i.e. index, delete, create etc.
+        Creates a dictionary containing the action information for elasticsearch. This tells
+        elasticsearch what to do, i.e. index, delete, create etc.
 
         :param record_id: the id of the record
         :param version: the version of the record
         :return: a dictionary
         """
-        # build and return the dictionary. Note that the document type is fixed as _doc as this parameter is no longer
-        # used and will be removed in future versions of elasticsearch
+        # build and return the dictionary. Note that the document type is fixed as _doc as this
+        # parameter is no longer used and will be removed in future versions of elasticsearch
         return {
             'index': {
-                # create an id for the document which is unique by using the record id and the version
+                # create an id for the document which is unique by using the record id and the
+                # version
                 '_id': '{}:{}'.format(record_id, version),
                 '_type': DOC_TYPE,
                 '_index': self.name,
@@ -133,8 +137,8 @@ class Index(object):
                         "meta.all": {
                             "type": "text"
                         },
-                        # a geo point meta field. This is defined here but not filled in by eevee and therefore must be
-                        # populated by subclassing the index process
+                        # a geo point meta field. This is defined here but not filled in by eevee
+                        # and therefore must be populated by subclassing the index process
                         'meta.geo': {
                             'type': 'geo_point'
                         },
@@ -142,11 +146,12 @@ class Index(object):
                     'dynamic_templates': [
                         {
                             # for all fields we want to:
-                            #  - store them as a keyword type so that we can do keyword searches on them
-                            #  - store them as a text type so that we can do free searches on them (available at
-                            # <field_name>.full)
-                            #  - copy them to the meta.all field so that we can do queries across all fields easily
-                            # this dynamic mapping accomplishes these three things
+                            #  - store them as a keyword type so that we can do keyword searches on
+                            #    them
+                            #  - store them as a text type so that we can do free searches on them
+                            #    (available at <field_name>.full)
+                            #  - copy them to the meta.all field so that we can do queries across
+                            #    all fields easily this dynamic mapping accomplishes these 3 things
                             "standard_field": {
                                 "path_match": "data.*",
                                 "mapping": {

@@ -9,7 +9,8 @@ import six
 
 
 if six.PY2:
-    # the builtin version of zip in python 2 returns a list, we need an iterator so we have to use the itertools version
+    # the builtin version of zip in python 2 returns a list, we need an iterator so we have to use
+    # the itertools version
     from itertools import izip as zip
 
 
@@ -33,8 +34,9 @@ def chunk_iterator(iterable, chunk_size=1000):
 
 def to_timestamp(moment):
     """
-    Converts a datetime into a timestamp value. The timestamp returned is an int. The timestamp value is the number of
-    milliseconds that have elapsed between the UNIX epoch and the given moment.
+    Converts a datetime into a timestamp value. The timestamp returned is an int. The timestamp
+    value is the number of milliseconds that have elapsed between the UNIX epoch and the given
+    moment.
 
     :param moment: a datetime object
     :return: the timestamp (number of milliseconds between the UNIX epoch and the moment) as an int
@@ -49,9 +51,9 @@ def to_timestamp(moment):
 
 def iter_pairs(iterable, final_partner=None):
     """
-    Produces a generator that iterates over the iterable provided, yielding a tuple of consecutive items. When the final
-    item in the iterable is reached, it is yielded with the final partner parameter. For example, printing the result
-    of:
+    Produces a generator that iterates over the iterable provided, yielding a tuple of consecutive
+    items. When the final item in the iterable is reached, it is yielded with the final partner
+    parameter. For example, printing the result of:
 
         iter_pairs([1,2,3,4])
 
@@ -63,7 +65,8 @@ def iter_pairs(iterable, final_partner=None):
         (4, None)
 
     :param iterable: the iterable or iterator to pair up
-    :param final_partner: the value that will partner the final item in the iterable (defaults to None)
+    :param final_partner: the value that will partner the final item in the iterable (defaults to
+                          None)
     :return: a generator object
     """
     i1, i2 = itertools.tee(iterable)
@@ -73,7 +76,8 @@ def iter_pairs(iterable, final_partner=None):
 @six.add_metaclass(abc.ABCMeta)
 class OpBuffer(object):
     """
-    Convenience class and context manager which allows buffering operations and then handling them in bulk.
+    Convenience class and context manager which allows buffering operations and then handling them
+    in bulk.
     """
 
     def __init__(self, size):
@@ -91,8 +95,8 @@ class OpBuffer(object):
         :return: True if the buffer was handled, False if not
         """
         self.ops.append(op)
-        # check greater than or equal to instead of just equal to to avoid any issues with the op list being modified
-        # out of sequence
+        # check greater than or equal to instead of just equal to to avoid any issues with the op
+        # list being modified out of sequence
         if len(self.ops) >= self.size:
             self.handle_ops()
             self.ops = []
@@ -119,7 +123,8 @@ class OpBuffer(object):
     @abc.abstractmethod
     def handle_ops(self):
         """
-        Handles the ops in the buffer currently. There is no need to clear the buffer in the implementing subclass.
+        Handles the ops in the buffer currently. There is no need to clear the buffer in the
+        implementing subclass.
         """
         pass
 
@@ -134,18 +139,20 @@ class OpBuffer(object):
 
 def serialise_diff(diff):
     """
-    Serialise a diff for storage in mongo. The diff is a list and therefore there are three ways to store this in mongo:
+    Serialise a diff for storage in mongo. The diff is a list and therefore there are three ways to
+    store this in mongo:
 
         - as a list
         - as a gzipped, json dumped string
         - as a json dumped string
 
-    Turns out, option 1 increases the size of a document significantly and is therefore slow to read, write and process
-    through pymongo. Option 2 is better on document size, however the time it takes to compress and uncompress the data
-    is significant. This leaves option 3 which is the most space efficient and fastest way to store the data for
-    processing too. This is because the data is compressed when stored as a string by mongo so we get some of the
-    benefits of option 2, and then ujson does a great job of dumping and loading the data (it's significantly faster
-    than the built in python json module).
+    Turns out, option 1 increases the size of a document significantly and is therefore slow to
+    read, write and process through pymongo. Option 2 is better on document size, however the time
+    it takes to compress and uncompress the data is significant. This leaves option 3 which is the
+    most space efficient and fastest way to store the data for processing too. This is because the
+    data is compressed when stored as a string by mongo so we get some of the benefits of option 2,
+    and then ujson does a great job of dumping and loading the data (it's significantly faster than
+    the built in python json module).
 
     :param diff: the diff output from dictdiffer as a list
     :return: a serialised version of the diff, ready for storage in mongo
