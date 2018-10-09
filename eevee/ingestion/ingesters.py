@@ -1,5 +1,6 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # encoding: utf-8
+
 from collections import defaultdict, Counter
 from datetime import datetime
 

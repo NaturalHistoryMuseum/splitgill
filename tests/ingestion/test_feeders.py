@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# encoding: utf-8
+
 from mock import MagicMock, call
 
 from eevee.ingestion.feeders import IngestionFeeder

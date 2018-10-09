@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# encoding: utf-8
+
 import copy
 
 from eevee.indexing.utils import get_versions_and_data, DOC_TYPE

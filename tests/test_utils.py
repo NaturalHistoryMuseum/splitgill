@@ -1,5 +1,6 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # encoding: utf-8
+
 import pytz
 from datetime import datetime
 
