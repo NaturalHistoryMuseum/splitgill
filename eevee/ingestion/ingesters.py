@@ -65,6 +65,7 @@ class Ingester(Versioned):
         return {
             u'version': self.version,
             u'source': self.feeder.source,
+            u'targets': sorted(operations.keys()),
             u'ingestion_time': self.record_to_mongo_converter.ingestion_time,
             u'start': self.start,
             u'end': end,
