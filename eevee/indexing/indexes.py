@@ -23,7 +23,7 @@ class Index(object):
         """
         self.config = config
         self.unprefixed_name = name
-        self.name = '{}{}'.format(config.elasticsearch_index_prefix, name)
+        self.name = u'{}{}'.format(config.elasticsearch_index_prefix, name)
         self.version = version
 
     def get_commands(self, mongo_doc):
@@ -34,7 +34,7 @@ class Index(object):
         """
         # iterate over the mongo_docs versions and send them to elasticsearch
         for version, data, next_version in get_versions_and_data(mongo_doc):
-            yield (self.create_action(mongo_doc['id'], version),
+            yield (self.create_action(mongo_doc[u'id'], version),
                    # pass a deep copy of the data dict for indexing as the indexing occurs lazily
                    # (if we didn't do this all the data dicts for each mongo doc that we send to
                    # elasticsearch would be the same)
@@ -52,12 +52,12 @@ class Index(object):
         # build and return the dictionary. Note that the document type is fixed as _doc as this
         # parameter is no longer used and will be removed in future versions of elasticsearch
         return {
-            'index': {
+            u'index': {
                 # create an id for the document which is unique by using the record id and the
                 # version
-                '_id': '{}:{}'.format(record_id, version),
-                '_type': DOC_TYPE,
-                '_index': self.name,
+                u'_id': u'{}:{}'.format(record_id, version),
+                u'_type': DOC_TYPE,
+                u'_index': self.name,
             }
         }
 
@@ -71,8 +71,8 @@ class Index(object):
         :return: a dictionary
         """
         return {
-            'data': self.create_data(data),
-            'meta': self.create_metadata(version, next_version),
+            u'data': self.create_data(data),
+            u'meta': self.create_metadata(version, next_version),
         }
 
     def create_data(self, data):
@@ -93,14 +93,14 @@ class Index(object):
         :return: a dictionary of metadata information
         """
         metadata = {
-            'versions': {
-                'gte': version,
+            u'versions': {
+                u'gte': version,
             },
-            'version': version,
+            u'version': version,
         }
-        if next_version and next_version != float('inf'):
-            metadata['versions']['lt'] = next_version
-            metadata['next_version'] = next_version
+        if next_version and next_version != float(u'inf'):
+            metadata[u'versions'][u'lt'] = next_version
+            metadata[u'next_version'] = next_version
         return metadata
 
     def get_index_create_body(self):
@@ -110,43 +110,43 @@ class Index(object):
         :return: a dict
         """
         return {
-            'settings': {
-                "analysis": {
-                    "normalizer": {
-                        "lowercase_normalizer": {
-                            "type": "custom",
-                            "char_filter": [],
-                            "filter": ["lowercase"]
+            u'settings': {
+                u'analysis': {
+                    u'normalizer': {
+                        u'lowercase_normalizer': {
+                            u'type': u'custom',
+                            u'char_filter': [],
+                            u'filter': [u'lowercase']
                         }
                     }
                 }
             },
-            'mappings': {
+            u'mappings': {
                 DOC_TYPE: {
-                    'properties': {
-                        'meta.versions': {
-                            'type': 'date_range',
-                            'format': 'epoch_millis'
+                    u'properties': {
+                        u'meta.versions': {
+                            u'type': u'date_range',
+                            u'format': u'epoch_millis'
                         },
-                        'meta.version': {
-                            'type': 'date',
-                            'format': 'epoch_millis'
+                        u'meta.version': {
+                            u'type': u'date',
+                            u'format': u'epoch_millis'
                         },
-                        'meta.next_version': {
-                            'type': 'date',
-                            'format': 'epoch_millis'
+                        u'meta.next_version': {
+                            u'type': u'date',
+                            u'format': u'epoch_millis'
                         },
                         # the values of each field will be copied into this field easy querying
-                        "meta.all": {
-                            "type": "text"
+                        u'meta.all': {
+                            u'type': u'text'
                         },
                         # a geo point meta field. This is defined here but not filled in by eevee
                         # and therefore must be populated by subclassing the index process
-                        'meta.geo': {
-                            'type': 'geo_point'
+                        u'meta.geo': {
+                            u'type': u'geo_point'
                         },
                     },
-                    'dynamic_templates': [
+                    u'dynamic_templates': [
                         {
                             # for all fields we want to:
                             #  - store them as a keyword type so that we can do keyword searches on
@@ -155,21 +155,21 @@ class Index(object):
                             #    (available at <field_name>.full)
                             #  - copy them to the meta.all field so that we can do queries across
                             #    all fields easily this dynamic mapping accomplishes these 3 things
-                            "standard_field": {
-                                "path_match": "data.*",
-                                "mapping": {
-                                    "type": "keyword",
+                            u'standard_field': {
+                                u'path_match': u'data.*',
+                                u'mapping': {
+                                    u'type': u'keyword',
                                     # ensure it's indexed lowercase so that it's easier to search
-                                    "normalizer": "lowercase_normalizer",
+                                    u'normalizer': u'lowercase_normalizer',
                                     # 256 is the standard limit in elasticsearch
-                                    "ignore_above": 256,
-                                    "fields": {
+                                    u'ignore_above': 256,
+                                    u'fields': {
                                         # index a text version of the field at <field_name>.full
-                                        "full": {
-                                            "type": "text",
+                                        u'full': {
+                                            u'type': u'text',
                                         }
                                     },
-                                    "copy_to": "meta.all",
+                                    u'copy_to': u'meta.all',
                                 }
                             }
                         }

@@ -11,8 +11,8 @@ class SearchResult(object):
     def __init__(self, config, result, hit_meta):
         self.config = config
         self.result = result
-        self.data = self.result.get('data', {})
-        self.meta = self.result.get('meta', {})
+        self.data = self.result.get(u'data', {})
+        self.meta = self.result.get(u'meta', {})
         self.hit_meta = hit_meta
         self.prefix_length = len(self.config.elasticsearch_index_prefix)
 
@@ -104,8 +104,8 @@ class Searcher(object):
         search = Search(using=self.elasticsearch,
                         index=self.config.elasticsearch_status_index_name)[:1000]
         if indexes is not None:
-            search = search.filter('regexp', index_name='|'.join(index.replace('*', '.*')
-                                                                 for index in indexes))
+            search = search.filter(u'regexp', index_name=u'|'.join(index.replace(u'*', u'.*')
+                                                                   for index in indexes))
         return {hit.index_name: hit.latest_version for hit in search}
 
     def pre_search(self, indexes=None, search=None, version=None):
@@ -142,15 +142,15 @@ class Searcher(object):
             # if no version is passed we want to work on the latest version of each index, hence we
             # set this variable to +inf so that the min call in the loop always results in the
             # index's latest version being used
-            comparison_version = version if version is not None else float('inf')
+            comparison_version = version if version is not None else float(u'inf')
             for index, latest_version in self.get_index_versions(indexes).items():
                 # figure out the version to filter on
                 version_to_filter = min(latest_version, comparison_version)
                 # add the filter to the list
-                filters.append(Q("term", _index=index) & Q("term", **{'meta.versions':
-                                                                      version_to_filter}))
+                filters.append(Q(u'term', _index=index) & Q(u'term', **{u'meta.versions':
+                                                                        version_to_filter}))
             # add the filter to the search
-            search = search.filter(Q('bool', should=filters, minimum_should_match=1))
+            search = search.filter(Q(u'bool', should=filters, minimum_should_match=1))
 
         # add the indexes to the search
         search = search.index(indexes)
@@ -206,10 +206,9 @@ class Searcher(object):
         :return: a list of sorted versions available for the given record
         """
         index = self.prefix_index(index)
-        search = Search(using=self.elasticsearch, index=index).query('term',
-                                                                     **{'data._id': record_id})[
-                 :max_versions]
-        return sorted(hit['meta']['version'] for hit in search)
+        search = Search(using=self.elasticsearch, index=index).query(
+            u'term', **{u'data._id': record_id})[:max_versions]
+        return sorted(hit[u'meta'][u'version'] for hit in search)
 
     def prefix_index(self, index):
         """
@@ -218,4 +217,4 @@ class Searcher(object):
         :param index: the index name (without the prefix)
         :return: the prefixed index name
         """
-        return '{}{}'.format(self.config.elasticsearch_index_prefix, index)
+        return u'{}{}'.format(self.config.elasticsearch_index_prefix, index)

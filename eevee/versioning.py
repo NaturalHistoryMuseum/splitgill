@@ -7,8 +7,8 @@ class Versioned(object):
     def __init__(self, version):
         # has to be an int representing an epoch time in milliseconds, this assert makes sure the
         # developer is doing it right
-        assert isinstance(version, int), 'the version must be an integer number of milliseconds' \
-                                         'since the UNIX epoch'
+        assert isinstance(version, int), u'the version must be an integer number of milliseconds' \
+                                         u'since the UNIX epoch'
         self.version = version
 
     def version_matches(self, lower, upper=None):

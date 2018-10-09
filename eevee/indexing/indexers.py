@@ -57,23 +57,23 @@ class ElasticsearchBulkWriterThread(Thread):
             # reset this value which essentially provides a commit mechanic ensuring all the new
             # data is visible at the same time
             if self.update_refresh:
-                self.elasticsearch.indices.put_settings({"index": {"refresh_interval": -1}},
+                self.elasticsearch.indices.put_settings({u'index': {u'refresh_interval': -1}},
                                                         self.index.name)
 
             # read commands off the queue and process them in turn
             for commands in chunk_iterator(iter(self.queue.get, None), chunk_size=self.bulk_size):
                 response = self.elasticsearch.bulk(itertools.chain.from_iterable(commands))
                 # extract stats from the elasticsearch response
-                for action_response in response['items']:
+                for action_response in response[u'items']:
                     # each item in the items list is a dict with a single key and value, we're
                     # interested in the value
                     info = next(iter(action_response.values()))
                     # update the stats
-                    self.stats[info['_index']][info['result']] += 1
+                    self.stats[info[u'_index']][info[u'result']] += 1
         finally:
             # ensure we put the refresh interval back to the default
             if self.update_refresh:
-                self.elasticsearch.indices.put_settings({"index": {"refresh_interval": None}},
+                self.elasticsearch.indices.put_settings({u'index': {u'refresh_interval': None}},
                                                         self.index.name)
 
 
@@ -130,12 +130,12 @@ class Indexer(object):
         end = datetime.now()
         # generate and return the report dict
         return {
-            'version': self.version,
-            'source': sorted(set(feeder.mongo_collection for feeder in self.feeders)),
-            'start': self.start,
-            'end': end,
-            'duration': (end - self.start).total_seconds(),
-            'operations': operations
+            u'version': self.version,
+            u'source': sorted(set(feeder.mongo_collection for feeder in self.feeders)),
+            u'start': self.start,
+            u'end': end,
+            u'duration': (end - self.start).total_seconds(),
+            u'operations': operations
         }
 
     def index(self):
@@ -204,24 +204,24 @@ class Indexer(object):
         Run through the indexes and update the statuses for each.
         """
         index_definition = {
-            'settings': {
-                'index': {
-                    'number_of_shards': 1,
-                    'number_of_replicas': 1
+            u'settings': {
+                u'index': {
+                    u'number_of_shards': 1,
+                    u'number_of_replicas': 1
                 }
             },
-            'mappings': {
+            u'mappings': {
                 DOC_TYPE: {
-                    'properties': {
-                        'name': {
-                            'type': 'keyword'
+                    u'properties': {
+                        u'name': {
+                            u'type': u'keyword'
                         },
-                        'index_name': {
-                            'type': 'keyword'
+                        u'index_name': {
+                            u'type': u'keyword'
                         },
-                        'latest_version': {
-                            'type': 'date',
-                            'format': 'epoch_millis'
+                        u'latest_version': {
+                            u'type': u'date',
+                            u'format': u'epoch_millis'
                         }
                     }
                 }
@@ -235,9 +235,9 @@ class Indexer(object):
         # use a set to avoid updating the status for an index multiple times
         for index in set(self.indexes):
             status_doc = {
-                'name': index.unprefixed_name,
-                'index_name': index.name,
-                'latest_version': self.version,
+                u'name': index.unprefixed_name,
+                u'index_name': index.name,
+                u'latest_version': self.version,
             }
             self.elasticsearch.index(self.config.elasticsearch_status_index_name, DOC_TYPE,
                                      status_doc, id=index.name)
@@ -327,7 +327,7 @@ class MultiprocessIndexer(Indexer):
                 # first of all, set the refresh intervals for all included indexes to -1 for faster
                 # ingestion
                 for index in set(self.indexes):
-                    self.elasticsearch.indices.put_settings({"index": {"refresh_interval": -1}},
+                    self.elasticsearch.indices.put_settings({u'index': {u'refresh_interval': -1}},
                                                             index.name)
 
                 # now iterate submit all the feeder and index pairs to the pool. When each one
@@ -342,7 +342,7 @@ class MultiprocessIndexer(Indexer):
             finally:
                 # ensure all the indexes have their refresh intervals returned to normal
                 for index in set(self.indexes):
-                    self.elasticsearch.indices.put_settings({"index": {"refresh_interval": None}},
+                    self.elasticsearch.indices.put_settings({u'index': {u'refresh_interval': None}},
                                                             index.name)
 
         # signal to all the monitors that we're done

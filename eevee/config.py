@@ -4,9 +4,9 @@
 
 class Config(object):
 
-    def __init__(self, elasticsearch_hosts=None, elasticsearch_index_prefix='eevee-',
-                 elasticsearch_status_index_name='status', mongo_host='localhost', mongo_port=27017,
-                 mongo_database='eevee', search_from=0, search_size=100,
+    def __init__(self, elasticsearch_hosts=None, elasticsearch_index_prefix=u'eevee-',
+                 elasticsearch_status_index_name=u'status', mongo_host=u'localhost', mongo_port=27017,
+                 mongo_database=u'eevee', search_from=0, search_size=100,
                  search_default_indexes=None):
         """
         :param elasticsearch_hosts: a list of known elasticsearch servers to connect to for
@@ -29,7 +29,7 @@ class Config(object):
         if elasticsearch_hosts is not None:
             self.elasticsearch_hosts = elasticsearch_hosts
         else:
-            self.elasticsearch_hosts = ['http://localhost:9200']
+            self.elasticsearch_hosts = [u'http://localhost:9200']
         self.elasticsearch_index_prefix = elasticsearch_index_prefix
         self.elasticsearch_status_index_name = elasticsearch_status_index_name
 
@@ -44,4 +44,4 @@ class Config(object):
         if search_default_indexes is not None:
             self.search_default_indexes = search_default_indexes
         else:
-            self.search_default_indexes = ['*']
+            self.search_default_indexes = [u'*']

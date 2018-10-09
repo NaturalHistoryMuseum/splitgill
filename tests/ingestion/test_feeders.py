@@ -14,14 +14,14 @@ class ExampleFeederForTests(IngestionFeeder):
 
     @property
     def source(self):
-        return 'testsource'
+        return u'testsource'
 
     def records(self):
         return self.test_records
 
 
 def test_feeder():
-    test_records = ['1', 'beans', 'a', '00000000']
+    test_records = [u'1', u'beans', u'a', u'00000000']
     feeder = ExampleFeederForTests(10, test_records)
 
     mock_monitor = MagicMock()

@@ -28,9 +28,9 @@ def test_version_enforces_int():
         Versioned(str(to_timestamp(datetime.now())))
 
     with pytest.raises(AssertionError):
-        Versioned('banana')
+        Versioned(u'banana')
 
     with pytest.raises(AssertionError):
-        Versioned({'a': 4})
+        Versioned({u'a': 4})
 
     Versioned(1531440000000)

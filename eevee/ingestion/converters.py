@@ -63,30 +63,30 @@ class RecordToMongoConverter(Versioned):
         if not should_insert:
             return None
         mongo_doc = {
-            'id': record.id,
+            u'id': record.id,
             # keep a record of when this record was first ingested and last ingested, these are the
             # actual times not version times and are not used in the actual search index
-            'first_ingested': self.ingestion_time,
-            'last_ingested': self.ingestion_time,
+            u'first_ingested': self.ingestion_time,
+            u'last_ingested': self.ingestion_time,
             # store a full copy of the data in this record for ease of access to the current data.
             # This is a little wasteful but shouldn't really cause any unreasonable strain. It also
             # allows us to diff the data between the latest version of a record and a new record
             # (such as we do in for_update below) without iteratively applying each diff which would
             # become a performance burden when dealing with millions of records.
-            'data': converted_record,
+            u'data': converted_record,
             # store any extra metadata for the record, the default starting metadata value is an
             # empty dict
-            'metadata': record.modify_metadata({}),
+            u'metadata': record.modify_metadata({}),
             # store the latest version in it's own field for easy access. Mongo supports index
             # access to arrays so the first version of a record is easy to get to using
             # "versions.0",however negative indexes are not permitted and therefore "versions.-1"
             # doesn't work. This field just makes it easier to query the mongo collection later
-            'latest_version': self.version,
+            u'latest_version': self.version,
             # list of versions for this record
-            'versions': [self.version],
+            u'versions': [self.version],
             # a dict of the incremental changes made by each version, note that the integer version
             # is converted to a string here because mongo can't handle non-string keys
-            'diffs': {str(self.version): serialise_diff(diff)},
+            u'diffs': {str(self.version): serialise_diff(diff)},
         }
         return mongo_doc
 
@@ -107,24 +107,24 @@ class RecordToMongoConverter(Versioned):
         converted_record = record.convert()
 
         # generate a diff of the new record against the existing version in mongo
-        should_update, diff = self.diff_data(mongo_doc['data'], converted_record)
+        should_update, diff = self.diff_data(mongo_doc[u'data'], converted_record)
         if should_update:
             # set some new values
             sets.update({
-                'data': converted_record,
-                'latest_version': self.version,
-                'last_ingested': self.ingestion_time,
-                'diffs.{}'.format(self.version): serialise_diff(diff),
+                u'data': converted_record,
+                u'latest_version': self.version,
+                u'last_ingested': self.ingestion_time,
+                u'diffs.{}'.format(self.version): serialise_diff(diff),
                 # allow modification of the metadata dict
-                'metadata': record.modify_metadata(mongo_doc['metadata']),
+                u'metadata': record.modify_metadata(mongo_doc[u'metadata']),
             })
             # add the new version to the versions array, ensuring there are no duplicates
-            add_to_sets.update({'versions': self.version})
+            add_to_sets.update({u'versions': self.version})
 
         # create a mongo update operation if there are changes
         update = {}
         if sets:
-            update['$set'] = sets
+            update[u'$set'] = sets
         if add_to_sets:
-            update['$addToSet'] = add_to_sets
+            update[u'$addToSet'] = add_to_sets
         return update

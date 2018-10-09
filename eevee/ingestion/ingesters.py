@@ -14,7 +14,7 @@ from eevee.versioning import Versioned
 class Ingester(Versioned):
 
     def __init__(self, version, feeder, record_to_mongo_converter, config, chunk_size=1000,
-                 insert_op_name='inserted', update_op_name='updated'):
+                 insert_op_name=u'inserted', update_op_name=u'updated'):
         """
         :param feeder: the feeder object to get records from
         :param record_to_mongo_converter: the object to use to convert the records to dicts ready
@@ -44,12 +44,12 @@ class Ingester(Versioned):
         """
         with get_mongo(self.config, collection=mongo_collection) as mongo:
             # index id for quick access to specific records
-            mongo.create_index('id', unique=True)
+            mongo.create_index(u'id', unique=True)
             # index versions for faster searches for records that were updated in specific versions
-            mongo.create_index('versions')
+            mongo.create_index(u'versions')
             # index latest_version for faster searches for records that were last updated in a
             # specific version
-            mongo.create_index('latest_version')
+            mongo.create_index(u'latest_version')
 
     def get_stats(self, operations):
         """
@@ -63,13 +63,13 @@ class Ingester(Versioned):
         end = datetime.now()
         # generate and return a stats dict
         return {
-            'version': self.version,
-            'source': self.feeder.source,
-            'ingestion_time': self.record_to_mongo_converter.ingestion_time,
-            'start': self.start,
-            'end': end,
-            'duration': (end - self.start).total_seconds(),
-            'operations': operations,
+            u'version': self.version,
+            u'source': self.feeder.source,
+            u'ingestion_time': self.record_to_mongo_converter.ingestion_time,
+            u'start': self.start,
+            u'end': end,
+            u'duration': (end - self.start).total_seconds(),
+            u'operations': operations,
         }
 
     def ingest(self):
@@ -102,8 +102,8 @@ class Ingester(Versioned):
 
                     # create a lookup of the current documents in this collection, keyed on their
                     # ids
-                    current_docs = {doc['id']: doc for doc in
-                                    mongo.find({'id': {'$in': [r.id for r in records]}})}
+                    current_docs = {doc[u'id']: doc for doc in
+                                    mongo.find({u'id': {u'$in': [r.id for r in records]}})}
 
                     for record in records:
                         # ignore ids we've already dealt with
@@ -122,7 +122,7 @@ class Ingester(Versioned):
                                                                                        mongo_doc)
                                 if update_doc:
                                     # an update is required, add the update operation to our list
-                                    operations[record.id] = UpdateOne({'id': record.id}, update_doc)
+                                    operations[record.id] = UpdateOne({u'id': record.id}, update_doc)
 
                     if operations:
                         # run the operations in bulk on mongo

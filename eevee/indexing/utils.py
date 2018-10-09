@@ -6,10 +6,10 @@ from elasticsearch import Elasticsearch
 
 from eevee.utils import deserialise_diff, iter_pairs
 
-DOC_TYPE = '_doc'
+DOC_TYPE = u'_doc'
 
 
-def get_versions_and_data(mongo_doc, future_next_version=float("inf")):
+def get_versions_and_data(mongo_doc, future_next_version=float(u'inf')):
     """
     Returns a generator which will yield, in order, the version, data and next version from the
     given record as a 3=tuple in that order. The next version is provided for convenience. The last
@@ -30,10 +30,10 @@ def get_versions_and_data(mongo_doc, future_next_version=float("inf")):
     # is the starting point assumed by the ingestion code when creating a records first diff
     data = {}
     # iterate over the versions
-    for version, next_version in iter_pairs(sorted(int(version) for version in mongo_doc['diffs']),
+    for version, next_version in iter_pairs(sorted(int(version) for version in mongo_doc[u'diffs']),
                                             final_partner=future_next_version):
         # patch the data dict with this version's diff
-        data = dictdiffer.patch(deserialise_diff(mongo_doc['diffs'][str(version)]), data,
+        data = dictdiffer.patch(deserialise_diff(mongo_doc[u'diffs'][str(version)]), data,
                                 in_place=True)
         # yield the version and data
         yield version, data, next_version
