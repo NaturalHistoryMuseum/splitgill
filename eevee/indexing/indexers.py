@@ -9,7 +9,6 @@ import six
 from pathos import multiprocessing
 
 from eevee.indexing.utils import DOC_TYPE, get_elasticsearch_client
-from eevee.mongo import get_mongo
 from eevee.utils import chunk_iterator
 
 if six.PY2:
@@ -106,24 +105,24 @@ class Indexer(object):
         """
         self.monitors.append(monitor_function)
 
-    def report_stats(self, operations):
+    def get_stats(self, operations):
         """
-        Records statistics about the indexing run into the mongo index stats collection.
+        Returns the statistics of a completed indexing in the form of a dict. The operations parameter is expected to
+        be a dict of the form {index_name -> {<op>: #, ...}} but can take any form as long as it can be handled sensibly
+        by any downstream functions.
 
         :param operations: a dict describing the operations that occurred
         """
         end = datetime.now()
-        stats = {
+        # generate and return the report dict
+        return {
             'version': self.version,
-            'source': [feeder.mongo_collection for feeder in self.feeders],
+            'source': sorted(set(feeder.mongo_collection for feeder in self.feeders)),
             'start': self.start,
             'end': end,
             'duration': (end - self.start).total_seconds(),
             'operations': operations
         }
-        with get_mongo(self.config, collection=self.config.mongo_indexing_stats_collection) as mongo:
-            mongo.insert_one(stats)
-        return stats
 
     def index(self):
         """
@@ -173,7 +172,7 @@ class Indexer(object):
         # update the aliases
         self.update_statuses()
         # report the statistics of the indexing operation back into mongo
-        return self.report_stats(stats)
+        return self.get_stats(stats)
 
     def define_indexes(self):
         """
@@ -320,4 +319,4 @@ class MultiprocessIndexer(Indexer):
         # update the aliases
         self.update_statuses()
         # report the statistics of the indexing operation back into mongo
-        return self.report_stats(stats)
+        return self.get_stats(stats)

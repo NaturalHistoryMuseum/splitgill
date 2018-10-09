@@ -46,17 +46,17 @@ class Ingester(Versioned):
             # index latest_version for faster searches for records that were last updated in a specific version
             mongo.create_index('latest_version')
 
-    def report_stats(self, operations):
+    def get_stats(self, operations):
         """
-        Reports the statistics of a completed ingestion to both the ingestion stats collection and stdout. The
-        operations parameter is expected to be a dict of the form {mongo_collection -> {inserts: #, updates: #}} but
-        can take any form as long as it can be handled sensibly by any downstream functions.
+        Returns the statistics of a completed ingestion in the form of a dict. The operations parameter is expected to
+        be a dict of the form {mongo_collection -> {inserts: #, updates: #}} but can take any form as long as it can be
+        handled sensibly by any downstream functions.
 
         :param operations: a dict describing the operations that occurred
         """
-        # generate a stats dict
         end = datetime.now()
-        stats = {
+        # generate and return a stats dict
+        return {
             'version': self.version,
             'source': self.feeder.source,
             'ingestion_time': self.record_to_mongo_converter.ingestion_time,
@@ -65,13 +65,6 @@ class Ingester(Versioned):
             'duration': (end - self.start).total_seconds(),
             'operations': operations,
         }
-
-        # insert the stats dict into the mongo ingestion stats collection
-        with get_mongo(self.config, collection=self.config.mongo_ingestion_stats_collection) as mongo:
-            mongo.insert_one(stats)
-
-        # return the stats dict
-        return stats
 
     def ingest(self):
         """
@@ -129,4 +122,4 @@ class Ingester(Versioned):
                         op_stats[collection][self.update_op_name] += bulk_result.modified_count
 
         # report the operation stats then return the stats dict produced
-        return self.report_stats(op_stats)
+        return self.get_stats(op_stats)
