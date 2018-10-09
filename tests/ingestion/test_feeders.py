@@ -3,10 +3,10 @@ from mock import MagicMock, call
 from eevee.ingestion.feeders import IngestionFeeder
 
 
-class TestFeeder(IngestionFeeder):
+class ExampleFeederForTests(IngestionFeeder):
 
     def __init__(self, version, test_records):
-        super(TestFeeder, self).__init__(version)
+        super(ExampleFeederForTests, self).__init__(version)
         self.test_records = test_records
 
     @property
@@ -19,7 +19,7 @@ class TestFeeder(IngestionFeeder):
 
 def test_feeder():
     test_records = ['1', 'beans', 'a', '00000000']
-    feeder = TestFeeder(10, test_records)
+    feeder = ExampleFeederForTests(10, test_records)
 
     mock_monitor = MagicMock()
     feeder.register_monitor(mock_monitor)
@@ -32,7 +32,7 @@ def test_feeder():
 
 def test_feeder_empty():
     test_records = []
-    feeder = TestFeeder(10, test_records)
+    feeder = ExampleFeederForTests(10, test_records)
 
     mock_monitor = MagicMock()
     feeder.register_monitor(mock_monitor)
