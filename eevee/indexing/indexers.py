@@ -83,7 +83,7 @@ class Indexer(object):
     """
 
     def __init__(self, version, config, feeders_and_indexes, elasticsearch_bulk_size=2000,
-                 queue_size=100000):
+                 queue_size=100000, update_status=True):
         """
         :param version: the version we're indexing up to
         :param config: the config object
@@ -94,6 +94,8 @@ class Indexer(object):
         :param elasticsearch_bulk_size: the number of pairs of commands to send to elasticsearch in
                                         one bulk request
         :param queue_size: the maximum size of the elasticsearch command queue
+        :param update_status: whether to update the status index after completing the indexing
+                              (default: True)
         """
         self.version = version
         self.config = config
@@ -101,6 +103,7 @@ class Indexer(object):
         self.feeders, self.indexes = zip(*feeders_and_indexes)
         self.elasticsearch_bulk_size = elasticsearch_bulk_size
         self.queue_size = queue_size
+        self.update_status = update_status
         self.elasticsearch = get_elasticsearch_client(self.config, sniff_on_start=True,
                                                       sniff_on_connection_fail=True,
                                                       sniffer_timeout=60, sniff_timeout=10,
@@ -237,15 +240,16 @@ class Indexer(object):
             self.elasticsearch.indices.create(self.config.elasticsearch_status_index_name,
                                               body=index_definition)
 
-        # use a set to avoid updating the status for an index multiple times
-        for index in set(self.indexes):
-            status_doc = {
-                u'name': index.unprefixed_name,
-                u'index_name': index.name,
-                u'latest_version': self.version,
-            }
-            self.elasticsearch.index(self.config.elasticsearch_status_index_name, DOC_TYPE,
-                                     status_doc, id=index.name)
+        if not self.update_status:
+            # use a set to avoid updating the status for an index multiple times
+            for index in set(self.indexes):
+                status_doc = {
+                    u'name': index.unprefixed_name,
+                    u'index_name': index.name,
+                    u'latest_version': self.version,
+                }
+                self.elasticsearch.index(self.config.elasticsearch_status_index_name, DOC_TYPE,
+                                         status_doc, id=index.name)
 
 
 class MultiprocessIndexer(Indexer):
