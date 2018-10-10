@@ -2,7 +2,7 @@
 # encoding: utf-8
 
 import dictdiffer
-from elasticsearch import Elasticsearch
+from elasticsearch import Elasticsearch, NotFoundError
 
 from eevee.utils import deserialise_diff, iter_pairs
 
@@ -50,3 +50,33 @@ def get_elasticsearch_client(config, **kwargs):
     :return: a new elasticsearch client object
     """
     return Elasticsearch(hosts=config.elasticsearch_hosts, **kwargs)
+
+
+def delete_index(config, index, **kwargs):
+    """
+    Deletes the specified index, any aliases for it and the status entry for it if there is one.
+
+    :param config: the config object
+    :param index: the index to remove
+    :param kwargs: key word arguments which are passed on when initialising the the elasticsearch
+                   client
+    """
+    index_name = u'{}{}'.format(config.elasticsearch_index_prefix, index)
+    client = get_elasticsearch_client(config, **kwargs)
+    # we have a few clean up operations to do on elasticsearch, but they are all allowed to fail due
+    # to things not being defined, therefore we define a list of commands to run and then loop
+    # through them all catching exceptions if necessary as we go and ignoring them
+    clean_up_commands = [
+        # remove the index status
+        lambda: client.delete(u'status', DOC_TYPE, index_name),
+        # remove any aliases for this index
+        lambda: client.indices.delete_alias(index_name, u'*'),
+        # remove the index itself
+        lambda: client.indices.delete(index_name),
+    ]
+    # run each command in a try except
+    for clean_up_command in clean_up_commands:
+        try:
+            clean_up_command()
+        except NotFoundError:
+            pass
