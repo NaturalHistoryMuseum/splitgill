@@ -154,6 +154,10 @@ class Indexer(object):
         # total stats across all feeder/index combinations
         stats = defaultdict(Counter)
 
+        # indicate to the monitors that we've started!
+        for monitor in self.monitors:
+            monitor(0)
+
         for feeder, index in self.feeders_and_indexes:
             # create a queue for elasticsearch commands
             queue = Queue(maxsize=self.queue_size)
@@ -316,6 +320,10 @@ class MultiprocessIndexer(Indexer):
         total_indexed_so_far = 0
         # total stats across all feeder/index combinations
         stats = defaultdict(Counter)
+
+        # indicate to the monitors that we've started!
+        for monitor in self.monitors:
+            monitor(0)
 
         # create a pool of workers to spread the indexing load on
         with multiprocessing.Pool(processes=self.pool_size) as pool:
