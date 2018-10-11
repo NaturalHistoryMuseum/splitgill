@@ -240,7 +240,7 @@ class Indexer(object):
             self.elasticsearch.indices.create(self.config.elasticsearch_status_index_name,
                                               body=index_definition)
 
-        if not self.update_status:
+        if self.update_status:
             # use a set to avoid updating the status for an index multiple times
             for index in set(self.indexes):
                 status_doc = {
