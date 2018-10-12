@@ -218,3 +218,12 @@ class Searcher(object):
         :return: the prefixed index name
         """
         return u'{}{}'.format(self.config.elasticsearch_index_prefix, index)
+
+    def ensure_index_exists(self, index):
+        """
+        Ensures that an index exists in Elasticsearch for the given index object.
+
+        :param index: the index object
+        """
+        if not self.elasticsearch.indices.exists(index.name):
+            self.elasticsearch.indices.create(index.name, body=index.get_index_create_body())
