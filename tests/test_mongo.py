@@ -5,7 +5,7 @@ from mock import MagicMock
 from pymongo.collection import Collection
 from pymongo.database import Database
 
-from eevee.mongo import get_mongo
+from eevee.mongo import get_mongo, MongoOpBuffer
 
 from pymongo import MongoClient
 
@@ -31,3 +31,20 @@ class TestMongo(object):
         with get_mongo(TestMongo.config, database=u'test_database',
                        collection=u'test_collection') as mongo:
             assert type(mongo) is Collection
+
+
+def test_mongo_op_buffer():
+    mongo_mock = MagicMock()
+    mongo_ctx_mock = MagicMock(__enter__=MagicMock(return_value=mongo_mock))
+    with MongoOpBuffer(MagicMock(), mongo_ctx_mock, size=1) as op_buffer:
+        # check that the mongo context has been entered
+        assert mongo_ctx_mock.__enter__.called
+        # add an op to the buffer. This should trigger the handle function to be run as we set the
+        # size to 1
+        mock_op = MagicMock()
+        op_buffer.add(mock_op)
+        # check that the mongo mock bulk write method was called
+        assert mongo_mock.bulk_write.called
+        # and that it was called with the ops
+        assert mongo_mock.bulk_write.call_args[0][0] == [mock_op]
+    assert mongo_ctx_mock.__exit__.called
