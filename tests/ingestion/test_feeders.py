@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # encoding: utf-8
+import itertools
 
 from mock import MagicMock, call
 
@@ -30,7 +31,12 @@ def test_feeder():
 
     read_records = list(feeder.read())
     assert read_records == test_records
-    assert mock_monitor.call_args_list == list(map(call, test_records))
+    assert mock_monitor.call_args_list == [
+        call(1, u'1'),
+        call(2, u'beans'),
+        call(3, u'a'),
+        call(4, u'00000000')
+    ]
 
 
 def test_feeder_empty():

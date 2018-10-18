@@ -84,7 +84,8 @@ class IngestionFeeder(Versioned):
         """
         Registers a function which will be called for each record read from records() during the run
         of read(). The function will be called before the record is yielded to the caller of read().
-        The monitoring function will receive 1 parameter: the record.
+        The monitoring function will receive 2 parameters: the record count so far and the record
+        itself.
 
         :param monitoring_function: a function to be called whilst this feeder is reading the
                                     records
@@ -95,9 +96,9 @@ class IngestionFeeder(Versioned):
         """
         Generator function which yields each record from the source.
         """
-        for record in self.records():
+        for number, record in enumerate(self.records(), start=1):
             # call any monitor functions
             for monitoring_function in self.monitors:
-                monitoring_function(record)
+                monitoring_function(number, record)
             # yield the record
             yield record
