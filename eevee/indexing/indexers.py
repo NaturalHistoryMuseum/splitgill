@@ -83,7 +83,7 @@ class Indexer(object):
     """
 
     def __init__(self, version, config, feeders_and_indexes, elasticsearch_bulk_size=2000,
-                 queue_size=100000, update_status=True):
+                 queue_size=100000, update_status=True, monitor_update_frequency=1000):
         """
         :param version: the version we're indexing up to
         :param config: the config object
@@ -96,6 +96,8 @@ class Indexer(object):
         :param queue_size: the maximum size of the elasticsearch command queue
         :param update_status: whether to update the status index after completing the indexing
                               (default: True)
+        :param monitor_update_frequency: after this many records have been indexed the monitors will
+                                         be called with the percentage, count and total.
         """
         self.version = version
         self.config = config
@@ -104,6 +106,7 @@ class Indexer(object):
         self.elasticsearch_bulk_size = elasticsearch_bulk_size
         self.queue_size = queue_size
         self.update_status = update_status
+        self.monitor_update_frequency = monitor_update_frequency
         self.elasticsearch = get_elasticsearch_client(self.config, sniff_on_start=True,
                                                       sniff_on_connection_fail=True,
                                                       sniffer_timeout=60, sniff_timeout=10,
@@ -114,8 +117,8 @@ class Indexer(object):
     def register_monitor(self, monitor_function):
         """
         Register a monitoring function with the indexer which receive updates after each chunk is
-        indexed. The function should take a single parameter, a percentage complete so far
-        represented as a decimal value between 0 and 1.
+        indexed. The function should take a 3 parameters, a percentage complete so far
+        represented as a decimal value between 0 and 1, the count so far and the total.
 
         :param monitor_function: the function to be called during indexing with details for
                                  monitoring
@@ -142,6 +145,27 @@ class Indexer(object):
             u'operations': operations,
         }
 
+    def update_monitors(self, count, total):
+        """
+        Update the monitor functions with the percentage, count and total (if applicable).
+
+        :param count: the number of records indexed
+        :param total: the total number of records to index
+        """
+        if count == total:
+            # we're done. Note that this catches the scenario where the total == 0 too and therefore
+            # avoids divide by 0 errors
+            percentage = 1
+        elif count % self.monitor_update_frequency == 0:
+            # only update every so often
+            percentage = count / total
+        else:
+            # if neither of these conditions are met, don't update the monitors
+            return
+        # update the monitors with the percentage
+        for monitor in self.monitors:
+            monitor(percentage, count, total)
+
     def index(self):
         """
         Indexes a set of records from mongo into elasticsearch.
@@ -158,8 +182,7 @@ class Indexer(object):
         stats = defaultdict(Counter)
 
         # indicate to the monitors that we've started!
-        for monitor in self.monitors:
-            monitor(0)
+        self.update_monitors(total_indexed_so_far, total_records_to_index)
 
         for feeder, index in self.feeders_and_indexes:
             # create a queue for elasticsearch commands
@@ -175,11 +198,7 @@ class Indexer(object):
                     for command in index.get_commands(mongo_doc):
                         # queue the command, waiting if necessary for the queue to not be full
                         queue.put(command)
-
-                    if total_indexed_so_far % 1000 == 0:
-                        # update the monitoring functions with progress
-                        for monitor in self.monitors:
-                            monitor(total_indexed_so_far / total_records_to_index)
+                    self.update_monitors(total_indexed_so_far, total_records_to_index)
             finally:
                 # send a sentinel to indicate that we're done putting indexing commands on the queue
                 queue.put(None)
@@ -190,8 +209,7 @@ class Indexer(object):
                 stats[index_name].update(counter)
 
         # signal to all the monitors that we're done
-        for monitor in self.monitors:
-            monitor(1)
+        self.update_monitors(total_indexed_so_far, total_records_to_index)
 
         # update the aliases
         self.update_statuses()
@@ -260,7 +278,7 @@ class MultiprocessIndexer(Indexer):
     """
 
     def __init__(self, version, config, feeders_and_indexes, elasticsearch_bulk_size=2000,
-                 pool_size=3, total=None):
+                 pool_size=3, total=None, monitor_update_frequency=1000):
         """
         :param version: the version we're indexing up to
         :param config: the config object
@@ -276,6 +294,8 @@ class MultiprocessIndexer(Indexer):
                       summed to calculate the total. This is useful to pass through if calculating
                       the total by summing each feeder's total function return is inefficient in
                       some way.
+        :param monitor_update_frequency: after this many records have been indexed the monitors will
+                                         be called with the percentage, count and total.
         """
         super(MultiprocessIndexer, self).__init__(version, config, feeders_and_indexes,
                                                   elasticsearch_bulk_size)
@@ -326,8 +346,7 @@ class MultiprocessIndexer(Indexer):
         stats = defaultdict(Counter)
 
         # indicate to the monitors that we've started!
-        for monitor in self.monitors:
-            monitor(0)
+        self.update_monitors(total_indexed_so_far, self.total)
 
         # create a pool of workers to spread the indexing load on
         with multiprocessing.Pool(processes=self.pool_size) as pool:
@@ -347,8 +366,8 @@ class MultiprocessIndexer(Indexer):
                 # completes, how many docs it handled and it's indexing stats will be returned
                 for count, pool_stats in pool.imap(self._index_process, self.feeders_and_indexes):
                     total_indexed_so_far += count
-                    for monitor in self.monitors:
-                        monitor(total_indexed_so_far / self.total)
+                    # update the monitors
+                    self.update_monitors(total_indexed_so_far, self.total)
                     # update the stats based on the new stats from the bulk writer
                     for index_name, counter in pool_stats.items():
                         stats[index_name].update(counter)
@@ -359,8 +378,7 @@ class MultiprocessIndexer(Indexer):
                                                             index.name)
 
         # signal to all the monitors that we're done
-        for monitor in self.monitors:
-            monitor(1)
+        self.update_monitors(total_indexed_so_far, self.total)
 
         # update the aliases
         self.update_statuses()
