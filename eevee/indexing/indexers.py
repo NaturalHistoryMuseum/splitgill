@@ -278,7 +278,7 @@ class MultiprocessIndexer(Indexer):
     """
 
     def __init__(self, version, config, feeders_and_indexes, elasticsearch_bulk_size=2000,
-                 pool_size=3, total=None, monitor_update_frequency=1000):
+                 pool_size=3, total=None, monitor_update_frequency=1):
         """
         :param version: the version we're indexing up to
         :param config: the config object
@@ -295,10 +295,13 @@ class MultiprocessIndexer(Indexer):
                       the total by summing each feeder's total function return is inefficient in
                       some way.
         :param monitor_update_frequency: after this many records have been indexed the monitors will
-                                         be called with the percentage, count and total.
+                                         be called with the percentage, count and total. For the
+                                         multiprocessing indexer this is set to 1 as we only get
+                                         updates when each process finishes a chunk and those chunks
+                                         might not neatly into batches of 1000.
         """
         super(MultiprocessIndexer, self).__init__(version, config, feeders_and_indexes,
-                                                  elasticsearch_bulk_size)
+                                                  elasticsearch_bulk_size, monitor_update_frequency)
         self.pool_size = pool_size
         self.total = total
 
