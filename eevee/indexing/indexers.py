@@ -345,9 +345,6 @@ class MultiprocessIndexer(Indexer):
         # total stats across all feeder/index combinations
         stats = defaultdict(Counter)
 
-        # indicate to the monitors that we've started!
-        self.update_monitors(total_indexed_so_far, self.total)
-
         # create a pool of workers to spread the indexing load on
         with multiprocessing.Pool(processes=self.pool_size) as pool:
             if self.total is None:
@@ -355,27 +352,39 @@ class MultiprocessIndexer(Indexer):
                 # monitoring purposes
                 self.total = sum(pool.map(lambda feeder: feeder.total(), self.feeders))
 
-            try:
-                # first of all, set the refresh intervals for all included indexes to -1 for faster
-                # ingestion
-                for index in set(self.indexes):
-                    self.elasticsearch.indices.put_settings({u'index': {u'refresh_interval': -1}},
-                                                            index.name)
+            # indicate to the monitors that we've started!
+            self.update_monitors(total_indexed_so_far, self.total)
 
-                # now iterate submit all the feeder and index pairs to the pool. When each one
-                # completes, how many docs it handled and it's indexing stats will be returned
-                for count, pool_stats in pool.imap(self._index_process, self.feeders_and_indexes):
-                    total_indexed_so_far += count
-                    # update the monitors
-                    self.update_monitors(total_indexed_so_far, self.total)
-                    # update the stats based on the new stats from the bulk writer
-                    for index_name, counter in pool_stats.items():
-                        stats[index_name].update(counter)
-            finally:
-                # ensure all the indexes have their refresh intervals returned to normal
-                for index in set(self.indexes):
-                    self.elasticsearch.indices.put_settings({u'index': {u'refresh_interval': None}},
-                                                            index.name)
+            # only do stuff if there is stuff to do!
+            if self.total > 0:
+                try:
+                    # first of all, set the refresh intervals for all included indexes to -1 for
+                    # faster ingestion
+                    for index in set(self.indexes):
+                        self.elasticsearch.indices.put_settings({
+                            u'index': {
+                                u'refresh_interval': -1
+                            }
+                        }, index.name)
+
+                    # now iterate submit all the feeder and index pairs to the pool. When each one
+                    # completes, how many docs it handled and it's indexing stats will be returned
+                    for count, pool_stats in pool.imap(self._index_process,
+                                                       self.feeders_and_indexes):
+                        total_indexed_so_far += count
+                        # update the monitors
+                        self.update_monitors(total_indexed_so_far, self.total)
+                        # update the stats based on the new stats from the bulk writer
+                        for index_name, counter in pool_stats.items():
+                            stats[index_name].update(counter)
+                finally:
+                    # ensure all the indexes have their refresh intervals returned to normal
+                    for index in set(self.indexes):
+                        self.elasticsearch.indices.put_settings({
+                            u'index': {
+                                u'refresh_interval': None
+                            }
+                        }, index.name)
 
         # signal to all the monitors that we're done
         self.update_monitors(total_indexed_so_far, self.total)
