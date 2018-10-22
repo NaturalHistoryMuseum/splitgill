@@ -1,3 +1,4 @@
+blinker==1.4
 dictdiffer==0.7.1
 docopt==0.6.2
 elasticsearch==6.3.1
