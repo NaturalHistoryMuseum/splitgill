@@ -4,6 +4,7 @@
 from collections import defaultdict, Counter
 from datetime import datetime
 
+from blinker import Signal
 from pymongo import InsertOne, UpdateOne
 
 from eevee import utils
@@ -32,6 +33,29 @@ class Ingester(Versioned):
         self.chunk_size = chunk_size
         self.insert_op_name = insert_op_name
         self.update_op_name = update_op_name
+
+        # setup some signals so that the ingestion can be tracked
+        self.insert_signal = Signal(doc=u'''Triggered when a record is about to be inserted. Note
+                                            that this signal is triggered after using the converter
+                                            to create the insert document for mongo but before the
+                                            this document is inserted into mongo. The kwargs passed
+                                            when this signal is sent are "record" and "doc" which
+                                            hold the record object and the insert doc returned by
+                                            the converter (could be None) respectively.''')
+        self.update_signal = Signal(doc=u'''Triggered when a record is about to be updated. Note
+                                            that this signal is triggered after using the converter
+                                            to create the update document for mongo but before the
+                                            this document is sent to mongo. The kwargs passed when
+                                            this signal is sent are "record" and "doc" which hold
+                                            the record object and the update doc returned by the
+                                            converter (could be None) respectively.''')
+        self.totals_signal = Signal(doc=u'''Triggered each time a batch of write operations is sent
+                                            to mongo. The kwargs passed when this signal is sent are
+                                            "inserted" and "updated" which hold the number of
+                                            documents inserted and updated respectively''')
+        self.finish_signal = Signal(doc=u'''Triggered when the processing is complete. A single
+                                            kwarg is passed: the stats dict for the run under the
+                                            name "stats".''')
         self.start = datetime.now()
 
     def ensure_mongo_indexes_exist(self, mongo_collection):
@@ -115,22 +139,36 @@ class Ingester(Versioned):
                                 # record needs adding to the collection, add an insert operation to
                                 # our list if the converter returns one
                                 insert_doc = self.record_to_mongo_converter.for_insert(record)
+                                # trigger the signal, even if no insert is going to occur
+                                self.insert_signal.send(self, record=record, doc=insert_doc)
                                 if insert_doc:
                                     operations[record.id] = InsertOne(insert_doc)
                             else:
                                 # record might need updating
                                 update_doc = self.record_to_mongo_converter.for_update(record,
                                                                                        mongo_doc)
+                                # trigger the signal, even if no update is going to occur
+                                self.update_signal.send(self, record=record, doc=update_doc)
                                 if update_doc:
                                     # an update is required, add the update operation to our list
-                                    operations[record.id] = UpdateOne({u'id': record.id}, update_doc)
+                                    operations[record.id] = UpdateOne({u'id': record.id},
+                                                                      update_doc)
 
                     if operations:
                         # run the operations in bulk on mongo
                         bulk_result = mongo.bulk_write(list(operations.values()))
+                        # extract the numbers of inserted and modified documents
+                        inserted = bulk_result.inserted_count
+                        updated = bulk_result.modified_count
+                        # trigger the totals signal
+                        self.totals_signal.send(self, inserted=inserted, updated=updated)
                         # extract operation stats
-                        op_stats[collection][self.insert_op_name] += bulk_result.inserted_count
-                        op_stats[collection][self.update_op_name] += bulk_result.modified_count
+                        op_stats[collection][self.insert_op_name] += inserted
+                        op_stats[collection][self.update_op_name] += updated
 
-        # report the operation stats then return the stats dict produced
-        return self.get_stats(op_stats)
+        # generate a stats dict
+        stats = self.get_stats(op_stats)
+        # send the stats to the finish signal
+        self.finished_signal.send(self, stats=stats)
+        # return the stats dict produced
+        return stats

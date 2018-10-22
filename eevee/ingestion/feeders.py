@@ -4,6 +4,7 @@
 import abc
 
 import six
+from blinker import Signal
 
 from eevee.versioning import Versioned
 
@@ -61,7 +62,11 @@ class IngestionFeeder(Versioned):
 
     def __init__(self, version):
         super(IngestionFeeder, self).__init__(version)
-        self.monitors = []
+        self.read_signal = Signal(doc=u'''Signal fired for each record read from the feeder. The
+                                          kwargs passed when the signal is triggered are number and
+                                          record, the number is the number of the record from the
+                                          feeder so far (so essentially a count) and the record is
+                                          the actual record object.''')
 
     @property
     @abc.abstractmethod
@@ -80,25 +85,12 @@ class IngestionFeeder(Versioned):
         """
         return []
 
-    def register_monitor(self, monitoring_function):
-        """
-        Registers a function which will be called for each record read from records() during the run
-        of read(). The function will be called before the record is yielded to the caller of read().
-        The monitoring function will receive 2 parameters: the record count so far and the record
-        itself.
-
-        :param monitoring_function: a function to be called whilst this feeder is reading the
-                                    records
-        """
-        self.monitors.append(monitoring_function)
-
     def read(self):
         """
         Generator function which yields each record from the source.
         """
         for number, record in enumerate(self.records(), start=1):
-            # call any monitor functions
-            for monitoring_function in self.monitors:
-                monitoring_function(number, record)
+            # trigger the read signal
+            self.read_signal.send(self, number=number, record=record)
             # yield the record
             yield record
