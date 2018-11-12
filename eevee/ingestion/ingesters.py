@@ -169,6 +169,6 @@ class Ingester(Versioned):
         # generate a stats dict
         stats = self.get_stats(op_stats)
         # send the stats to the finish signal
-        self.finished_signal.send(self, stats=stats)
+        self.finish_signal.send(self, stats=stats)
         # return the stats dict produced
         return stats
