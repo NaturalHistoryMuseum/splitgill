@@ -6,7 +6,6 @@ eevee/__init__.py
 eevee/config.py
 eevee/mongo.py
 eevee/utils.py
-eevee/versioning.py
 eevee.egg-info/PKG-INFO
 eevee.egg-info/SOURCES.txt
 eevee.egg-info/dependency_links.txt
