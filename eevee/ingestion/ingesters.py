@@ -49,13 +49,19 @@ class Ingester(object):
                                             this signal is sent are "record" and "doc" which hold
                                             the record object and the update doc returned by the
                                             converter (could be None) respectively.''')
-        self.totals_signal = Signal(doc=u'''Triggered each time a batch of write operations is sent
+        self.totals_signal = Signal(doc=u'''Triggered after each batch of write operations is sent
                                             to mongo. The kwargs passed when this signal is sent are
-                                            "inserted" and "updated" which hold the number of
-                                            documents inserted and updated respectively''')
-        self.finish_signal = Signal(doc=u'''Triggered when the processing is complete. A single
-                                            kwarg is passed: the stats dict for the run under the
-                                            name "stats".''')
+                                            "total", "inserted" and "updated" which hold the total
+                                            number of documents that have passed through the
+                                            ingester, the total number of documents inserted and the
+                                            total number of documents updated respectively''')
+        self.finish_signal = Signal(doc=u'''Triggered when the processing is complete. The kwargs
+                                            passed when this signal is sent are "total", "inserted",
+                                            "updated" and "stats" which hold the total number of
+                                            documents that have passed through the ingester, the
+                                            total number of documents inserted, the total number of
+                                            documents updated and the report stats that will be
+                                            entered into mongo respectively''')
         self.start = datetime.now()
 
     def ensure_mongo_indexes_exist(self, mongo_collection):
@@ -103,6 +109,11 @@ class Ingester(object):
 
         :return:
         """
+        # keep some running totals for reporting
+        total_records = 0
+        total_inserted = 0
+        total_updated = 0
+
         # store for stats about the insert and update operations that occur on each collection
         op_stats = defaultdict(Counter)
 
@@ -131,6 +142,7 @@ class Ingester(object):
                                     mongo.find({u'id': {u'$in': [r.id for r in records]}})}
 
                     for record in records:
+                        total_records += 1
                         # ignore ids we've already dealt with
                         if record.id not in operations:
                             # see if there is a version of this record already in mongo
@@ -157,18 +169,20 @@ class Ingester(object):
                     if operations:
                         # run the operations in bulk on mongo
                         bulk_result = mongo.bulk_write(list(operations.values()))
-                        # extract the numbers of inserted and modified documents
-                        inserted = bulk_result.inserted_count
-                        updated = bulk_result.modified_count
+                        # add insert and update totals to the per-collection stats
+                        op_stats[collection][self.insert_op_name] += bulk_result.inserted_count
+                        op_stats[collection][self.update_op_name] += bulk_result.modified_count
+                        # add the insert and update totals to the total stats
+                        total_inserted += bulk_result.inserted_count
+                        total_updated += bulk_result.modified_count
                         # trigger the totals signal
-                        self.totals_signal.send(self, inserted=inserted, updated=updated)
-                        # extract operation stats
-                        op_stats[collection][self.insert_op_name] += inserted
-                        op_stats[collection][self.update_op_name] += updated
+                        self.totals_signal.send(self, total=total_records, inserted=total_inserted,
+                                                updated=total_updated)
 
         # generate a stats dict
         stats = self.get_stats(op_stats)
         # send the stats to the finish signal
-        self.finish_signal.send(self, stats=stats)
+        self.finish_signal.send(self, records=total_records, inserted=total_inserted,
+                                updated=total_updated, stats=stats)
         # return the stats dict produced
         return stats
