@@ -111,8 +111,18 @@ class Indexer(object):
                                                       http_compress=False)
 
         # setup the signals
-        self.index_signal = Signal()
-        self.finish_signal = Signal()
+        self.index_signal = Signal(doc=u'''Triggered when a record has been indexed (or at least
+                                           queued for index). The kwargs passed when this signal is
+                                           sent are "document_count" and "command_count" which hold
+                                           the number of records that have been handled and the
+                                           total number of index commands created from those records
+                                           respectively.''')
+        self.finish_signal = Signal(doc=u'''Triggered when the processing is complete. The kwargs
+                                            passed when this signal is sent are "document_count",
+                                            "command_count" and "stats", which hold the number of
+                                            records that have been handled, the total number of
+                                            index commands created from those records and the report
+                                            stats that will be entered into mongo respectively.''')
         self.start = datetime.now()
 
     def get_stats(self, operations):
@@ -142,6 +152,11 @@ class Indexer(object):
         # define the mappings first
         self.define_indexes()
 
+        # count how many documents from mongo have been handled
+        document_count = 0
+        # count how many index commands have been sent to elasticsearch
+        command_count = 0
+
         # total stats across all feeder/index combinations
         op_stats = defaultdict(Counter)
 
@@ -154,12 +169,15 @@ class Indexer(object):
             try:
                 bulk_writer.start()
                 for mongo_doc in feeder.documents():
-                    commands = list(index.get_commands(mongo_doc))
-                    self.index_signal.send(self, mongo_doc=mongo_doc, commands=commands)
+                    document_count += 1
                     # add each of the commands to the op buffer
-                    for command in commands:
+                    for command in index.get_commands(mongo_doc):
                         # queue the command, waiting if necessary for the queue to not be full
                         queue.put(command)
+                        command_count += 1
+
+                    self.index_signal.send(self, document_count=document_count,
+                                           command_count=command_count)
             finally:
                 # send a sentinel to indicate that we're done putting indexing commands on the queue
                 queue.put(None)
@@ -174,7 +192,8 @@ class Indexer(object):
         # generate the stats dict
         stats = self.get_stats(op_stats)
         # trigger the finish signal
-        self.finish_signal.send(self, stats)
+        self.finish_signal.send(self, document_count=document_count, command_count=command_count,
+                                stats=stats)
         # return the stats dict
         return stats
 
@@ -271,7 +290,10 @@ class MultiprocessIndexer(Indexer):
         :return: a 2-tuple of the number of documents processed and the stats dict
         """
         feeder, index = feeder_and_index
-        count = 0
+        # count how many documents from mongo have been handled in this process's lifetime
+        document_count = 0
+        # count how many index commands have been sent to elasticsearch in this process's lifetime
+        command_count = 0
         # create a queue for elasticsearch commands
         queue = Queue()
         # create and then start a thread to send the commands to elasticsearch
@@ -281,17 +303,19 @@ class MultiprocessIndexer(Indexer):
         try:
             bulk_writer.start()
             for mongo_doc in feeder.documents():
-                count += 1
+                document_count += 1
                 # add each of the commands to the op buffer
                 for command in index.get_commands(mongo_doc):
                     # queue the command, waiting if necessary for the queue to not be full
                     queue.put(command)
+                    command_count += 1
         finally:
             # send a sentinel to indicate that we're done putting indexing commands on the queue
             queue.put(None)
             # wait for all indexing commands to be sent
             bulk_writer.join()
-        return count, bulk_writer.stats
+
+        return document_count, command_count, bulk_writer.stats
 
     def index(self):
         """
@@ -300,10 +324,12 @@ class MultiprocessIndexer(Indexer):
         # define the mappings first
         self.define_indexes()
 
-        # keep a count of the number of documents indexed so far
-        total_indexed_so_far = 0
+        # keep a count of the total number of documents indexed
+        total_documents = 0
+        # keep a count of the total number of commands sent to elasticsearch
+        total_commands = 0
         # total stats across all feeder/index combinations
-        stats = defaultdict(Counter)
+        op_stats = defaultdict(Counter)
 
         # create a pool of workers to spread the indexing load on
         with multiprocessing.Pool(processes=self.pool_size) as pool:
@@ -311,9 +337,6 @@ class MultiprocessIndexer(Indexer):
                 # work out the total number of documents we're going to go through and index, for
                 # monitoring purposes
                 self.total = sum(pool.map(lambda feeder: feeder.total(), self.feeders))
-
-            # indicate to the monitors that we've started!
-            self.update_monitors(total_indexed_so_far, self.total)
 
             # only do stuff if there is stuff to do!
             if self.total > 0:
@@ -329,14 +352,15 @@ class MultiprocessIndexer(Indexer):
 
                     # now iterate submit all the feeder and index pairs to the pool. When each one
                     # completes, how many docs it handled and it's indexing stats will be returned
-                    for count, pool_stats in pool.imap(self._index_process,
-                                                       self.feeders_and_indexes):
-                        total_indexed_so_far += count
-                        # update the monitors
-                        self.update_monitors(total_indexed_so_far, self.total)
+                    for doc_count, command_count, pool_stats in pool.imap(self._index_process,
+                                                                          self.feeders_and_indexes):
+                        total_documents += doc_count
+                        total_commands += command_count
+                        self.index_signal.send(self, doc_count=total_documents,
+                                               command_count=total_commands)
                         # update the stats based on the new stats from the bulk writer
                         for index_name, counter in pool_stats.items():
-                            stats[index_name].update(counter)
+                            op_stats[index_name].update(counter)
                 finally:
                     # ensure all the indexes have their refresh intervals returned to normal
                     for index in set(self.indexes):
@@ -346,10 +370,12 @@ class MultiprocessIndexer(Indexer):
                             }
                         }, index.name)
 
-        # signal to all the monitors that we're done
-        self.update_monitors(total_indexed_so_far, self.total)
-
         # update the aliases
         self.update_statuses()
-        # report the statistics of the indexing operation back into mongo
-        return self.get_stats(stats)
+        # generate the stats dict
+        stats = self.get_stats(op_stats)
+        # trigger the finish signal
+        self.finish_signal.send(self, document_count=total_documents, command_count=total_commands,
+                                stats=stats)
+        # return the stats dict
+        return stats
