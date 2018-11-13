@@ -6,6 +6,7 @@ from datetime import datetime
 from threading import Thread
 
 import six
+from blinker import Signal
 from pathos import multiprocessing
 
 from eevee.indexing.utils import DOC_TYPE, get_elasticsearch_client
@@ -83,7 +84,7 @@ class Indexer(object):
     """
 
     def __init__(self, version, config, feeders_and_indexes, elasticsearch_bulk_size=2000,
-                 queue_size=100000, update_status=True, monitor_update_frequency=1000):
+                 queue_size=100000, update_status=True):
         """
         :param version: the version we're indexing up to
         :param config: the config object
@@ -96,8 +97,6 @@ class Indexer(object):
         :param queue_size: the maximum size of the elasticsearch command queue
         :param update_status: whether to update the status index after completing the indexing
                               (default: True)
-        :param monitor_update_frequency: after this many records have been indexed the monitors will
-                                         be called with the percentage, count and total.
         """
         self.version = version
         self.config = config
@@ -106,24 +105,15 @@ class Indexer(object):
         self.elasticsearch_bulk_size = elasticsearch_bulk_size
         self.queue_size = queue_size
         self.update_status = update_status
-        self.monitor_update_frequency = monitor_update_frequency
         self.elasticsearch = get_elasticsearch_client(self.config, sniff_on_start=True,
                                                       sniff_on_connection_fail=True,
                                                       sniffer_timeout=60, sniff_timeout=10,
                                                       http_compress=False)
-        self.monitors = []
+
+        # setup the signals
+        self.index_signal = Signal()
+        self.finish_signal = Signal()
         self.start = datetime.now()
-
-    def register_monitor(self, monitor_function):
-        """
-        Register a monitoring function with the indexer which receive updates after each chunk is
-        indexed. The function should take a 3 parameters, a percentage complete so far
-        represented as a decimal value between 0 and 1, the count so far and the total.
-
-        :param monitor_function: the function to be called during indexing with details for
-                                 monitoring
-        """
-        self.monitors.append(monitor_function)
 
     def get_stats(self, operations):
         """
@@ -145,27 +135,6 @@ class Indexer(object):
             u'operations': operations,
         }
 
-    def update_monitors(self, count, total):
-        """
-        Update the monitor functions with the percentage, count and total (if applicable).
-
-        :param count: the number of records indexed
-        :param total: the total number of records to index
-        """
-        if count == total:
-            # we're done. Note that this catches the scenario where the total == 0 too and therefore
-            # avoids divide by 0 errors
-            percentage = 1
-        elif count % self.monitor_update_frequency == 0:
-            # only update every so often
-            percentage = count / total
-        else:
-            # if neither of these conditions are met, don't update the monitors
-            return
-        # update the monitors with the percentage
-        for monitor in self.monitors:
-            monitor(percentage, count, total)
-
     def index(self):
         """
         Indexes a set of records from mongo into elasticsearch.
@@ -173,16 +142,8 @@ class Indexer(object):
         # define the mappings first
         self.define_indexes()
 
-        # work out the total number of documents we're going to go through and index, for monitoring
-        # purposes
-        total_records_to_index = sum(feeder.total() for feeder in self.feeders)
-        # keep a count of the number of documents indexed so far
-        total_indexed_so_far = 0
         # total stats across all feeder/index combinations
-        stats = defaultdict(Counter)
-
-        # indicate to the monitors that we've started!
-        self.update_monitors(total_indexed_so_far, total_records_to_index)
+        op_stats = defaultdict(Counter)
 
         for feeder, index in self.feeders_and_indexes:
             # create a queue for elasticsearch commands
@@ -193,12 +154,12 @@ class Indexer(object):
             try:
                 bulk_writer.start()
                 for mongo_doc in feeder.documents():
-                    total_indexed_so_far += 1
+                    commands = list(index.get_commands(mongo_doc))
+                    self.index_signal.send(self, mongo_doc=mongo_doc, commands=commands)
                     # add each of the commands to the op buffer
-                    for command in index.get_commands(mongo_doc):
+                    for command in commands:
                         # queue the command, waiting if necessary for the queue to not be full
                         queue.put(command)
-                    self.update_monitors(total_indexed_so_far, total_records_to_index)
             finally:
                 # send a sentinel to indicate that we're done putting indexing commands on the queue
                 queue.put(None)
@@ -206,15 +167,16 @@ class Indexer(object):
                 bulk_writer.join()
             # update the stats based on the new stats from the bulk writer
             for index_name, counter in bulk_writer.stats.items():
-                stats[index_name].update(counter)
-
-        # signal to all the monitors that we're done
-        self.update_monitors(total_indexed_so_far, total_records_to_index)
+                op_stats[index_name].update(counter)
 
         # update the aliases
         self.update_statuses()
-        # report the statistics of the indexing operation back into mongo
-        return self.get_stats(stats)
+        # generate the stats dict
+        stats = self.get_stats(op_stats)
+        # trigger the finish signal
+        self.finish_signal.send(self, stats)
+        # return the stats dict
+        return stats
 
     def define_indexes(self):
         """
@@ -278,7 +240,7 @@ class MultiprocessIndexer(Indexer):
     """
 
     def __init__(self, version, config, feeders_and_indexes, elasticsearch_bulk_size=2000,
-                 pool_size=3, total=None, monitor_update_frequency=1):
+                 pool_size=3, total=None):
         """
         :param version: the version we're indexing up to
         :param config: the config object
@@ -294,14 +256,9 @@ class MultiprocessIndexer(Indexer):
                       summed to calculate the total. This is useful to pass through if calculating
                       the total by summing each feeder's total function return is inefficient in
                       some way.
-        :param monitor_update_frequency: after this many records have been indexed the monitors will
-                                         be called with the percentage, count and total. For the
-                                         multiprocessing indexer this is set to 1 as we only get
-                                         updates when each process finishes a chunk and those chunks
-                                         might not neatly into batches of 1000.
         """
         super(MultiprocessIndexer, self).__init__(version, config, feeders_and_indexes,
-                                                  elasticsearch_bulk_size, monitor_update_frequency)
+                                                  elasticsearch_bulk_size)
         self.pool_size = pool_size
         self.total = total
 

@@ -4,10 +4,9 @@
 import dictdiffer
 
 from eevee.utils import serialise_diff
-from eevee.versioning import Versioned
 
 
-class RecordToMongoConverter(Versioned):
+class RecordToMongoConverter(object):
     """
     This class provides functions to convert a record into a document to be inserted into mongo.
     """
@@ -18,7 +17,6 @@ class RecordToMongoConverter(Versioned):
         :param ingestion_time: the time of the ingestion operation which will be attached to all
                                records created/updated through this converter
         """
-        super(RecordToMongoConverter, self).__init__(version)
         self.version = version
         self._ingestion_time = ingestion_time
 

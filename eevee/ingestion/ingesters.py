@@ -9,14 +9,14 @@ from pymongo import InsertOne, UpdateOne
 
 from eevee import utils
 from eevee.mongo import get_mongo
-from eevee.versioning import Versioned
 
 
-class Ingester(Versioned):
+class Ingester(object):
 
     def __init__(self, version, feeder, record_to_mongo_converter, config, chunk_size=1000,
                  insert_op_name=u'inserted', update_op_name=u'updated'):
         """
+        :param version: the version the records to be ingested by this ingester
         :param feeder: the feeder object to get records from
         :param record_to_mongo_converter: the object to use to convert the records to dicts ready
                                           for storage in mongo
@@ -26,7 +26,7 @@ class Ingester(Versioned):
         :param insert_op_name: the name of the insert operation (for stats)
         :param update_op_name: the name of the update operation (for stats)
         """
-        super(Ingester, self).__init__(version)
+        self.version = version
         self.feeder = feeder
         self.record_to_mongo_converter = record_to_mongo_converter
         self.config = config

@@ -6,11 +6,15 @@ import abc
 import six
 from blinker import Signal
 
-from eevee.versioning import Versioned
-
 
 @six.add_metaclass(abc.ABCMeta)
-class BaseRecord(Versioned):
+class BaseRecord(object):
+
+    def __init__(self, version):
+        """
+        :param version: the version of this record
+        """
+        self.version = version
 
     @abc.abstractmethod
     def convert(self):
@@ -58,10 +62,13 @@ class BaseRecord(Versioned):
 
 
 @six.add_metaclass(abc.ABCMeta)
-class IngestionFeeder(Versioned):
+class IngestionFeeder(object):
 
     def __init__(self, version):
-        super(IngestionFeeder, self).__init__(version)
+        """
+        :param version: the version the records produced by this feeder will be
+        """
+        self.version = version
         self.read_signal = Signal(doc=u'''Signal fired for each record read from the feeder. The
                                           kwargs passed when the signal is triggered are number and
                                           record, the number is the number of the record from the
