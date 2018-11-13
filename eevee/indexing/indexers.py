@@ -9,7 +9,7 @@ import six
 from blinker import Signal
 from pathos import multiprocessing
 
-from eevee.indexing.utils import DOC_TYPE, get_elasticsearch_client
+from eevee.indexing.utils import DOC_TYPE, get_elasticsearch_client, update_refresh_interval
 from eevee.utils import chunk_iterator
 
 if six.PY2:
@@ -58,8 +58,7 @@ class ElasticsearchBulkWriterThread(Thread):
             # reset this value which essentially provides a commit mechanic ensuring all the new
             # data is visible at the same time
             if self.update_refresh:
-                self.elasticsearch.indices.put_settings({u'index': {u'refresh_interval': -1}},
-                                                        self.index.name)
+                update_refresh_interval(self.elasticsearch, [self.index], -1)
 
             # read commands off the queue and process them in turn
             for commands in chunk_iterator(iter(self.queue.get, None), chunk_size=self.bulk_size):
@@ -74,8 +73,7 @@ class ElasticsearchBulkWriterThread(Thread):
         finally:
             # ensure we put the refresh interval back to the default
             if self.update_refresh:
-                self.elasticsearch.indices.put_settings({u'index': {u'refresh_interval': None}},
-                                                        self.index.name)
+                update_refresh_interval(self.elasticsearch, [self.index], None)
 
 
 class Indexer(object):
@@ -343,12 +341,7 @@ class MultiprocessIndexer(Indexer):
                 try:
                     # first of all, set the refresh intervals for all included indexes to -1 for
                     # faster ingestion
-                    for index in set(self.indexes):
-                        self.elasticsearch.indices.put_settings({
-                            u'index': {
-                                u'refresh_interval': -1
-                            }
-                        }, index.name)
+                    update_refresh_interval(self.elasticsearch, self.indexes, -1)
 
                     # now iterate submit all the feeder and index pairs to the pool. When each one
                     # completes, how many docs it handled and it's indexing stats will be returned
@@ -363,12 +356,7 @@ class MultiprocessIndexer(Indexer):
                             op_stats[index_name].update(counter)
                 finally:
                     # ensure all the indexes have their refresh intervals returned to normal
-                    for index in set(self.indexes):
-                        self.elasticsearch.indices.put_settings({
-                            u'index': {
-                                u'refresh_interval': None
-                            }
-                        }, index.name)
+                    update_refresh_interval(self.elasticsearch, self.indexes, None)
 
         # update the aliases
         self.update_statuses()

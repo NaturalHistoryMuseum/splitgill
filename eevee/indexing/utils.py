@@ -80,3 +80,19 @@ def delete_index(config, index, **kwargs):
             clean_up_command()
         except NotFoundError:
             pass
+
+
+def update_refresh_interval(elasticsearch, indexes, refresh_interval):
+    """
+    Updates the refresh interval for the given indexes to the given value using the given client.
+
+    :param elasticsearch: the elasticsearch client object to connect to the cluster with
+    :param indexes: the indexes to update (this should be an iterable of Index objects)
+    :param refresh_interval: the refresh interval value to update the indexes with
+    """
+    for index in set(indexes):
+        elasticsearch.indices.put_settings({
+            u'index': {
+                u'refresh_interval': refresh_interval,
+            }
+        }, index.name)

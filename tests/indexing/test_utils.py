@@ -5,8 +5,9 @@ from collections import OrderedDict
 
 import dictdiffer
 import six
+from mock import MagicMock, call
 
-from eevee.indexing.utils import get_versions_and_data
+from eevee.indexing.utils import get_versions_and_data, update_refresh_interval
 from eevee.utils import serialise_diff
 
 if six.PY2:
@@ -39,3 +40,24 @@ def test_get_versions_and_data():
         assert rv == tv
         assert rd == td
         assert rnv == tnv
+
+
+def test_update_refresh_interval():
+    # update_refresh_interval(elasticsearch, indexes, refresh_interval)
+    mock_elasticsearch_client = MagicMock(indices=MagicMock(put_settings=MagicMock()))
+    mock_index_1 = MagicMock()
+    mock_index_1.configure_mock(name=u'index_1')
+    mock_index_2 = MagicMock()
+    mock_index_2.configure_mock(name=u'index_2')
+
+    refresh_interval = 10
+    # pass 2 mock_index_2 objects so that we can check the refresh isn't applied multiple times to
+    # the same index
+    update_refresh_interval(mock_elasticsearch_client, [mock_index_1, mock_index_2, mock_index_2],
+                            refresh_interval)
+
+    assert mock_elasticsearch_client.indices.put_settings.call_count == 2
+    assert (call({u'index': {u'refresh_interval': refresh_interval}}, mock_index_1.name) in
+            mock_elasticsearch_client.indices.put_settings.call_args_list)
+    assert (call({u'index': {u'refresh_interval': refresh_interval}}, mock_index_2.name) in
+            mock_elasticsearch_client.indices.put_settings.call_args_list)
