@@ -70,10 +70,14 @@ class IngestionFeeder(object):
         """
         self.version = version
         self.read_signal = Signal(doc=u'''Signal fired for each record read from the feeder. The
-                                          kwargs passed when the signal is triggered are number and
-                                          record, the number is the number of the record from the
-                                          feeder so far (so essentially a count) and the record is
-                                          the actual record object.''')
+                                          kwargs passed when the signal is triggered are "number"
+                                          and "record", the number is the number of the record from
+                                          the feeder so far (so essentially a count) and the record
+                                          is the actual record object.''')
+        self.finish_signal = Signal(doc=u'''Signal fired when the feeder has been exhausted and all
+                                            records read. One kwarg is passed when the signal is
+                                            triggered: "number", the total number of records read.
+                                            ''')
 
     @property
     @abc.abstractmethod
@@ -96,8 +100,8 @@ class IngestionFeeder(object):
         """
         Generator function which yields each record from the source.
         """
+        number = 0
         for number, record in enumerate(self.records(), start=1):
-            # trigger the read signal
             self.read_signal.send(self, number=number, record=record)
-            # yield the record
             yield record
+        self.finish_signal.send(self, number=number)
