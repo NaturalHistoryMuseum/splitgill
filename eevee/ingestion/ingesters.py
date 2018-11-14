@@ -182,7 +182,7 @@ class Ingester(object):
         # generate a stats dict
         stats = self.get_stats(op_stats)
         # send the stats to the finish signal
-        self.finish_signal.send(self, records=total_records, inserted=total_inserted,
+        self.finish_signal.send(self, total=total_records, inserted=total_inserted,
                                 updated=total_updated, stats=stats)
         # return the stats dict produced
         return stats
