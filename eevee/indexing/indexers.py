@@ -111,10 +111,11 @@ class Indexer(object):
         # setup the signals
         self.index_signal = Signal(doc=u'''Triggered when a record has been indexed (or at least
                                            queued for index). The kwargs passed when this signal is
-                                           sent are "document_count" and "command_count" which hold
-                                           the number of records that have been handled and the
-                                           total number of index commands created from those records
-                                           respectively.''')
+                                           sent are "document_count", "command_count" and
+                                           "document_total" which hold the number of records that
+                                           have been handled, the total number of index commands
+                                           created from those records so far and the total number of
+                                           documents to be handled overall respectively.''')
         self.finish_signal = Signal(doc=u'''Triggered when the processing is complete. The kwargs
                                             passed when this signal is sent are "document_count",
                                             "command_count" and "stats", which hold the number of
@@ -158,6 +159,9 @@ class Indexer(object):
         # total stats across all feeder/index combinations
         op_stats = defaultdict(Counter)
 
+        # total up the number of documents to be handled by this indexer
+        document_total = sum(feeder.total() for feeder in self.feeders)
+
         for feeder, index in self.feeders_and_indexes:
             # create a queue for elasticsearch commands
             queue = Queue(maxsize=self.queue_size)
@@ -175,7 +179,8 @@ class Indexer(object):
                         command_count += 1
 
                     self.index_signal.send(self, document_count=document_count,
-                                           command_count=command_count)
+                                           command_count=command_count,
+                                           document_total=document_total)
             finally:
                 # send a sentinel to indicate that we're done putting indexing commands on the queue
                 queue.put(None)
