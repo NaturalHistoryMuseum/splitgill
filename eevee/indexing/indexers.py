@@ -3,6 +3,7 @@
 import itertools
 from collections import Counter, defaultdict
 from datetime import datetime
+from functools import partial
 from threading import Thread
 
 import six
@@ -254,6 +255,45 @@ class Indexer(object):
                                          status_doc, id=index.name)
 
 
+def index_process(config, elasticsearch_bulk_size, feeder_and_index):
+    """
+    Function run on a separate process which does the indexing work for a given feeder and index
+    combination.
+
+    :param config: the config object
+    :param elasticsearch_bulk_size: the number of pairs of commands to send to elasticsearch in
+                                    one bulk request
+    :param feeder_and_index: a 2-tuple of the feeder and the index
+    :return: a 2-tuple of the number of documents processed and the stats dict
+    """
+    feeder, index = feeder_and_index
+    # count how many documents from mongo have been handled in this process's lifetime
+    document_count = 0
+    # count how many index commands have been sent to elasticsearch in this process's lifetime
+    command_count = 0
+    # create a queue for elasticsearch commands
+    queue = Queue()
+    # create and then start a thread to send the commands to elasticsearch
+    bulk_writer = ElasticsearchBulkWriterThread(index, config, queue, elasticsearch_bulk_size,
+                                                update_refresh=False)
+    try:
+        bulk_writer.start()
+        for mongo_doc in feeder.documents():
+            document_count += 1
+            # add each of the commands to the op buffer
+            for command in index.get_commands(mongo_doc):
+                # queue the command, waiting if necessary for the queue to not be full
+                queue.put(command)
+                command_count += 1
+    finally:
+        # send a sentinel to indicate that we're done putting indexing commands on the queue
+        queue.put(None)
+        # wait for all indexing commands to be sent
+        bulk_writer.join()
+
+    return document_count, command_count, bulk_writer.stats
+
+
 class MultiprocessIndexer(Indexer):
     """
     Class encapsulating the functionality required to index records using a pool of processes. This
@@ -284,42 +324,6 @@ class MultiprocessIndexer(Indexer):
         self.pool_size = pool_size
         self.total = total
 
-    def _index_process(self, feeder_and_index):
-        """
-        Function run on a separate process which does the indexing work for a given feeder and
-        index combination.
-
-        :param feeder_and_index: a 2-tuple of the feeder and the index
-        :return: a 2-tuple of the number of documents processed and the stats dict
-        """
-        feeder, index = feeder_and_index
-        # count how many documents from mongo have been handled in this process's lifetime
-        document_count = 0
-        # count how many index commands have been sent to elasticsearch in this process's lifetime
-        command_count = 0
-        # create a queue for elasticsearch commands
-        queue = Queue()
-        # create and then start a thread to send the commands to elasticsearch
-        bulk_writer = ElasticsearchBulkWriterThread(index, self.config, queue,
-                                                    self.elasticsearch_bulk_size,
-                                                    update_refresh=False)
-        try:
-            bulk_writer.start()
-            for mongo_doc in feeder.documents():
-                document_count += 1
-                # add each of the commands to the op buffer
-                for command in index.get_commands(mongo_doc):
-                    # queue the command, waiting if necessary for the queue to not be full
-                    queue.put(command)
-                    command_count += 1
-        finally:
-            # send a sentinel to indicate that we're done putting indexing commands on the queue
-            queue.put(None)
-            # wait for all indexing commands to be sent
-            bulk_writer.join()
-
-        return document_count, command_count, bulk_writer.stats
-
     def index(self):
         """
         Indexes a set of records from mongo into elasticsearch.
@@ -328,9 +332,9 @@ class MultiprocessIndexer(Indexer):
         self.define_indexes()
 
         # keep a count of the total number of documents indexed
-        total_documents = 0
+        document_count = 0
         # keep a count of the total number of commands sent to elasticsearch
-        total_commands = 0
+        command_count = 0
         # total stats across all feeder/index combinations
         op_stats = defaultdict(Counter)
 
@@ -348,14 +352,21 @@ class MultiprocessIndexer(Indexer):
                     # faster ingestion
                     update_refresh_interval(self.elasticsearch, self.indexes, -1)
 
-                    # now iterate submit all the feeder and index pairs to the pool. When each one
-                    # completes, how many docs it handled and it's indexing stats will be returned
-                    for doc_count, command_count, pool_stats in pool.imap(self._index_process,
-                                                                          self.feeders_and_indexes):
-                        total_documents += doc_count
-                        total_commands += command_count
-                        self.index_signal.send(self, doc_count=total_documents,
-                                               command_count=total_commands)
+                    # create a partial processor with the common parameters for all calls
+                    processor = partial(index_process, self.config, self.elasticsearch_bulk_size)
+                    # create a generator that returns the results as they come out of the pool for
+                    # the feeder index combinations we have
+                    pool_results = pool.imap(processor, self.feeders_and_indexes)
+
+                    # iterate over each of the pool results
+                    for pool_document_count, pool_command_count, pool_stats in pool_results:
+                        # update the counts and send a signal
+                        document_count += pool_document_count
+                        command_count += pool_command_count
+                        self.index_signal.send(self, document_count=document_count,
+                                               command_count=command_count,
+                                               document_total=self.total)
+
                         # update the stats based on the new stats from the bulk writer
                         for index_name, counter in pool_stats.items():
                             op_stats[index_name].update(counter)
@@ -368,7 +379,7 @@ class MultiprocessIndexer(Indexer):
         # generate the stats dict
         stats = self.get_stats(op_stats)
         # trigger the finish signal
-        self.finish_signal.send(self, document_count=total_documents, command_count=total_commands,
+        self.finish_signal.send(self, document_count=document_count, command_count=command_count,
                                 stats=stats)
         # return the stats dict
         return stats
