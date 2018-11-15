@@ -62,6 +62,13 @@ class SearchResults(object):
         for hit in self.hits:
             yield SearchResult(self.config, hit.to_dict(), hit.meta)
 
+    @property
+    def last_after(self):
+        if self.hits and u'sort' in self.hits[-1].meta:
+            return self.hits[-1].meta[u'sort']
+        else:
+            return None
+
 
 class Searcher(object):
     """
