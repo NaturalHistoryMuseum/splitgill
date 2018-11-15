@@ -65,7 +65,7 @@ class SearchResults(object):
     @property
     def last_after(self):
         if self.hits and u'sort' in self.hits[-1].meta:
-            return self.hits[-1].meta[u'sort']
+            return list(self.hits[-1].meta[u'sort'])
         else:
             return None
 
