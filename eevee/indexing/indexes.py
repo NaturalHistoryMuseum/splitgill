@@ -150,11 +150,14 @@ class Index(object):
                         {
                             # for all fields we want to:
                             #  - store them as a keyword type so that we can do keyword searches on
-                            #    them
+                            #    them by default
                             #  - store them as a text type so that we can do free searches on them
                             #    (available at <field_name>.full)
+                            #  - store them as a number type (double is used to catch all values) so
+                            #    that we can do number value based searches on values that are
+                            #    numbers (available at <field_name>.number)
                             #  - copy them to the meta.all field so that we can do queries across
-                            #    all fields easily this dynamic mapping accomplishes these 3 things
+                            #    all fields easily
                             u'standard_field': {
                                 u'path_match': u'data.*',
                                 u'mapping': {
@@ -167,6 +170,12 @@ class Index(object):
                                         # index a text version of the field at <field_name>.full
                                         u'full': {
                                             u'type': u'text',
+                                        },
+                                        # index a number version of the field at <field_name>.number
+                                        u'number': {
+                                            u'type': u'double',
+                                            # values that don't work as number should be ignored
+                                            u'ignore_malformed': True,
                                         }
                                     },
                                     u'copy_to': u'meta.all',
