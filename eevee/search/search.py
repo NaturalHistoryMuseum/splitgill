@@ -92,7 +92,7 @@ class Searcher(object):
         else:
             self.elasticsearch = client
 
-    def get_index_versions(self, indexes=None):
+    def get_index_versions(self, indexes=None, max_results=1000, prefixed=True):
         """
         Returns the current indexes and their latest versions as a dict. If the indexes parameter is
         None then the details for all indexes are returned, if not then only the indexes that match
@@ -100,20 +100,25 @@ class Searcher(object):
 
         :param indexes: the index names to match and return data for. The names should be the full
                         index names with prefix.
+        :param max_results: the maximum number of results to get from elasticsearch, defaults to
+                            1000.
+        :param prefixed: whether the index names passed in have been prefixed or not. If this is
+                         True then the indexes are used as is and returned with prefixes still
+                         attached (using the status `index_name` field). If this is False then the
+                         status `name` field is queries and used in the returned dict so that no
+                         prefixes are used.
         :return: a dict of index names -> latest version
         """
         # TODO: cache this data and refresh it every n minutes?
-        # find all the statuses, note the slice at the end which means we only get the first 1000
-        # hits. 1000 is an arbitrary size to avoid having to use the slower scroll api (through the
-        # scan function) to get all the items in the status index. If we get more than 1000
-        # resources then this number will need to be increased, or indeed replaced with the scroll
-        # api instead
         search = Search(using=self.elasticsearch,
-                        index=self.config.elasticsearch_status_index_name)[:1000]
+                        index=self.config.elasticsearch_status_index_name)[:max_results]
         if indexes is not None:
-            search = search.filter(u'regexp', index_name=u'|'.join(index.replace(u'*', u'.*')
-                                                                   for index in indexes))
-        return {hit.index_name: hit.latest_version for hit in search}
+            filter_value = u'|'.join(index.replace(u'*', u'.*') for index in indexes)
+            if prefixed:
+                search = search.filter(u'regexp', index_name=filter_value)
+            else:
+                search = search.filter(u'regexp', name=filter_value)
+        return {hit.index_name if prefixed else hit.name: hit.latest_version for hit in search}
 
     def pre_search(self, indexes=None, search=None, version=None):
         """
