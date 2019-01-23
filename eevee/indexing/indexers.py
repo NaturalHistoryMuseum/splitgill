@@ -5,6 +5,7 @@ import itertools
 import multiprocessing
 from collections import Counter, defaultdict
 from datetime import datetime
+from threading import Thread
 
 from blinker import Signal
 from elasticsearch_dsl import Search
@@ -17,7 +18,8 @@ class IndexingProcess(multiprocessing.Process):
     Process that indexes mongo documents placed on its queue.
     """
 
-    def __init__(self, process_id, config, index, document_queue, result_queue, is_clean_insert):
+    def __init__(self, process_id, config, index, document_queue, result_queue, is_clean_insert,
+                 stats_queue):
         """
         :param process_id: an identifier for this process (we'll include this when posting results
                            back)
@@ -25,9 +27,10 @@ class IndexingProcess(multiprocessing.Process):
         :param index: the index object - this is used to get the commands and then identifies which
                       elasticsearch index to send them to
         :param document_queue: the queue of document objects we'll read from
-        :param result_queue: the queue of results we'll write to
+        :param result_queue: the queue we'll write results to
         :param is_clean_insert: True if the index we're indexing into is empty, this allows us to
                                 skip some checks and makes processing faster
+        :param stats_queue: the queue we'll write created/updated stats to
         """
         super(IndexingProcess, self).__init__()
         # not the actual OS level PID just an internal id for this process
@@ -37,6 +40,7 @@ class IndexingProcess(multiprocessing.Process):
         self.document_queue = document_queue
         self.result_queue = result_queue
         self.is_clean_insert = is_clean_insert
+        self.stats_queue = stats_queue
 
         self.command_count = 0
         self.stats = defaultdict(Counter)
@@ -95,10 +99,14 @@ class IndexingProcess(multiprocessing.Process):
         """
         self.command_count += len(commands)
 
+        # TODO: might want a way of turning off stats collection if it proves overly expensive
+        # collect up some stats!
+        created, updated = self.collect_stats(ids)
+
         # we can skip the delete step if there isn't any data in the index
         if not self.is_clean_insert:
             # delete any existing records with the ids we're about to update
-            search = Search(index=self.index.name).query(u'terms', **{u'data._id': ids})
+            search = Search(index=self.index.name).filter(u'terms', **{u'data._id': ids})
             search.using(self.elasticsearch).delete()
 
         # send the commands to elasticsearch
@@ -110,6 +118,31 @@ class IndexingProcess(multiprocessing.Process):
             info = next(iter(action_response.values()))
             # update the stats
             self.stats[info[u'_index']][info[u'result']] += 1
+
+        # drop our stats on to the stats queue
+        self.stats_queue.put((created, updated))
+
+    def collect_stats(self, ids):
+        """
+        Given a list of ids, figure out which ones will be created for the first time when indexed
+        and which ones will be updated as they already exist in the index.
+
+        :param ids: a list of integer record ids
+        :return: a 2-tuple consisting of a list of created ids and a list of updated ids
+        """
+        if self.is_clean_insert:
+            # well that was easy, everything is a create when the index was empty beforehand
+            return ids, []
+        else:
+            # find which record ids already exist in the index
+            search = Search(index=self.index.name, using=self.elasticsearch)\
+                .filter(u'terms', **{u'data._id': ids})\
+                .source([u'data._id'])\
+                .extra(size=len(ids))
+            # extract the updated ids from the return
+            updated = [hit[u'data'][u'_id'] for hit in search.execute()]
+            # diff the lists to figure out which ones were created ones
+            return list(set(ids) - set(updated)), updated
 
 
 class Indexer(object):
@@ -160,6 +193,14 @@ class Indexer(object):
                                             records that have been handled, the total number of
                                             index commands created from those records and the report
                                             stats that will be entered into mongo respectively.''')
+        self.created_signal = Signal(doc=u'''Triggered after a record is actually indexed and it is
+                                             the first time it's been indexed. Only one kwarg is
+                                             passed when the signal is sent: "record_id", which will
+                                             contain the integer record_id of the record.''')
+        self.updated_signal = Signal(doc=u'''Triggered after a record is actually indexed and it is
+                                             not the first time it's been indexed. Only one kwarg is
+                                             passed when the signal is sent: "record_id", which will
+                                             contain the integer record_id of the record.''')
         self.start = datetime.now()
 
     def get_stats(self, operations):
@@ -182,6 +223,23 @@ class Indexer(object):
             u'operations': operations,
         }
 
+    def stats_collector(self, stats_queue):
+        """
+        Should be run in a separate thread from the main index function as it uses a blocking get
+        on the stats_queue parameter passed in.
+
+        :param stats_queue: the stats queue to read from
+        """
+        try:
+            for created, updated in iter(stats_queue.get, None):
+                for record_id in created:
+                    self.created_signal.send(self, record_id=record_id)
+                for record_id in updated:
+                    self.updated_signal.send(self, record_id=record_id)
+        except KeyboardInterrupt:
+            # if we're keyboard interrupted, just end
+            pass
+
     def index(self):
         """
         Indexes a set of records from mongo into elasticsearch.
@@ -198,6 +256,12 @@ class Indexer(object):
         # total up the number of documents to be handled by this indexer
         document_total = sum(feeder.total() for feeder in self.feeders)
 
+        # create a queue for per record created and updated stats to flow through and a thread to
+        # pick them up and send them to the signal listeners
+        stats_queue = multiprocessing.Queue()
+        stats_thread = Thread(target=self.stats_collector, args=(stats_queue, ))
+        stats_thread.start()
+
         for feeder, index in self.feeders_and_indexes:
             # check if there is any data already in the index or not, this allows us to skip some
             # checks and makes the process faster
@@ -212,7 +276,7 @@ class Indexer(object):
             process_pool = []
             for number in range(self.pool_size):
                 process = IndexingProcess(number, self.config, index, document_queue, result_queue,
-                                          is_clean_insert)
+                                          is_clean_insert, stats_queue)
                 process_pool.append(process)
                 process.start()
 
@@ -245,6 +309,11 @@ class Indexer(object):
                     command_count += commands_handled
                     for index_name, counter in stats.items():
                         op_stats[index_name].update(counter)
+
+                # everything is complete now, put a sentinel on the stats queue and wait for it to
+                # finish up
+                stats_queue.put(None)
+                stats_thread.join()
             finally:
                 # set the refresh interval back to the default
                 update_refresh_interval(self.elasticsearch, [index], None)
