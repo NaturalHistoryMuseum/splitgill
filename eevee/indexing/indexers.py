@@ -120,7 +120,7 @@ class IndexingProcess(multiprocessing.Process):
             self.stats[info[u'_index']][info[u'result']] += 1
 
         # drop our stats on to the stats queue
-        self.stats_queue.put((created, updated))
+        self.stats_queue.put((self.index.unprefixed_name, created, updated))
 
     def collect_stats(self, ids):
         """
@@ -194,13 +194,17 @@ class Indexer(object):
                                             index commands created from those records and the report
                                             stats that will be entered into mongo respectively.''')
         self.created_signal = Signal(doc=u'''Triggered after a record is actually indexed and it is
-                                             the first time it's been indexed. Only one kwarg is
-                                             passed when the signal is sent: "record_id", which will
-                                             contain the integer record_id of the record.''')
+                                             the first time it's been indexed. The kwargs passed
+                                             when this signal is sent are "index" and "record_id"
+                                             which hold the name of the index (unprefixed) into
+                                             which the record was indexed and the integer record ID
+                                             of the record respectively.''')
         self.updated_signal = Signal(doc=u'''Triggered after a record is actually indexed and it is
-                                             not the first time it's been indexed. Only one kwarg is
-                                             passed when the signal is sent: "record_id", which will
-                                             contain the integer record_id of the record.''')
+                                             not the first time it's been indexed. The kwargs passed
+                                             when this signal is sent are "index" and "record_id"
+                                             which hold the name of the index (unprefixed) into
+                                             which the record was indexed and the integer record ID
+                                             of the record respectively.''')
         self.start = datetime.now()
 
     def get_stats(self, operations):
@@ -231,11 +235,11 @@ class Indexer(object):
         :param stats_queue: the stats queue to read from
         """
         try:
-            for created, updated in iter(stats_queue.get, None):
+            for index, created, updated in iter(stats_queue.get, None):
                 for record_id in created:
-                    self.created_signal.send(self, record_id=record_id)
+                    self.created_signal.send(self, index=index, record_id=record_id)
                 for record_id in updated:
-                    self.updated_signal.send(self, record_id=record_id)
+                    self.updated_signal.send(self, index=index, record_id=record_id)
         except KeyboardInterrupt:
             # if we're keyboard interrupted, just end
             pass
