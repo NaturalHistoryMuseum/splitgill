@@ -4,10 +4,8 @@
 import abc
 import calendar
 import itertools
-import ujson
 
 import six
-
 
 if six.PY2:
     # the builtin version of zip in python 2 returns a list, we need an iterator so we have to use
@@ -136,36 +134,3 @@ class OpBuffer(object):
         # only flush if there are no exceptions
         if exc_type is None and exc_val is None and exc_tb is None:
             self.flush()
-
-
-def serialise_diff(diff):
-    """
-    Serialise a diff for storage in mongo. The diff is a list and therefore there are three ways to
-    store this in mongo:
-
-        - as a list
-        - as a gzipped, json dumped string
-        - as a json dumped string
-
-    Turns out, option 1 increases the size of a document significantly and is therefore slow to
-    read, write and process through pymongo. Option 2 is better on document size, however the time
-    it takes to compress and uncompress the data is significant. This leaves option 3 which is the
-    most space efficient and fastest way to store the data for processing too. This is because the
-    data is compressed when stored as a string by mongo so we get some of the benefits of option 2,
-    and then ujson does a great job of dumping and loading the data (it's significantly faster than
-    the built in python json module).
-
-    :param diff: the diff output from dictdiffer as a list
-    :return: a serialised version of the diff, ready for storage in mongo
-    """
-    return ujson.dumps(diff)
-
-
-def deserialise_diff(diff):
-    """
-    Deserialises a diff that has been retrieved from mongo. This should be a serialised json string.
-
-    :param diff: the diff as a serialised json string
-    :return: a list in the dictdiffer diff format
-    """
-    return ujson.loads(diff)

@@ -7,8 +7,8 @@ import dictdiffer
 import six
 from mock import MagicMock, call
 
+from eevee.diffing import format_diff, DICT_DIFFER_DIFFER
 from eevee.indexing.utils import get_versions_and_data, update_refresh_interval
-from eevee.utils import serialise_diff
 
 if six.PY2:
     # the builtin version of zip in python 2 returns a list, we need an iterator so we have to use
@@ -26,10 +26,10 @@ def test_get_versions_and_data():
     mongo_doc = {
         u'versions': list(data.keys()),
         u'diffs': {
-            u'3': serialise_diff(list(dictdiffer.diff({}, data[3]))),
-            u'5': serialise_diff(list(dictdiffer.diff(data[3], data[5]))),
-            u'6': serialise_diff(list(dictdiffer.diff(data[5], data[6]))),
-            u'21': serialise_diff(list(dictdiffer.diff(data[6], data[21]))),
+            u'3': format_diff(DICT_DIFFER_DIFFER, DICT_DIFFER_DIFFER.diff({}, data[3])),
+            u'5': format_diff(DICT_DIFFER_DIFFER, DICT_DIFFER_DIFFER.diff(data[3], data[5])),
+            u'6': format_diff(DICT_DIFFER_DIFFER, DICT_DIFFER_DIFFER.diff(data[5], data[6])),
+            u'21': format_diff(DICT_DIFFER_DIFFER, DICT_DIFFER_DIFFER.diff(data[6], data[21])),
         }
     }
 

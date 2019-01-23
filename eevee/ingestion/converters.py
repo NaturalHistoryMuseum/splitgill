@@ -1,9 +1,7 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
-import dictdiffer
-
-from eevee.utils import serialise_diff
+from eevee.diffing import DICT_DIFFER_DIFFER, SHALLOW_DIFFER, format_diff
 
 
 class RecordToMongoConverter(object):
@@ -11,14 +9,23 @@ class RecordToMongoConverter(object):
     This class provides functions to convert a record into a document to be inserted into mongo.
     """
 
-    def __init__(self, version, ingestion_time):
+    def __init__(self, version, ingestion_time, differs=None):
         """
         :param version: the current version
         :param ingestion_time: the time of the ingestion operation which will be attached to all
                                records created/updated through this converter
+        :param differs: a list of differ objects to use for diffing the different versions of the
+                        data. When diffing the list is iterated through in order and the first
+                        differ to return True from the can_diff function is used.
+                        If None then the default is used: [ShallowDiffer(), DictDifferDiffer()].
         """
         self.version = version
         self._ingestion_time = ingestion_time
+        if differs is None:
+            # prefer the shallow differ as it is faster to patch with
+            self.differs = [SHALLOW_DIFFER, DICT_DIFFER_DIFFER]
+        else:
+            self.differs = differs
 
     @property
     def ingestion_time(self):
@@ -34,17 +41,20 @@ class RecordToMongoConverter(object):
 
     def diff_data(self, existing_data, new_data):
         """
-        Diffs the two data dicts, returning a 2-tuple where the first element indicates whether a
-        change has occurred and the second element is the actual diff.
+        Diffs the two data dicts, returning a 3-tuple where the first element indicates whether a
+        change has occurred, the second element is the differ object chosen to do the diff and the
+        third object is the resulting diff.
 
         :param existing_data: the data as it was
         :param new_data: the data as it is now
         :return: a tuple
         """
-        diff = list(dictdiffer.diff(existing_data, new_data))
-        # in the base function, indicate that there was a change by checking if the diff is empty or
-        # not
-        return bool(diff), diff
+        # figure out which differ to use
+        differ = next(differ for differ in self.differs if differ.can_diff(new_data))
+        # diff the data with the chosen differ
+        diff = differ.diff(existing_data, new_data)
+        # return a tuple indicating if the data changed, the differ chosen and the diff
+        return bool(diff), differ, diff
 
     def for_insert(self, record):
         """
@@ -56,7 +66,7 @@ class RecordToMongoConverter(object):
         """
         # convert the record to a dict according to the records requirements
         converted_record = record.convert()
-        should_insert, diff = self.diff_data({}, converted_record)
+        should_insert, differ, diff = self.diff_data({}, converted_record)
         # if the converted doc is empty, ignore it
         if not should_insert:
             return None
@@ -84,7 +94,7 @@ class RecordToMongoConverter(object):
             u'versions': [self.version],
             # a dict of the incremental changes made by each version, note that the integer version
             # is converted to a string here because mongo can't handle non-string keys
-            u'diffs': {str(self.version): serialise_diff(diff)},
+            u'diffs': {str(self.version): format_diff(differ, diff)},
         }
         return mongo_doc
 
@@ -105,14 +115,14 @@ class RecordToMongoConverter(object):
         converted_record = record.convert()
 
         # generate a diff of the new record against the existing version in mongo
-        should_update, diff = self.diff_data(mongo_doc[u'data'], converted_record)
+        should_update, differ, diff = self.diff_data(mongo_doc[u'data'], converted_record)
         if should_update:
             # set some new values
             sets.update({
                 u'data': converted_record,
                 u'latest_version': self.version,
                 u'last_ingested': self.ingestion_time,
-                u'diffs.{}'.format(self.version): serialise_diff(diff),
+                u'diffs.{}'.format(self.version): format_diff(differ, diff),
                 # allow modification of the metadata dict
                 u'metadata': record.modify_metadata(mongo_doc[u'metadata']),
             })

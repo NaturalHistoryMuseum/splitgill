@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
-import dictdiffer
 from elasticsearch import Elasticsearch, NotFoundError
 
-from eevee.utils import deserialise_diff, iter_pairs
+from eevee.diffing import extract_diff
+from eevee.utils import iter_pairs
 
 DOC_TYPE = u'_doc'
 
 
-def get_versions_and_data(mongo_doc, future_next_version=float(u'inf')):
+def get_versions_and_data(mongo_doc, future_next_version=float(u'inf'), in_place=False):
     """
     Returns a generator which will yield, in order, the version, data and next version from the
     given record as a 3=tuple in that order. The next version is provided for convenience. The last
@@ -23,6 +23,8 @@ def get_versions_and_data(mongo_doc, future_next_version=float(u'inf')):
     :param mongo_doc: the mongo doc
     :param future_next_version: the value yielded in the 3-tuple when the last version is yielded,
                                 defaults to +infinity
+    :param in_place: if true then the returned data is updated in place each time through, if False
+                     (the default) then the data returned is a new object each time through
     :return: a generator
     """
     # this variable will hold the actual data of the record and will be updated with the diffs as we
@@ -32,10 +34,13 @@ def get_versions_and_data(mongo_doc, future_next_version=float(u'inf')):
     # iterate over the versions
     for version, next_version in iter_pairs(sorted(int(version) for version in mongo_doc[u'diffs']),
                                             final_partner=future_next_version):
-        # patch the data dict with this version's diff
-        data = dictdiffer.patch(deserialise_diff(mongo_doc[u'diffs'][str(version)]), data,
-                                in_place=True)
-        # yield the version and data
+        # retrieve the diff for the version
+        raw_diff = mongo_doc[u'diffs'][str(version)]
+        # extract the differ used and the diff object itself
+        differ, diff = extract_diff(raw_diff)
+        # patch the data
+        data = differ.patch(diff, data, in_place=in_place)
+        # yield the version, data and next version
         yield version, data, next_version
 
 
