@@ -4,6 +4,7 @@ requirements.txt
 setup.py
 eevee/__init__.py
 eevee/config.py
+eevee/diffing.py
 eevee/mongo.py
 eevee/utils.py
 eevee.egg-info/PKG-INFO
