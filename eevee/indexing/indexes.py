@@ -31,12 +31,9 @@ class Index(object):
         :param mongo_doc: the mongo doc to handle
         """
         # iterate over the mongo_docs versions and send them to elasticsearch
-        for version, data, next_version in get_versions_and_data(mongo_doc):
+        for version, data, next_version in get_versions_and_data(mongo_doc, in_place=False):
             yield (self.create_action(mongo_doc[u'id'], version),
-                   # pass a deep copy of the data dict for indexing as the indexing occurs lazily
-                   # (if we didn't do this all the data dicts for each mongo doc that we send to
-                   # elasticsearch would be the same)
-                   self.create_index_document(copy.deepcopy(data), version, next_version))
+                   self.create_index_document(data, version, next_version))
 
     def create_action(self, record_id, version):
         """
