@@ -9,7 +9,7 @@ class Index(object):
     Represents an index in elasticsearch.
     """
 
-    def __init__(self, config, name, version):
+    def __init__(self, config, name, version, shards=5, replicas=1):
         """
         :param config: the config object
         :param name: the elasticsearch index name that the data held in this object will be indexed
@@ -18,11 +18,21 @@ class Index(object):
                      whereas the name without the prefix will be stored in the unprefixed_name
                      attribute
         :param version: the version we're indexing up to
+        :param shards: the number of shards to create this index with (only applies if the index is
+                       created new, existing indexes will not be updated). The default value is 5,
+                       in elasticsearch 7 they are changing the default number of shards from 5 to
+                       1, so by defaulting here to 5 we can get ahead of the curve and manually set
+                       it to 5 when we create the index. 5 is a reasonable starting point for the
+                       number of shards for an index.
+        :param replicas: the number of replica shards to create this index with (only applies if the
+                         index is created new, existing indexes will not be updated). Defaults to 1.
         """
         self.config = config
         self.unprefixed_name = name
         self.name = u'{}{}'.format(config.elasticsearch_index_prefix, name)
         self.version = version
+        self.shards = shards
+        self.replicas = replicas
 
     def get_commands(self, mongo_doc):
         """
@@ -114,12 +124,8 @@ class Index(object):
                     }
                 },
                 u'index': {
-                    # in elasticsearch 7 they are changing the default number of shards from 5 to 1,
-                    # so might as well get ahead of the curve and manually set it to 5 here when we
-                    # create the index. 5 is a reasonable starting point for the number of shards
-                    # in an index, override if you want!
-                    u'number_of_shards': 5,
-                    u'number_of_replicas': 1
+                    u'number_of_shards': self.shards,
+                    u'number_of_replicas': self.replicas,
                 }
             },
             u'mappings': {
