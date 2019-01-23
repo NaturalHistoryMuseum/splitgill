@@ -54,10 +54,13 @@ class IndexingProcess(multiprocessing.Process):
         try:
             # do a blocking read from the queue until we get a sentinel
             for mongo_doc in iter(self.document_queue.get, None):
-                # add the id to the buffer as an integer
-                id_buffer.append(int(mongo_doc[u'id']))
-                # create the commands for the record and add them to the buffer
-                command_buffer.extend(self.index.get_commands(mongo_doc))
+                # create the commands for the record
+                commands = list(self.index.get_commands(mongo_doc))
+                if commands:
+                    # add them to the buffer
+                    command_buffer.extend(commands)
+                    # add the id to the buffer as an integer
+                    id_buffer.append(int(mongo_doc[u'id']))
 
                 # send the commands to elasticsearch if the bulk size limit has been reached or
                 # exceeded
@@ -69,7 +72,6 @@ class IndexingProcess(multiprocessing.Process):
                     id_buffer = []
 
             if command_buffer:
-                # TODO: or id_buffer?
                 # if there are any commands left, handle them
                 self.send_to_elasticsearch(command_buffer, id_buffer)
 
