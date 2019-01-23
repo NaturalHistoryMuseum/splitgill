@@ -112,6 +112,14 @@ class Index(object):
                             u'filter': [u'lowercase']
                         }
                     }
+                },
+                u'index': {
+                    # in elasticsearch 7 they are changing the default number of shards from 5 to 1,
+                    # so might as well get ahead of the curve and manually set it to 5 here when we
+                    # create the index. 5 is a reasonable starting point for the number of shards
+                    # in an index, override if you want!
+                    u'number_of_shards': 5,
+                    u'number_of_replicas': 1
                 }
             },
             u'mappings': {
