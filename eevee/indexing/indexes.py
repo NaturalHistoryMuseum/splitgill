@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
-import copy
-
 from eevee.indexing.utils import get_versions_and_data, DOC_TYPE
 
 
@@ -53,9 +51,7 @@ class Index(object):
         # parameter is no longer used and will be removed in future versions of elasticsearch
         return {
             u'index': {
-                # create an id for the document which is unique by using the record id and the
-                # version
-                u'_id': u'{}:{}'.format(record_id, version),
+                # don't provide an id for speed (see elasticsearch bulk index doc for reasons)
                 u'_type': DOC_TYPE,
                 u'_index': self.name,
             }
