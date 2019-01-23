@@ -17,7 +17,7 @@ class IndexingProcess(multiprocessing.Process):
     Process that indexes mongo documents placed on its queue.
     """
 
-    def __init__(self, process_id, config, index, document_queue, result_queue):
+    def __init__(self, process_id, config, index, document_queue, result_queue, is_clean_insert):
         """
         :param process_id: an identifier for this process (we'll include this when posting results
                            back)
@@ -26,6 +26,8 @@ class IndexingProcess(multiprocessing.Process):
                       elasticsearch index to send them to
         :param document_queue: the queue of document objects we'll read from
         :param result_queue: the queue of results we'll write to
+        :param is_clean_insert: True if the index we're indexing into is empty, this allows us to
+                                skip some checks and makes processing faster
         """
         super(IndexingProcess, self).__init__()
         # not the actual OS level PID just an internal id for this process
@@ -34,6 +36,7 @@ class IndexingProcess(multiprocessing.Process):
         self.index = index
         self.document_queue = document_queue
         self.result_queue = result_queue
+        self.is_clean_insert = is_clean_insert
 
         self.command_count = 0
         self.stats = defaultdict(Counter)
@@ -92,9 +95,11 @@ class IndexingProcess(multiprocessing.Process):
         """
         self.command_count += len(commands)
 
-        # delete any existing records with the ids we're about to update
-        search = Search(index=self.index.name).query(u'terms', **{u'data._id': ids})
-        search.using(self.elasticsearch).delete()
+        # we can skip the delete step if there isn't any data in the index
+        if not self.is_clean_insert:
+            # delete any existing records with the ids we're about to update
+            search = Search(index=self.index.name).query(u'terms', **{u'data._id': ids})
+            search.using(self.elasticsearch).delete()
 
         # send the commands to elasticsearch
         response = self.elasticsearch.bulk(itertools.chain.from_iterable(commands))
@@ -194,6 +199,10 @@ class Indexer(object):
         document_total = sum(feeder.total() for feeder in self.feeders)
 
         for feeder, index in self.feeders_and_indexes:
+            # check if there is any data already in the index or not, this allows us to skip some
+            # checks and makes the process faster
+            is_clean_insert = Search(index=index.name, using=self.elasticsearch).count() == 0
+
             # create a queue for documents
             document_queue = multiprocessing.Queue(maxsize=self.queue_size)
             # create a queue allowing results to be passed back once a process has completed
@@ -202,7 +211,8 @@ class Indexer(object):
             # create all the sub-processes for indexing and start them up
             process_pool = []
             for number in range(self.pool_size):
-                process = IndexingProcess(number, self.config, index, document_queue, result_queue)
+                process = IndexingProcess(number, self.config, index, document_queue, result_queue,
+                                          is_clean_insert)
                 process_pool.append(process)
                 process.start()
 
