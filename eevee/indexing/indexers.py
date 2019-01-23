@@ -56,7 +56,7 @@ class IndexingProcess(multiprocessing.Process):
         """
         # buffers for commands and ids we're going to modify
         command_buffer = []
-        id_buffer = []
+        id_buffer = {}
 
         try:
             # do a blocking read from the queue until we get a sentinel
@@ -66,8 +66,9 @@ class IndexingProcess(multiprocessing.Process):
                 if commands:
                     # add them to the buffer
                     command_buffer.extend(commands)
-                    # add the id to the buffer as an integer
-                    id_buffer.append(int(mongo_doc[u'id']))
+                    # add the id to the buffer (as an integer) along with the latest version of the
+                    # record as it will be once indexed by elasticsearch
+                    id_buffer[int(mongo_doc[u'id'])] = commands[-1][1]
 
                 # send the commands to elasticsearch if the bulk size limit has been reached or
                 # exceeded
@@ -76,7 +77,7 @@ class IndexingProcess(multiprocessing.Process):
                     self.send_to_elasticsearch(command_buffer, id_buffer)
                     # reset the buffers
                     command_buffer = []
-                    id_buffer = []
+                    id_buffer = {}
 
             if command_buffer:
                 # if there are any commands left, handle them
@@ -95,7 +96,7 @@ class IndexingProcess(multiprocessing.Process):
         :param commands: the commands to send, each element in the list should be a command pair -
                          the action and then the data (see the elasticsearch bulk api doc for
                          details)
-        :param ids: the ids of the documents being updated
+        :param ids: the ids of the documents being updated and their latest data state
         """
         self.command_count += len(commands)
 
@@ -106,8 +107,9 @@ class IndexingProcess(multiprocessing.Process):
         # we can skip the delete step if there isn't any data in the index
         if not self.is_clean_insert:
             # delete any existing records with the ids we're about to update
-            search = Search(index=self.index.name).filter(u'terms', **{u'data._id': ids})
-            search.using(self.elasticsearch).delete()
+            Search(index=self.index.name, using=self.elasticsearch)\
+                .filter(u'terms', **{u'data._id': list(ids.keys())})\
+                .delete()
 
         # send the commands to elasticsearch
         response = self.elasticsearch.bulk(itertools.chain.from_iterable(commands))
@@ -120,29 +122,30 @@ class IndexingProcess(multiprocessing.Process):
             self.stats[info[u'_index']][info[u'result']] += 1
 
         # drop our stats on to the stats queue
-        self.stats_queue.put((self.index.unprefixed_name, created, updated))
+        self.stats_queue.put((self.index.unprefixed_name, created, updated, ids))
 
     def collect_stats(self, ids):
         """
         Given a list of ids, figure out which ones will be created for the first time when indexed
         and which ones will be updated as they already exist in the index.
 
-        :param ids: a list of integer record ids
+        :param ids: a dict of integer record ids and their latest data states
         :return: a 2-tuple consisting of a list of created ids and a list of updated ids
         """
+        all_ids = list(ids.keys())
         if self.is_clean_insert:
             # well that was easy, everything is a create when the index was empty beforehand
-            return ids, []
+            return all_ids, []
         else:
             # find which record ids already exist in the index
             search = Search(index=self.index.name, using=self.elasticsearch)\
-                .filter(u'terms', **{u'data._id': ids})\
+                .filter(u'terms', **{u'data._id': all_ids})\
                 .source([u'data._id'])\
                 .extra(size=len(ids))
             # extract the updated ids from the return
             updated = [hit[u'data'][u'_id'] for hit in search.execute()]
             # diff the lists to figure out which ones were created ones
-            return list(set(ids) - set(updated)), updated
+            return list(set(all_ids) - set(updated)), updated
 
 
 class Indexer(object):
@@ -195,16 +198,18 @@ class Indexer(object):
                                             stats that will be entered into mongo respectively.''')
         self.created_signal = Signal(doc=u'''Triggered after a record is actually indexed and it is
                                              the first time it's been indexed. The kwargs passed
-                                             when this signal is sent are "index" and "record_id"
-                                             which hold the name of the index (unprefixed) into
-                                             which the record was indexed and the integer record ID
-                                             of the record respectively.''')
+                                             when this signal is sent are "index", "record_id" and
+                                             "record" which hold the name of the index (unprefixed)
+                                             into which the record was indexed, the integer record
+                                             ID of the record and the latest record data
+                                             respectively.''')
         self.updated_signal = Signal(doc=u'''Triggered after a record is actually indexed and it is
-                                             not the first time it's been indexed. The kwargs passed
-                                             when this signal is sent are "index" and "record_id"
-                                             which hold the name of the index (unprefixed) into
-                                             which the record was indexed and the integer record ID
-                                             of the record respectively.''')
+                                             the not time it's been indexed. The kwargs passed
+                                             when this signal is sent are "index", "record_id" and
+                                             "record" which hold the name of the index (unprefixed)
+                                             into which the record was indexed, the integer record
+                                             ID of the record and the latest record data
+                                             respectively.''')
         self.start = datetime.now()
 
     def get_stats(self, operations):
@@ -235,11 +240,13 @@ class Indexer(object):
         :param stats_queue: the stats queue to read from
         """
         try:
-            for index, created, updated in iter(stats_queue.get, None):
+            for index, created, updated, data in iter(stats_queue.get, None):
                 for record_id in created:
-                    self.created_signal.send(self, index=index, record_id=record_id)
+                    self.created_signal.send(self, index=index, record_id=record_id,
+                                             record=data[record_id])
                 for record_id in updated:
-                    self.updated_signal.send(self, index=index, record_id=record_id)
+                    self.updated_signal.send(self, index=index, record_id=record_id,
+                                             record=data[record_id])
         except KeyboardInterrupt:
             # if we're keyboard interrupted, just end
             pass
