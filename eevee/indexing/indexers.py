@@ -19,7 +19,7 @@ class IndexingProcess(multiprocessing.Process):
     """
 
     def __init__(self, process_id, config, index, document_queue, result_queue, is_clean_insert,
-                 stats_queue, elasticsearch_bulk_size):
+                 elasticsearch_bulk_size, stats_queue=None):
         """
         :param process_id: an identifier for this process (we'll include this when posting results
                            back)
@@ -30,8 +30,9 @@ class IndexingProcess(multiprocessing.Process):
         :param result_queue: the queue we'll write results to
         :param is_clean_insert: True if the index we're indexing into is empty, this allows us to
                                 skip some checks and makes processing faster
-        :param stats_queue: the queue we'll write created/updated stats to
         :param elasticsearch_bulk_size: the number of index requests to send in each bulk request
+        :param stats_queue: the queue we'll write created/updated stats to (default: None, means
+                            don't send stats)
         """
         super(IndexingProcess, self).__init__()
         # not the actual OS level PID just an internal id for this process
@@ -41,8 +42,8 @@ class IndexingProcess(multiprocessing.Process):
         self.document_queue = document_queue
         self.result_queue = result_queue
         self.is_clean_insert = is_clean_insert
-        self.stats_queue = stats_queue
         self.elasticsearch_bulk_size = elasticsearch_bulk_size
+        self.stats_queue = stats_queue
 
         self.command_count = 0
         self.stats = defaultdict(Counter)
@@ -102,7 +103,6 @@ class IndexingProcess(multiprocessing.Process):
         """
         self.command_count += len(commands)
 
-        # TODO: might want a way of turning off stats collection if it proves overly expensive
         # collect up some stats!
         created, updated = self.collect_stats(ids)
 
@@ -123,17 +123,25 @@ class IndexingProcess(multiprocessing.Process):
             # update the stats
             self.stats[info[u'_index']][info[u'result']] += 1
 
-        # drop our stats on to the stats queue
-        self.stats_queue.put((self.index.unprefixed_name, created, updated, ids))
+        # drop our stats on to the stats queue if necessary
+        if self.stats_queue is not None:
+            self.stats_queue.put((self.index.unprefixed_name, created, updated, ids))
 
     def collect_stats(self, ids):
         """
         Given a list of ids, figure out which ones will be created for the first time when indexed
         and which ones will be updated as they already exist in the index.
 
+        If the stats_queue attribute on this object is None then two empty lists will be returned
+        from this function and no stats will be collected.
+
         :param ids: a dict of integer record ids and their latest data states
         :return: a 2-tuple consisting of a list of created ids and a list of updated ids
         """
+        # if there's no stats queue for stats to be sent back on then we shouldn't collect them up
+        if self.stats_queue is not None:
+            return [], []
+
         all_ids = list(ids.keys())
         if self.is_clean_insert:
             # well that was easy, everything is a create when the index was empty beforehand
@@ -156,7 +164,7 @@ class Indexer(object):
     """
 
     def __init__(self, version, config, feeders_and_indexes, queue_size=16000, pool_size=3,
-                 elasticsearch_bulk_size=1000, update_status=True):
+                 elasticsearch_bulk_size=1000, update_status=True, signal_stats=True):
         """
         :param version: the version we're indexing up to
         :param config: the config object
@@ -169,6 +177,8 @@ class Indexer(object):
         :param elasticsearch_bulk_size: the number of index requests to send in each bulk request
         :param update_status: whether to update the status index after completing the indexing
                               (default: True)
+        :param signal_stats: whether to collect stats about the indexing and fire the created and
+                             updated signals (default: True)
         """
         self.version = version
         self.config = config
@@ -178,6 +188,7 @@ class Indexer(object):
         self.pool_size = pool_size
         self.elasticsearch_bulk_size = elasticsearch_bulk_size
         self.update_status = update_status
+        self.signal_stats = signal_stats
         self.elasticsearch = get_elasticsearch_client(self.config, sniff_on_start=True,
                                                       sniff_on_connection_fail=True,
                                                       sniffer_timeout=60, sniff_timeout=10,
@@ -278,11 +289,15 @@ class Indexer(object):
             for index in set(self.indexes)
         }
 
-        # create a queue for per record created and updated stats to flow through and a thread to
-        # pick them up and send them to the signal listeners
-        stats_queue = multiprocessing.Queue(maxsize=10)
-        stats_thread = Thread(target=self.stats_collector, args=(stats_queue, ))
-        stats_thread.start()
+        if self.signal_stats:
+            # create a queue for per record created and updated stats to flow through and a thread
+            # to pick them up and send them to the signal listeners
+            stats_queue = multiprocessing.Queue(maxsize=10)
+            stats_thread = Thread(target=self.stats_collector, args=(stats_queue, ))
+            stats_thread.start()
+        else:
+            stats_queue = None
+            stats_thread = None
 
         for feeder, index in self.feeders_and_indexes:
             # create a queue for documents
@@ -294,8 +309,8 @@ class Indexer(object):
             process_pool = []
             for number in range(self.pool_size):
                 process = IndexingProcess(number, self.config, index, document_queue, result_queue,
-                                          clean_indexes[index], stats_queue,
-                                          self.elasticsearch_bulk_size)
+                                          clean_indexes[index], self.elasticsearch_bulk_size,
+                                          stats_queue)
                 process_pool.append(process)
                 process.start()
 
@@ -333,10 +348,11 @@ class Indexer(object):
                 # set the refresh interval back to the default
                 update_refresh_interval(self.elasticsearch, [index], None)
 
-        # everything is complete now, put a sentinel on the stats queue and wait for it to
-        # finish up
-        stats_queue.put(None)
-        stats_thread.join()
+        if self.signal_stats:
+            # everything is complete now, put a sentinel on the stats queue and wait for it to
+            # finish up
+            stats_queue.put(None)
+            stats_thread.join()
 
         # update the status index
         self.update_statuses()
