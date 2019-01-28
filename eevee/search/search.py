@@ -109,6 +109,9 @@ class Searcher(object):
                          prefixes are used.
         :return: a dict of index names -> latest version
         """
+        if not self.elasticsearch.indices.exists(self.config.elasticsearch_status_index_name):
+            return {}
+
         # TODO: cache this data and refresh it every n minutes?
         search = Search(using=self.elasticsearch,
                         index=self.config.elasticsearch_status_index_name)[:max_results]
