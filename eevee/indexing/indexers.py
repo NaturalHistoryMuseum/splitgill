@@ -299,60 +299,61 @@ class Indexer(object):
             stats_queue = None
             stats_thread = None
 
-        for feeder, index in self.feeders_and_indexes:
-            # create a queue for documents
-            document_queue = multiprocessing.Queue(maxsize=self.queue_size)
-            # create a queue allowing results to be passed back once a process has completed
-            result_queue = multiprocessing.Queue()
+        try:
+            for feeder, index in self.feeders_and_indexes:
+                # create a queue for documents
+                document_queue = multiprocessing.Queue(maxsize=self.queue_size)
+                # create a queue allowing results to be passed back once a process has completed
+                result_queue = multiprocessing.Queue()
 
-            # create all the sub-processes for indexing and start them up
-            process_pool = []
-            for number in range(self.pool_size):
-                process = IndexingProcess(number, self.config, index, document_queue, result_queue,
-                                          clean_indexes[index], self.elasticsearch_bulk_size,
-                                          stats_queue)
-                process_pool.append(process)
-                process.start()
+                # create all the sub-processes for indexing and start them up
+                process_pool = []
+                for number in range(self.pool_size):
+                    process = IndexingProcess(number, self.config, index, document_queue,
+                                              result_queue, clean_indexes[index],
+                                              self.elasticsearch_bulk_size, stats_queue)
+                    process_pool.append(process)
+                    process.start()
 
-            try:
-                # set the refresh interval to -1 for the target index for performance
-                update_refresh_interval(self.elasticsearch, [index], -1)
+                try:
+                    # set the refresh interval to -1 for the target index for performance
+                    update_refresh_interval(self.elasticsearch, [index], -1)
 
-                # loop through the documents from the feeder
-                for mongo_doc in feeder.documents():
-                    # do a blocking put onto the queue
-                    document_queue.put(mongo_doc)
-                    document_count += 1
-                    self.index_signal.send(self, mongo_doc=mongo_doc, feeder=feeder, index=index,
-                                           document_count=document_count,
-                                           command_count=command_count,
-                                           document_total=document_total)
+                    # loop through the documents from the feeder
+                    for mongo_doc in feeder.documents():
+                        # do a blocking put onto the queue
+                        document_queue.put(mongo_doc)
+                        document_count += 1
+                        self.index_signal.send(self, mongo_doc=mongo_doc, feeder=feeder,
+                                               index=index, document_count=document_count,
+                                               command_count=command_count,
+                                               document_total=document_total)
 
-                # send a sentinel to each worker to indicate that we're done putting documents
-                # on the queue
-                for i in range(self.pool_size):
-                    document_queue.put(None)
+                    # send a sentinel to each worker to indicate that we're done putting documents
+                    # on the queue
+                    for i in range(self.pool_size):
+                        document_queue.put(None)
 
-                # if there are any processes still running, loop until they are complete (when they
-                # complete their slot in the process_pool list is replaced with None
-                while any(process_pool):
-                    # retrieve some results from the result queue (blocking)
-                    number, commands_handled, stats = result_queue.get()
-                    # set the process to None to signal that this process has completed
-                    process_pool[number] = None
-                    # add the stats for this process to our various counters
-                    command_count += commands_handled
-                    for index_name, counter in stats.items():
-                        op_stats[index_name].update(counter)
-            finally:
-                # set the refresh interval back to the default
-                update_refresh_interval(self.elasticsearch, [index], None)
-
-        if self.signal_stats:
-            # everything is complete now, put a sentinel on the stats queue and wait for it to
-            # finish up
-            stats_queue.put(None)
-            stats_thread.join()
+                    # if there are any processes still running, loop until they are complete (when
+                    # they complete their slot in the process_pool list is replaced with None
+                    while any(process_pool):
+                        # retrieve some results from the result queue (blocking)
+                        number, commands_handled, stats = result_queue.get()
+                        # set the process to None to signal that this process has completed
+                        process_pool[number] = None
+                        # add the stats for this process to our various counters
+                        command_count += commands_handled
+                        for index_name, counter in stats.items():
+                            op_stats[index_name].update(counter)
+                finally:
+                    # set the refresh interval back to the default
+                    update_refresh_interval(self.elasticsearch, [index], None)
+        finally:
+            if self.signal_stats:
+                # everything is complete now, put a sentinel on the stats queue and wait for it to
+                # finish up
+                stats_queue.put(None)
+                stats_thread.join()
 
         # update the status index
         self.update_statuses()
