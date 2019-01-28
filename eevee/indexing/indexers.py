@@ -316,8 +316,12 @@ class Indexer(object):
                     process.start()
 
                 try:
-                    # set the refresh interval to -1 for the target index for performance
-                    update_refresh_interval(self.elasticsearch, [index], -1)
+                    if clean_indexes[index]:
+                        # if we're doing a clean index, set the interval to -1 for performance
+                        update_refresh_interval(self.elasticsearch, [index], -1)
+                    else:
+                        # we're just doing updates on an existing index set the interval to 30 secs
+                        update_refresh_interval(self.elasticsearch, [index], u'30s')
 
                     # loop through the documents from the feeder
                     for mongo_doc in feeder.documents():
