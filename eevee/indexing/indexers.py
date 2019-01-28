@@ -267,6 +267,13 @@ class Indexer(object):
         # total up the number of documents to be handled by this indexer
         document_total = sum(feeder.total() for feeder in self.feeders)
 
+        # check if there is any data already in the indexes targeted or not, this allows us to skip
+        # some checks and makes the process faster
+        clean_indexes = {
+            index: Search(index=index.name, using=self.elasticsearch).count() == 0
+            for index in set(self.indexes)
+        }
+
         # create a queue for per record created and updated stats to flow through and a thread to
         # pick them up and send them to the signal listeners
         stats_queue = multiprocessing.Queue(maxsize=10)
@@ -274,10 +281,6 @@ class Indexer(object):
         stats_thread.start()
 
         for feeder, index in self.feeders_and_indexes:
-            # check if there is any data already in the index or not, this allows us to skip some
-            # checks and makes the process faster
-            is_clean_insert = Search(index=index.name, using=self.elasticsearch).count() == 0
-
             # create a queue for documents
             document_queue = multiprocessing.Queue(maxsize=self.queue_size)
             # create a queue allowing results to be passed back once a process has completed
@@ -287,7 +290,7 @@ class Indexer(object):
             process_pool = []
             for number in range(self.pool_size):
                 process = IndexingProcess(number, self.config, index, document_queue, result_queue,
-                                          is_clean_insert, stats_queue)
+                                          clean_indexes[index], stats_queue)
                 process_pool.append(process)
                 process.start()
 
