@@ -269,7 +269,7 @@ class Indexer(object):
 
         # create a queue for per record created and updated stats to flow through and a thread to
         # pick them up and send them to the signal listeners
-        stats_queue = multiprocessing.Queue()
+        stats_queue = multiprocessing.Queue(maxsize=10)
         stats_thread = Thread(target=self.stats_collector, args=(stats_queue, ))
         stats_thread.start()
 
