@@ -19,7 +19,7 @@ class IndexingProcess(multiprocessing.Process):
     """
 
     def __init__(self, process_id, config, index, document_queue, result_queue, is_clean_insert,
-                 stats_queue):
+                 stats_queue, elasticsearch_bulk_size):
         """
         :param process_id: an identifier for this process (we'll include this when posting results
                            back)
@@ -31,6 +31,7 @@ class IndexingProcess(multiprocessing.Process):
         :param is_clean_insert: True if the index we're indexing into is empty, this allows us to
                                 skip some checks and makes processing faster
         :param stats_queue: the queue we'll write created/updated stats to
+        :param elasticsearch_bulk_size: the number of index requests to send in each bulk request
         """
         super(IndexingProcess, self).__init__()
         # not the actual OS level PID just an internal id for this process
@@ -41,6 +42,7 @@ class IndexingProcess(multiprocessing.Process):
         self.result_queue = result_queue
         self.is_clean_insert = is_clean_insert
         self.stats_queue = stats_queue
+        self.elasticsearch_bulk_size = elasticsearch_bulk_size
 
         self.command_count = 0
         self.stats = defaultdict(Counter)
@@ -72,7 +74,7 @@ class IndexingProcess(multiprocessing.Process):
 
                 # send the commands to elasticsearch if the bulk size limit has been reached or
                 # exceeded
-                if len(command_buffer) >= self.config.elasticsearch_bulk_size:
+                if len(command_buffer) >= self.elasticsearch_bulk_size:
                     # send the commands
                     self.send_to_elasticsearch(command_buffer, id_buffer)
                     # reset the buffers
@@ -154,7 +156,7 @@ class Indexer(object):
     """
 
     def __init__(self, version, config, feeders_and_indexes, queue_size=16000, pool_size=3,
-                 update_status=True):
+                 elasticsearch_bulk_size=1000, update_status=True):
         """
         :param version: the version we're indexing up to
         :param config: the config object
@@ -164,6 +166,7 @@ class Indexer(object):
                                     from the feeder's documents
         :param queue_size: the maximum size of the document indexing process queue (default: 16000)
         :param pool_size: the size of the pool of processes to use (default: 3)
+        :param elasticsearch_bulk_size: the number of index requests to send in each bulk request
         :param update_status: whether to update the status index after completing the indexing
                               (default: True)
         """
@@ -173,6 +176,7 @@ class Indexer(object):
         self.feeders, self.indexes = zip(*feeders_and_indexes)
         self.queue_size = queue_size
         self.pool_size = pool_size
+        self.elasticsearch_bulk_size = elasticsearch_bulk_size
         self.update_status = update_status
         self.elasticsearch = get_elasticsearch_client(self.config, sniff_on_start=True,
                                                       sniff_on_connection_fail=True,
@@ -290,7 +294,8 @@ class Indexer(object):
             process_pool = []
             for number in range(self.pool_size):
                 process = IndexingProcess(number, self.config, index, document_queue, result_queue,
-                                          clean_indexes[index], stats_queue)
+                                          clean_indexes[index], stats_queue,
+                                          self.elasticsearch_bulk_size)
                 process_pool.append(process)
                 process.start()
 
