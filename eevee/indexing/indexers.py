@@ -139,7 +139,7 @@ class IndexingProcess(multiprocessing.Process):
         :return: a 2-tuple consisting of a list of created ids and a list of updated ids
         """
         # if there's no stats queue for stats to be sent back on then we shouldn't collect them up
-        if self.stats_queue is not None:
+        if self.stats_queue is None:
             return [], []
 
         all_ids = list(ids.keys())
