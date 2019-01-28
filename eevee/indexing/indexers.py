@@ -307,6 +307,7 @@ class Indexer(object):
                                            document_count=document_count,
                                            command_count=command_count,
                                            document_total=document_total)
+
                 # send a sentinel to each worker to indicate that we're done putting documents
                 # on the queue
                 for i in range(self.pool_size):
@@ -323,14 +324,14 @@ class Indexer(object):
                     command_count += commands_handled
                     for index_name, counter in stats.items():
                         op_stats[index_name].update(counter)
-
-                # everything is complete now, put a sentinel on the stats queue and wait for it to
-                # finish up
-                stats_queue.put(None)
-                stats_thread.join()
             finally:
                 # set the refresh interval back to the default
                 update_refresh_interval(self.elasticsearch, [index], None)
+
+        # everything is complete now, put a sentinel on the stats queue and wait for it to
+        # finish up
+        stats_queue.put(None)
+        stats_thread.join()
 
         # update the status index
         self.update_statuses()
