@@ -1,11 +1,8 @@
 blinker==1.4
 dictdiffer==0.7.1
-docopt==0.6.2
 elasticsearch==6.3.1
 elasticsearch-dsl==6.2.1
-ipaddress==1.0.22
 pymongo==3.6.1
 python-dateutil==2.7.3
 pytz==2018.4
 six==1.11.0
-urllib3==1.23
