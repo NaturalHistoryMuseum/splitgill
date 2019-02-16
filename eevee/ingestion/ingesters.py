@@ -141,10 +141,9 @@ class Ingester(object):
                     # entries are ignored
                     operations = {}
 
-                    # create a lookup of the current documents in this collection, keyed on their
-                    # ids
-                    current_docs = {doc[u'id']: doc for doc in
-                                    mongo.find({u'id': {u'$in': [r.id for r in records]}})}
+                    # create a lookup of the current docs in this collection, keyed on their ids
+                    filter_query = {u'id': {u'$in': [r.id for r in records]}}
+                    current_docs = {doc[u'id']: doc for doc in mongo.find(filter_query)}
 
                     for record in records:
                         total_records += 1
