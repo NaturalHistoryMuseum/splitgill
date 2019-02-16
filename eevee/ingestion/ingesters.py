@@ -62,13 +62,15 @@ class Ingester(object):
                                             total number of documents inserted, the total number of
                                             documents updated and the report stats that will be
                                             entered into mongo respectively''')
+        self.seen_collections = set()
         self.start = datetime.now()
 
     def ensure_mongo_indexes_exist(self, mongo_collection):
         """
         To improve performance we need some mongo indexes, this function ensures the indexes we want
         exist. If overriding ensure this function is called as well to avoid potentially lower
-        ingestion/indexing performance.
+        ingestion/indexing performance. This function is only called the first time a collection is
+        encountered during ingestion.
 
         :param mongo_collection: the name of the mongo collection to add the indexes to
         """
@@ -126,8 +128,11 @@ class Ingester(object):
             # then iterate over the collections and their records, inserting/updating the records
             # into each collection in turn
             for collection, records in collection_mapping.items():
-                # make sure the indexes we want exist for this collection
-                self.ensure_mongo_indexes_exist(collection)
+                # if we haven't seen this collection before during this ingestion we should ensure
+                # it has the appropriate indexes on it
+                if collection not in self.seen_collections:
+                    self.seen_collections.add(collection)
+                    self.ensure_mongo_indexes_exist(collection)
 
                 with get_mongo(self.config, self.config.mongo_database, collection) as mongo:
                     # keep a dict of operations so that we can do them in bulk and also avoid
