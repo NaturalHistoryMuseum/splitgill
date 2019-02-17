@@ -40,21 +40,26 @@ class IndexFeeder(object):
         pass
 
 
-class ConditionalIndexFeeder(IndexFeeder):
+class SimpleIndexFeeder(IndexFeeder):
     """
-    Simple index feeder class which uses a condition to filter the mongo documents in the collection
-    provided.
+    Simple index feeder class which uses a a lower and upper version to filter which documents get
+    indexed.
     """
 
-    def __init__(self, config, mongo_collection, condition=None):
+    def __init__(self, config, mongo_collection, lower_version, upper_version):
         """
         :param config: the config object
         :param mongo_collection: the collection to pull records from
-        :param condition: the condition to filter the documents in mongo with (can be none in which
-                          case all documents in the collection are yielded)
+        :param lower_version: the lower bound version (can be None)
+        :param upper_version: the upper bound version (can be None)
         """
-        super(ConditionalIndexFeeder, self).__init__(config, mongo_collection)
-        self.condition = condition if condition else {}
+        super(SimpleIndexFeeder, self).__init__(config, mongo_collection)
+        range_dict = {}
+        if lower_version is not None:
+            range_dict[u'$gt'] = lower_version
+        if upper_version is not None:
+            range_dict[u'$lte'] = upper_version
+        self.condition = {u'latest_version': range_dict} if range_dict else {}
 
     def documents(self):
         """
