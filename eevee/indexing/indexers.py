@@ -12,6 +12,31 @@ from elasticsearch_dsl import Search
 
 from eevee.indexing.utils import DOC_TYPE, get_elasticsearch_client, update_refresh_interval
 
+try:
+    from queue import Empty
+except ImportError:
+    from Queue import Empty
+
+
+class IndexingException(Exception):
+    """
+    Exception thrown when indexing fails for any reason.
+    """
+
+    def __init__(self, error_string):
+        super(IndexingException, self).__init__(error_string)
+
+
+class ElasticsearchBulkIndexingException(Exception):
+    """
+    Exception used to indicate that there was a probem when sending the data in bulk to
+    elasticsearch.
+    """
+
+    def __init__(self, elasticsearch_response):
+        super(ElasticsearchBulkIndexingException, self).__init__(u'Elasticsearch indexing failed')
+        self.elasticsearch_response = elasticsearch_response
+
 
 class IndexingProcess(multiprocessing.Process):
     """
@@ -19,7 +44,7 @@ class IndexingProcess(multiprocessing.Process):
     """
 
     def __init__(self, process_id, config, index, document_queue, result_queue, is_clean_insert,
-                 elasticsearch_bulk_size, stats_queue=None):
+                 elasticsearch_bulk_size, error_queue, stats_queue=None):
         """
         :param process_id: an identifier for this process (we'll include this when posting results
                            back)
@@ -31,6 +56,7 @@ class IndexingProcess(multiprocessing.Process):
         :param is_clean_insert: True if the index we're indexing into is empty, this allows us to
                                 skip some checks and makes processing faster
         :param elasticsearch_bulk_size: the number of index requests to send in each bulk request
+        :param error_queue: the queue we'll write errors to
         :param stats_queue: the queue we'll write created/updated stats to (default: None, means
                             don't send stats)
         """
@@ -43,6 +69,7 @@ class IndexingProcess(multiprocessing.Process):
         self.result_queue = result_queue
         self.is_clean_insert = is_clean_insert
         self.elasticsearch_bulk_size = elasticsearch_bulk_size
+        self.error_queue = error_queue
         self.stats_queue = stats_queue
 
         self.command_count = 0
@@ -91,6 +118,9 @@ class IndexingProcess(multiprocessing.Process):
         except KeyboardInterrupt:
             # if we get a keyboard interrupt just stop
             pass
+        except Exception as e:
+            # use repr so we get the class too
+            self.error_queue.put(repr(e))
 
     def send_to_elasticsearch(self, commands, ids):
         """
@@ -115,6 +145,11 @@ class IndexingProcess(multiprocessing.Process):
 
         # send the commands to elasticsearch
         response = self.elasticsearch.bulk(itertools.chain.from_iterable(commands))
+
+        # if there are errors in the response, raise an exception
+        if response[u'errors']:
+            raise ElasticsearchBulkIndexingException(response)
+
         # extract stats from the elasticsearch response
         for action_response in response[u'items']:
             # each item in the items list is a dict with a single key and value, we're interested in
@@ -266,6 +301,31 @@ class Indexer(object):
             # if we're keyboard interrupted, just end
             pass
 
+    def check_errors(self, error_queue, document_queue):
+        """
+        Given the error queue and the document queue, check if there are any errors. If there are
+        we consume the document queue and then add the sentinels. Finall we raise and
+        IndexingException.
+
+        :param error_queue: the queue errors are put on
+        :param document_queue: the queue documents to index are put on
+        """
+        if not error_queue.empty():
+            try:
+                # get the first error, if there is one
+                error_string = error_queue.get_nowait()
+                # consume the queue
+                while not document_queue.empty():
+                    document_queue.get()
+                # put the sentinels on the queue
+                for i in range(self.pool_size):
+                    document_queue.put(None)
+                # raise the problem
+                raise IndexingException(error_string)
+            except Empty:
+                # if the queue is empty it's no big deal, just means no errors!
+                pass
+
     def index(self):
         """
         Indexes a set of records from mongo into elasticsearch.
@@ -305,13 +365,16 @@ class Indexer(object):
                 document_queue = multiprocessing.Queue(maxsize=self.queue_size)
                 # create a queue allowing results to be passed back once a process has completed
                 result_queue = multiprocessing.Queue()
+                # create a queue allowing errors to be passed back from the indexing subprocesses
+                error_queue = multiprocessing.Queue()
 
                 # create all the sub-processes for indexing and start them up
                 process_pool = []
                 for number in range(self.pool_size):
                     process = IndexingProcess(number, self.config, index, document_queue,
                                               result_queue, clean_indexes[index],
-                                              self.elasticsearch_bulk_size, stats_queue)
+                                              self.elasticsearch_bulk_size, error_queue,
+                                              stats_queue)
                     process_pool.append(process)
                     process.start()
 
@@ -325,6 +388,9 @@ class Indexer(object):
 
                     # loop through the documents from the feeder
                     for mongo_doc in feeder.documents():
+                        # check the error queue first
+                        self.check_errors(error_queue, document_queue)
+
                         # do a blocking put onto the queue
                         document_queue.put(mongo_doc)
                         document_count += 1
@@ -341,8 +407,15 @@ class Indexer(object):
                     # if there are any processes still running, loop until they are complete (when
                     # they complete their slot in the process_pool list is replaced with None
                     while any(process_pool):
-                        # retrieve some results from the result queue (blocking)
-                        number, commands_handled, stats = result_queue.get()
+                        # check the errors first
+                        self.check_errors(error_queue, document_queue)
+                        try:
+                            # retrieve some results from the result queue (block for 3 secs)
+                            number, commands_handled, stats = result_queue.get(timeout=3)
+                        except Empty:
+                            # if there were no completed processes yet, just loop round. This allows
+                            # us to respond if error are found
+                            continue
                         # set the process to None to signal that this process has completed
                         process_pool[number] = None
                         # add the stats for this process to our various counters
@@ -423,3 +496,4 @@ class Indexer(object):
                 }
                 self.elasticsearch.index(self.config.elasticsearch_status_index_name, DOC_TYPE,
                                          status_doc, id=index.name)
+
