@@ -44,4 +44,4 @@ class Config(object):
         if search_default_indexes is not None:
             self.search_default_indexes = search_default_indexes
         else:
-            self.search_default_indexes = [u'*']
+            self.search_default_indexes = [u'{}*'.format(elasticsearch_index_prefix)]
