@@ -297,12 +297,12 @@ class Searcher(object):
             if not versions:
                 # something isn't right, just set to None
                 result[index] = None
+            elif target_version is None or target_version >= versions[-1]:
+                # cap the requested version to the latest version
+                result[index] = versions[-1]
             elif target_version < versions[0]:
                 # use the requested version if it's lower than the lowest available version
                 result[index] = target_version
-            elif target_version >= versions[-1]:
-                # cap the requested version to the latest version
-                result[index] = versions[-1]
             else:
                 # find the lowest, nearest version to the requested one
                 position = bisect.bisect_right(versions, target_version)
