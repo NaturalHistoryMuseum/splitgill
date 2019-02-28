@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 # encoding: utf-8
+import bisect
 
-from elasticsearch_dsl import Search, Q
+from elasticsearch_dsl import Search, Q, A
 
 from eevee.indexing.utils import get_elasticsearch_client
 
@@ -92,36 +93,6 @@ class Searcher(object):
         else:
             self.elasticsearch = client
 
-    def get_index_versions(self, indexes=None, max_results=1000, prefixed=True):
-        """
-        Returns the current indexes and their latest versions as a dict. If the indexes parameter is
-        None then the details for all indexes are returned, if not then only the indexes that match
-        the names passed in the list are returned.
-
-        :param indexes: the index names to match and return data for. The names should be the full
-                        index names with prefix.
-        :param max_results: the maximum number of results to get from elasticsearch, defaults to
-                            1000.
-        :param prefixed: whether the index names passed in have been prefixed or not. If this is
-                         True then the indexes are used as is and returned with prefixes still
-                         attached (using the status `index_name` field). If this is False then the
-                         status `name` field is queries and used in the returned dict so that no
-                         prefixes are used.
-        :return: a dict of index names -> latest version
-        """
-        if not self.elasticsearch.indices.exists(self.config.elasticsearch_status_index_name):
-            return {}
-
-        search = Search(using=self.elasticsearch,
-                        index=self.config.elasticsearch_status_index_name)[:max_results]
-        if indexes is not None:
-            filter_value = u'|'.join(index.replace(u'*', u'.*') for index in indexes)
-            if prefixed:
-                search = search.filter(u'regexp', index_name=filter_value)
-            else:
-                search = search.filter(u'regexp', name=filter_value)
-        return {hit.index_name if prefixed else hit.name: hit.latest_version for hit in search}
-
     def pre_search(self, indexes=None, search=None, version=None):
         """
         Function which will be called before running a search on elasticsearch. Override in subclass
@@ -139,8 +110,6 @@ class Searcher(object):
         # if the indexes aren't specified, use the default from the config
         if indexes is None:
             indexes = self.config.search_default_indexes
-        # add the prefix to all the indexes
-        indexes = list(map(self.prefix_index, indexes))
 
         # if no search has been specified, specify one which searches everything
         if search is None:
@@ -157,7 +126,9 @@ class Searcher(object):
             # set this variable to +inf so that the min call in the loop always results in the
             # index's latest version being used
             comparison_version = version if version is not None else float(u'inf')
-            for index, latest_version in self.get_index_versions(indexes).items():
+            # use the latest index versions values here as it's faster than figuring out the rounded
+            # version for each index, and unnecessary to complete the search correctly
+            for index, latest_version in self.get_latest_index_versions(indexes).items():
                 # figure out the version to filter on
                 version_to_filter = min(latest_version, comparison_version)
                 # add the filter to the list
@@ -208,21 +179,136 @@ class Searcher(object):
             response = search.execute()
             return self.post_search(response.hits, indexes, search, version, response=response)
 
-    def get_versions(self, index, record_id, max_versions=1000):
+    def get_latest_index_versions(self, indexes=None):
+        """
+        Returns the current indexes and their latest versions as a dict. If the indexes parameter is
+        None then the details for all indexes are returned, if not then only the indexes that match
+        the names passed in the list are returned.
+
+        The index names passed should all be prefixed. The prefixed names will be returned in the
+        dict returned too.
+
+        :param indexes: the index names to match and return data for. The names should be the full
+                        index names with prefix.
+        :return: a dict of index names -> latest version
+        """
+        if not self.elasticsearch.indices.exists(self.config.elasticsearch_status_index_name):
+            return {}
+
+        search = Search(using=self.elasticsearch, index=self.config.elasticsearch_status_index_name)
+        if indexes is not None:
+            search = search.filter(
+                Q(u'bool',
+                  should=[Q(u'term', index_name=index) for index in indexes],
+                  minimum_should_match=1))
+        return {hit.index_name: hit.latest_version for hit in search.scan()}
+
+    def get_record_versions(self, index, record_id):
         """
         Given the id of a record, returns all the available versions of that record in the given
         index. The versions are timestamps represented by milliseconds since the UNIX epoch. They
         are returned as a list in ascending order.
 
-        :param index: the index name (unprefixed)
+        :param index: the prefixed index name
         :param record_id: the record id
-        :param max_versions: the maximum number of versions to retrieve, defaults to 1000
         :return: a list of sorted versions available for the given record
         """
-        index = self.prefix_index(index)
-        search = Search(using=self.elasticsearch, index=index).query(
-            u'term', **{u'data._id': record_id})[:max_versions]
-        return sorted(hit[u'meta'][u'version'] for hit in search)
+        search = Search(using=self.elasticsearch, index=index)\
+            .query(u'term', **{u'data._id': record_id})\
+            .source([u'meta.version'])
+        return sorted(hit[u'meta'][u'version'] for hit in search.scan())
+
+    def get_index_versions(self, index):
+        """
+        Given an index, return a list of the versions available for that index. These will be
+        provided in ascending order.
+
+        :param index: the prefixed index name
+        :return: a list of versions in ascending order
+        """
+        return [vc[u'version'] for vc in self.get_index_version_counts(index)]
+
+    def get_index_version_counts(self, index):
+        """
+        Given an index, return a list of dicts each containing a version and a count of the number
+        of records that were changed in that version. The dict is structure like so:
+
+            {
+                "version": <version>,
+                "changes": <number of changes>
+            }
+
+        The returned list is sorted in ascending order by version.
+
+        :param index: the prefixed index
+        :return: a list of dicts of version and changes count data
+        """
+        after = None
+        versions = []
+        while True:
+            search = Search(using=self.elasticsearch, index=index)[0:0]
+            # create an aggregation to count the number of records in the index at each version
+            search.aggs.bucket(u'versions', u'composite', size=100,
+                               sources={u'version': A(u'terms',
+                                                      field=u'meta.version',
+                                                      order=u'asc')})
+
+            # if we have pagination data, use it
+            if after is not None:
+                search.aggs[u'versions'].after = {u'version': after}
+
+            # run the search and get the result
+            result = search.execute().aggs.to_dict()[u'versions']
+            for bucket in result[u'buckets']:
+                versions.append({
+                    u'version': bucket[u'key'][u'version'],
+                    u'changes': bucket[u'doc_count']
+                })
+
+            # retrieve the after key if there is one
+            after = result.get(u'after_key', {}).get(u'version', None)
+            # if there isn't then we're done
+            if after is None:
+                break
+
+        return versions
+
+    def get_rounded_versions(self, indexes, target_version):
+        """
+        Given a list of indexes, work out their individual rounded versions based on the target
+        version, i.e. round the target version down to the lowest, nearest version of each index's
+        data.
+
+        If the target version is lower than the oldest version of an index then the target version
+        will be assigned to the index in returned dict.
+
+        If there are no versions found for an index then the index is assigned to None in the
+        returned dict.
+
+        :param indexes: a list of prefixed indexes
+        :param target_version: the target version
+        :return: a dict of index names mapped to their rounded version
+        """
+        result = {}
+        for index in indexes:
+            # get all the versions available for this index
+            versions = self.get_index_versions(index)
+
+            if not versions:
+                # something isn't right, just set to None
+                result[index] = None
+            elif target_version < versions[0]:
+                # use the requested version if it's lower than the lowest available version
+                result[index] = target_version
+            elif target_version >= versions[-1]:
+                # cap the requested version to the latest version
+                result[index] = versions[-1]
+            else:
+                # find the lowest, nearest version to the requested one
+                position = bisect.bisect_right(versions, target_version)
+                result[index] = versions[position - 1]
+
+        return result
 
     def prefix_index(self, index):
         """
