@@ -72,7 +72,10 @@ class IndexingProcess(multiprocessing.Process):
         self.error_queue = error_queue
         self.stats_queue = stats_queue
 
+        # keep track of how many commands this process has sent to elasticsearch
         self.command_count = 0
+        # keep track of the versions of the records we've handled in this process
+        self.versions = set()
         self.stats = defaultdict(Counter)
         self.elasticsearch = get_elasticsearch_client(config, sniff_on_start=True,
                                                       sniff_on_connection_fail=True,
@@ -94,10 +97,13 @@ class IndexingProcess(multiprocessing.Process):
                 # create the commands for the record
                 commands = list(self.index.get_commands(mongo_doc))
                 if commands:
-                    # add them to the buffer
+                    # add all the versions seen in the commands
+                    self.versions.update(
+                        index_doc[u'meta'][u'version'] for _, index_doc in commands)
+                    # then add them to the buffer
                     command_buffer.extend(commands)
-                    # add the id to the buffer (as an integer) along with the latest version of the
-                    # record as it will be once indexed by elasticsearch
+                    # and add the id to the buffer (as an integer) along with the latest version of
+                    # the record as it will be once indexed by elasticsearch
                     id_buffer[int(mongo_doc[u'id'])] = commands[-1][1]
 
                 # send the commands to elasticsearch if the bulk size limit has been reached or
@@ -114,7 +120,7 @@ class IndexingProcess(multiprocessing.Process):
                 self.send_to_elasticsearch(command_buffer, id_buffer)
 
             # post the results back to the main process
-            self.result_queue.put((self.process_id, self.command_count, self.stats))
+            self.result_queue.put((self.process_id, self.command_count, self.stats, self.versions))
         except KeyboardInterrupt:
             # if we get a keyboard interrupt just stop
             pass
@@ -262,18 +268,20 @@ class Indexer(object):
                                              respectively.''')
         self.start = datetime.now()
 
-    def get_stats(self, operations):
+    def get_stats(self, operations, seen_versions):
         """
         Returns the statistics of a completed indexing in the form of a dict. The operations
         parameter is expected to be a dict of the form {index_name -> {<op>: #, ...}} but can take
         any form as long as it can be handled sensibly by any downstream functions.
 
         :param operations: a dict describing the operations that occurred
+        :param seen_versions: the versions seen during indexing
         """
         end = datetime.now()
         # generate and return the report dict
         return {
-            u'version': self.version,
+            u'version': max(seen_versions) if seen_versions else self.version,
+            u'versions': sorted(seen_versions),
             u'sources': sorted(set(feeder.mongo_collection for feeder in self.feeders)),
             u'targets': sorted(set(index.name for index in self.indexes)),
             u'start': self.start,
@@ -339,6 +347,8 @@ class Indexer(object):
         command_count = 0
         # total stats across all feeder/index combinations
         op_stats = defaultdict(Counter)
+        # seen versions
+        seen_versions = set()
         # total up the number of documents to be handled by this indexer
         document_total = sum(feeder.total() for feeder in self.feeders)
 
@@ -411,7 +421,7 @@ class Indexer(object):
                         self.check_errors(error_queue, document_queue)
                         try:
                             # retrieve some results from the result queue (block for 3 secs)
-                            number, commands_handled, stats = result_queue.get(timeout=3)
+                            number, commands_handled, stats, versions = result_queue.get(timeout=3)
                         except Empty:
                             # if there were no completed processes yet, just loop round. This allows
                             # us to respond if error are found
@@ -420,6 +430,9 @@ class Indexer(object):
                         process_pool[number] = None
                         # add the stats for this process to our various counters
                         command_count += commands_handled
+                        # update the global seen versions
+                        seen_versions.update(versions)
+                        # update the global stats counter
                         for index_name, counter in stats.items():
                             op_stats[index_name].update(counter)
                 finally:
@@ -433,9 +446,9 @@ class Indexer(object):
                 stats_thread.join()
 
         # update the status index
-        self.update_statuses()
+        self.update_statuses(seen_versions)
         # generate the stats dict
-        stats = self.get_stats(op_stats)
+        stats = self.get_stats(op_stats, seen_versions)
         # trigger the finish signal
         self.finish_signal.send(self, document_count=document_count, command_count=command_count,
                                 stats=stats)
@@ -452,9 +465,11 @@ class Indexer(object):
             if not self.elasticsearch.indices.exists(index.name):
                 self.elasticsearch.indices.create(index.name, body=index.get_index_create_body())
 
-    def update_statuses(self):
+    def update_statuses(self, seen_versions):
         """
         Run through the indexes and update the statuses for each.
+
+        :param seen_versions: all the versions that have been seen during this indexing operation
         """
         index_definition = {
             u'settings': {
@@ -492,8 +507,7 @@ class Indexer(object):
                 status_doc = {
                     u'name': index.unprefixed_name,
                     u'index_name': index.name,
-                    u'latest_version': self.version,
+                    u'latest_version': max(seen_versions) if seen_versions else self.version,
                 }
                 self.elasticsearch.index(self.config.elasticsearch_status_index_name, DOC_TYPE,
                                          status_doc, id=index.name)
-
