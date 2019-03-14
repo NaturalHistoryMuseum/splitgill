@@ -218,17 +218,19 @@ class Searcher(object):
             .source([u'meta.version'])
         return sorted(hit[u'meta'][u'version'] for hit in search.scan())
 
-    def get_index_versions(self, index):
+    def get_index_versions(self, index, search=None):
         """
         Given an index, return a list of the versions available for that index. These will be
-        provided in ascending order.
+        provided in ascending order. If the search argument is provided then the versions returned
+        will be limited to the versions covered by the search.
 
         :param index: the prefixed index name
+        :param search: a Search object, optional
         :return: a list of versions in ascending order
         """
-        return [vc[u'version'] for vc in self.get_index_version_counts(index)]
+        return [vc[u'version'] for vc in self.get_index_version_counts(index, search)]
 
-    def get_index_version_counts(self, index):
+    def get_index_version_counts(self, index, search=None):
         """
         Given an index, return a list of dicts each containing a version and a count of the number
         of records that were changed in that version. The dict is structure like so:
@@ -238,38 +240,44 @@ class Searcher(object):
                 "changes": <number of changes>
             }
 
-        The returned list is sorted in ascending order by version.
+        The returned list is sorted in ascending order by version. If the search argument is
+        provided then the versions and counts returned will be limited to the versions covered by
+        the search.
 
         :param index: the prefixed index
+        :param search: a Search object, optional
         :return: a list of dicts of version and changes count data
         """
-        after = None
         versions = []
+        # if there is no search passed in, make our own
+        if search is None:
+            search = Search()
+        # [0:0] ensures we don't waste time by getting hits back
+        search = search.using(self.elasticsearch).index(index)[0:0]
+        # create an aggregation to count the number of records in the index at each version
+        search.aggs.bucket(u'versions', u'composite', size=1000,
+                           sources={u'version': A(u'terms', field=u'meta.version', order=u'asc')})
         while True:
-            search = Search(using=self.elasticsearch, index=index)[0:0]
-            # create an aggregation to count the number of records in the index at each version
-            search.aggs.bucket(u'versions', u'composite', size=100,
-                               sources={u'version': A(u'terms',
-                                                      field=u'meta.version',
-                                                      order=u'asc')})
+            # run the search and get the result, ignore_cache makes sure that calling execute gives
+            # us back new data from the backend. We need this because we just sneakily change the
+            # after value in the aggregation without generating a new search object
+            result = search.execute(ignore_cache=True).aggs.to_dict()[u'versions']
 
-            # if we have pagination data, use it
-            if after is not None:
-                search.aggs[u'versions'].after = {u'version': after}
-
-            # run the search and get the result
-            result = search.execute().aggs.to_dict()[u'versions']
+            # iterate over the results
             for bucket in result[u'buckets']:
                 versions.append({
                     u'version': bucket[u'key'][u'version'],
                     u'changes': bucket[u'doc_count']
                 })
 
-            # retrieve the after key if there is one
-            after = result.get(u'after_key', {}).get(u'version', None)
-            # if there isn't then we're done
-            if after is None:
+            # retrieve the after key for pagination if there is one
+            after_key = result.get(u'after_key', None)
+            if after_key is None:
+                # if there isn't then we're done
                 break
+            else:
+                # otherwise apply it to the aggregation
+                search.aggs[u'versions'].after = after_key
 
         return versions
 
