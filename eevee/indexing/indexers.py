@@ -280,7 +280,7 @@ class Indexer(object):
         end = datetime.now()
         # generate and return the report dict
         return {
-            u'version': max(seen_versions) if seen_versions else self.version,
+            u'version': self.version,
             u'versions': sorted(seen_versions),
             u'sources': sorted(set(feeder.mongo_collection for feeder in self.feeders)),
             u'targets': sorted(set(index.name for index in self.indexes)),
@@ -446,7 +446,7 @@ class Indexer(object):
                 stats_thread.join()
 
         # update the status index
-        self.update_statuses(seen_versions)
+        self.update_statuses()
         # generate the stats dict
         stats = self.get_stats(op_stats, seen_versions)
         # trigger the finish signal
@@ -465,11 +465,9 @@ class Indexer(object):
             if not self.elasticsearch.indices.exists(index.name):
                 self.elasticsearch.indices.create(index.name, body=index.get_index_create_body())
 
-    def update_statuses(self, seen_versions):
+    def update_statuses(self):
         """
         Run through the indexes and update the statuses for each.
-
-        :param seen_versions: all the versions that have been seen during this indexing operation
         """
         index_definition = {
             u'settings': {
@@ -507,7 +505,7 @@ class Indexer(object):
                 status_doc = {
                     u'name': index.unprefixed_name,
                     u'index_name': index.name,
-                    u'latest_version': max(seen_versions) if seen_versions else self.version,
+                    u'latest_version': self.version,
                 }
                 self.elasticsearch.index(self.config.elasticsearch_status_index_name, DOC_TYPE,
                                          status_doc, id=index.name)
