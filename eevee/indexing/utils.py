@@ -101,3 +101,19 @@ def update_refresh_interval(elasticsearch, indexes, refresh_interval):
                 u'refresh_interval': refresh_interval,
             }
         }, index.name)
+
+
+def update_number_of_replicas(elasticsearch, indexes, number):
+    """
+    Updates the number of replicas for the given indexes to the given value using the given client.
+
+    :param elasticsearch: the elasticsearch client object to connect to the cluster with
+    :param indexes: the indexes to update (this should be an iterable of Index objects)
+    :param number: the number of replicas
+    """
+    for index in set(indexes):
+        elasticsearch.indices.put_settings({
+            u'index': {
+                u'number_of_replicas': number,
+            }
+        }, index.name)
