@@ -34,35 +34,17 @@ class Index(object):
         self.shards = shards
         self.replicas = replicas
 
-    def get_commands(self, mongo_doc):
+    def get_index_docs(self, mongo_doc):
         """
-        Yields all the action and data dicts as a tuple for the given mongo doc.
+        Yields all the index documents required for this mongo doc as a 2-tuples of the version and
+        the data dict, in version order.
 
         :param mongo_doc: the mongo doc to handle
+        :return: yields a 2-tuple of version and data dict for indexing
         """
         # iterate over the mongo_docs versions and send them to elasticsearch
         for version, data, next_version in get_versions_and_data(mongo_doc, in_place=False):
-            yield (self.create_action(mongo_doc[u'id'], version),
-                   self.create_index_document(data, version, next_version))
-
-    def create_action(self, record_id, version):
-        """
-        Creates a dictionary containing the action information for elasticsearch. This tells
-        elasticsearch what to do, i.e. index, delete, create etc.
-
-        :param record_id: the id of the record
-        :param version: the version of the record
-        :return: a dictionary
-        """
-        # build and return the dictionary. Note that the document type is fixed as _doc as this
-        # parameter is no longer used and will be removed in future versions of elasticsearch
-        return {
-            u'index': {
-                # don't provide an id for speed (see elasticsearch bulk index doc for reasons)
-                u'_type': DOC_TYPE,
-                u'_index': self.name,
-            }
-        }
+            yield version, self.create_index_document(data, version, next_version)
 
     def create_index_document(self, data, version, next_version):
         """
