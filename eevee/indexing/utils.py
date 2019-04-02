@@ -161,7 +161,7 @@ def parallel_bulk(client, actions, thread_count=4, chunk_size=500,
 
     try:
         # note that we're using imap_unordered instead of imap as is used in the elasticsearch
-        # original, just cause it should be a bit faster and we don't care about order
+        # original, just cause it should be a bit smoother and we don't care about order
         for result in pool.imap_unordered(
                 lambda bulk_chunk: list(helpers._process_bulk_chunk(client, bulk_chunk[1],
                                                                     bulk_chunk[0], *args,
