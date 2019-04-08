@@ -173,7 +173,7 @@ class Indexer(object):
         for i, mongo_doc in enumerate(feeder.documents()):
             index_docs = list(index.get_index_docs(mongo_doc))
             if index_docs:
-                record_id = mongo_doc[u'id']
+                record_id = str(mongo_doc[u'id'])
                 self.indexed_records[record_id] = IndexedRecord(record_id, mongo_doc, index_docs)
                 for index_doc_number, (_version, index_document) in enumerate(index_docs):
                     yield record_id + u'-' + str(index_doc_number), index_document
