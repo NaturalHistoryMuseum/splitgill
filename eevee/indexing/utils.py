@@ -149,7 +149,9 @@ def parallel_bulk(client, actions, thread_count=4, chunk_size=500,
     # environments like App Engine
     from multiprocessing.pool import ThreadPool
 
-    actions = map(expand_action_callback, actions)
+    # here's a change from the elasticsearch original, use a generator so that this is lazy in
+    # python2 and python3 (they were using map)
+    expanded_actions = (expand_action_callback(action) for action in actions)
 
     class BlockingPoolWithMaxSize(ThreadPool):
         def _setup_queues(self):
@@ -166,7 +168,7 @@ def parallel_bulk(client, actions, thread_count=4, chunk_size=500,
                 lambda bulk_chunk: list(helpers._process_bulk_chunk(client, bulk_chunk[1],
                                                                     bulk_chunk[0], *args,
                                                                     **kwargs)),
-                helpers._chunk_actions(actions, chunk_size, max_chunk_bytes,
+                helpers._chunk_actions(expanded_actions, chunk_size, max_chunk_bytes,
                                        client.transport.serializer)):
             for item in result:
                 yield item
