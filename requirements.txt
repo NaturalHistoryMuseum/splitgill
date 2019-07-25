@@ -1,7 +1,7 @@
 blinker==1.4
 dictdiffer==0.7.1
-elasticsearch==6.3.1
-elasticsearch-dsl==6.2.1
+elasticsearch>=6.0.0,<7.0.0
+elasticsearch-dsl>=6.0.0,<7.0.0
 pymongo==3.6.1
 python-dateutil==2.7.3
 pytz==2018.4
