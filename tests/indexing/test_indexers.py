@@ -46,8 +46,8 @@ class TestIndexingStats(object):
         assert stats.op_stats == {index_name: {u'updated': 4, u'created': 1, u'deleted': 1}}
         assert stats.seen_versions == {1290, 10000, 18}
 
-        # create another mock IndexedRecord object and update the stats with it. Note that this one is
-        # updated into the same index as the first one
+        # create another mock IndexedRecord object and update the stats with it. Note that this one
+        # is updated into the same index as the first one
         indexed_record2 = MagicMock(
             index_op_count=10,
             delete_op_count=0,
@@ -65,8 +65,8 @@ class TestIndexingStats(object):
         assert stats.op_stats == {index_name: {u'updated': 5, u'created': 10, u'deleted': 1}}
         assert stats.seen_versions == {1290, 10000, 18, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32}
 
-        # update the stats with the first IndexedRecord object again, but this time it's going into a
-        # different index
+        # update the stats with the first IndexedRecord object again, but this time it's going into
+        # a different index
         stats.update(index_name2, indexed_record)
         assert stats.document_total == 1029
         assert stats.document_count == 3
@@ -77,6 +77,23 @@ class TestIndexingStats(object):
             index_name2: {u'updated': 4, u'created': 1, u'deleted': 1}
         }
         assert stats.seen_versions == {1290, 10000, 18, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32}
+
+    def test_update_no_stats(self):
+        stats = IndexingStats(1029)
+        index_name = u'nhm-some-index'
+        # create a mock IndexedRecord object and update the stats with it
+        indexed_record = MagicMock(
+            index_op_count=0,
+            delete_op_count=0,
+            stats=Counter(),
+            get_versions=MagicMock(return_value=set()))
+        stats.update(index_name, indexed_record)
+        assert stats.document_total == 1029
+        assert stats.document_count == 1
+        assert stats.indexed_count == 0
+        assert stats.deleted_count == 0
+        assert stats.op_stats == {}
+        assert stats.seen_versions == set()
 
 
 class TestIndexedRecord(object):

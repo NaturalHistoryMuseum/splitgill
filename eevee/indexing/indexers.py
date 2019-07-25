@@ -548,5 +548,7 @@ class IndexingStats:
         self.document_count += 1
         self.indexed_count += indexed_record.index_op_count
         self.deleted_count += indexed_record.delete_op_count
-        self.op_stats[target_index_name].update(indexed_record.stats)
+        # only update the op stats if there were ops
+        if indexed_record.stats:
+            self.op_stats[target_index_name].update(indexed_record.stats)
         self.seen_versions.update(indexed_record.get_versions())
