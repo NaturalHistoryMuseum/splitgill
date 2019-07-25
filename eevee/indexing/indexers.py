@@ -7,11 +7,11 @@ from datetime import datetime
 
 import ujson
 from blinker import Signal
+from elasticsearch.helpers import streaming_bulk
 from elasticsearch_dsl import Search
 
 from eevee.indexing.utils import DOC_TYPE, get_elasticsearch_client, update_refresh_interval, \
-    update_number_of_replicas, parallel_bulk
-
+    update_number_of_replicas
 from eevee.utils import chunk_iterator
 
 
@@ -20,8 +20,8 @@ class Indexer(object):
     Class encapsulating the functionality required to index records.
     """
 
-    def __init__(self, version, config, feeders_and_indexes, queue_size=4, pool_size=1,
-                 bulk_size=2000, update_status=True, check_batch_size=1000, always_replace=False):
+    def __init__(self, version, config, feeders_and_indexes, bulk_size=2000, update_status=True,
+                 check_batch_size=1000, always_replace=False):
         """
         :param version: the version we're indexing up to
         :param config: the config object
@@ -29,8 +29,6 @@ class Indexer(object):
                                     object which provides the documents from mongo to index and an
                                     index object which will be used to generate the data to index
                                     from the feeder's documents
-        :param queue_size: the maximum size of the document indexing process queue (default: 4)
-        :param pool_size: the size of the pool of processes to use (default: 1)
         :param bulk_size: the number of index requests to send in each bulk request (default: 2000)
         :param update_status: whether to update the status index after indexing is complete
                               (default: True)
@@ -48,8 +46,6 @@ class Indexer(object):
         self.config = config
         self.feeders_and_indexes = feeders_and_indexes
         self.feeders, self.indexes = zip(*feeders_and_indexes)
-        self.pool_size = pool_size
-        self.queue_size = queue_size
         self.bulk_size = bulk_size
         self.update_status = update_status
         self.check_batch_size = check_batch_size
@@ -88,21 +84,17 @@ class Indexer(object):
         indexing_stats = IndexingStats(document_total)
 
         for feeder, index in self.feeders_and_indexes:
-            try:
-                # create a partial of the index_signal's send function with the objects we have at
-                # our disposal here, this saves us sending around a bunch of objects just so that
-                # the tasks can fire the signal
-                partial_signal = functools.partial(self.index_signal.send, self, feeder=feeder,
-                                                   index=index, indexing_stats=indexing_stats)
-                task = IndexingTask(feeder, index, partial_signal, indexing_stats, self.queue_size,
-                                    self.pool_size, self.bulk_size, self.elasticsearch,
-                                    self.check_batch_size, self.always_replace)
-                task.run()
-            except KeyboardInterrupt:
-                break
-        else:
-            # update the status index
-            self.update_statuses()
+            # create a partial of the index_signal's send function with the objects we have at
+            # our disposal here, this saves us sending around a bunch of objects just so that
+            # the tasks can fire the signal
+            partial_signal = functools.partial(self.index_signal.send, self, feeder=feeder,
+                                               index=index, indexing_stats=indexing_stats)
+            task = IndexingTask(feeder, index, partial_signal, indexing_stats, self.bulk_size,
+                                self.elasticsearch, self.check_batch_size, self.always_replace)
+            task.run()
+
+        # update the status index
+        self.update_statuses()
         # generate the stats dict
         stats = self.get_stats(indexing_stats)
         # trigger the finish signal
@@ -193,8 +185,8 @@ class IndexingTask:
     A class that encapsulates the task of indexing a single index from a single feeder.
     """
 
-    def __init__(self, feeder, index, partial_signal, indexing_stats, queue_size, pool_size,
-                 bulk_size, elasticsearch, check_batch_size, always_replace):
+    def __init__(self, feeder, index, partial_signal, indexing_stats, bulk_size, elasticsearch,
+                 check_batch_size, always_replace):
         """
         :param feeder: the feeder object to get the mongo documents from
         :param index: the index object to get the index documents from
@@ -202,8 +194,6 @@ class IndexingTask:
                                parent indexer
         :param indexing_stats: an IndexingStats object to store stats on about the whole indexing
                                job, not just this task
-        :param queue_size: the maximum size of the document indexing process queue
-        :param pool_size: the size of the pool of processes to use
         :param bulk_size: the number of index requests to send in each bulk request
         :param elasticsearch: an elasticsearch client object
         :param check_batch_size: the number of ids to look up in elasticsearch at a time when
@@ -221,8 +211,6 @@ class IndexingTask:
         self.partial_signal = partial_signal
         self.indexing_stats = indexing_stats
         self.check_batch_size = check_batch_size
-        self.queue_size = queue_size
-        self.pool_size = pool_size
         self.bulk_size = bulk_size
         self.elasticsearch = elasticsearch
         self.always_replace = always_replace
@@ -383,18 +371,17 @@ class IndexingTask:
             update_refresh_interval(self.elasticsearch, [self.index], -1)
             update_number_of_replicas(self.elasticsearch, [self.index], 0)
 
-            # we can ignore the success value as if there is a problem parallel_bulk will raise
-            # an exception
-            for _success, info in parallel_bulk(client=self.elasticsearch,
-                                                actions=self.index_doc_iterator(),
-                                                expand_action_callback=self.expand_for_index,
-                                                chunk_size=self.bulk_size,
-                                                thread_count=self.pool_size,
-                                                queue_size=self.queue_size,
-                                                index=self.index.name,
-                                                doc_type=DOC_TYPE,
-                                                raise_on_error=True,
-                                                raise_on_exception=True):
+            # we can ignore the success value as if there is a problem streaming_bulk will raise an
+            # exception
+            for _success, info in streaming_bulk(client=self.elasticsearch,
+                                                 actions=self.index_doc_iterator(),
+                                                 expand_action_callback=self.expand_for_index,
+                                                 chunk_size=self.bulk_size,
+                                                 index=self.index.name,
+                                                 doc_type=DOC_TYPE,
+                                                 raise_on_error=True,
+                                                 raise_on_exception=True,
+                                                 max_retries=1):
                 # pull out the operation type and the details of the operation from the info
                 op_type, details = next(iter(info.items()))
                 # extract the id of the document we just modified

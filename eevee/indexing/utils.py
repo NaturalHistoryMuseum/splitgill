@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
-from elasticsearch import Elasticsearch, NotFoundError, helpers, compat
+from elasticsearch import Elasticsearch, NotFoundError
 
 from eevee.diffing import extract_diff
 from eevee.utils import iter_pairs
@@ -117,68 +117,3 @@ def update_number_of_replicas(elasticsearch, indexes, number):
                 u'number_of_replicas': number,
             }
         }, index.name)
-
-
-def parallel_bulk(client, actions, thread_count=4, chunk_size=500,
-                  max_chunk_bytes=100 * 1024 * 1024, queue_size=4,
-                  expand_action_callback=helpers.expand_action, *args, **kwargs):
-    """
-    This is a copy of the parallel_bulk function in the elasticsearch helpers module. It is copied
-    here to modify it very slightly to handle exceptions better :(. There are some open issues
-    on the elasticsearch-py github repo which may help resolve this but currently it's a problem
-    that hasn't been fixed. I have also formatted it so that it's less horrible to look at.
-
-    Parallel version of the bulk helper run in multiple threads at once.
-
-    :arg client: instance of :class:`~elasticsearch.Elasticsearch` to use
-    :arg actions: iterator containing the actions
-    :arg thread_count: size of the threadpool to use for the bulk requests
-    :arg chunk_size: number of docs in one chunk sent to es (default: 500)
-    :arg max_chunk_bytes: the maximum size of the request in bytes (default: 100MB)
-    :arg raise_on_error: raise ``BulkIndexError`` containing errors (as `.errors`) from the
-                         execution of the last chunk when some occur. By default we raise.
-    :arg raise_on_exception: if ``False`` then don't propagate exceptions from call to ``bulk`` and
-                             just report the items that failed as failed.
-    :arg expand_action_callback: callback executed on each action passed in, should return a tuple
-                                 containing the action line and the data line (`None` if data line
-                                 should be omitted).
-    :arg queue_size: size of the task queue between the main thread (producing chunks to send) and
-                     the processing threads.
-    """
-    # avoid importing multiprocessing unless parallel_bulk is used to avoid exceptions on restricted
-    # environments like App Engine
-    from multiprocessing.pool import ThreadPool
-
-    # here's a change from the elasticsearch original, use a generator so that this is lazy in
-    # python2 and python3 (they were using map)
-    expanded_actions = (expand_action_callback(action) for action in actions)
-
-    class BlockingPoolWithMaxSize(ThreadPool):
-        def _setup_queues(self):
-            super(BlockingPoolWithMaxSize, self)._setup_queues()
-            self._inqueue = compat.Queue(queue_size)
-            self._quick_put = self._inqueue.put
-
-    pool = BlockingPoolWithMaxSize(thread_count)
-
-    try:
-        # note that we're using imap_unordered instead of imap as is used in the elasticsearch
-        # original, just cause it should be a bit smoother and we don't care about order
-        for result in pool.imap_unordered(
-                lambda bulk_chunk: list(helpers._process_bulk_chunk(client, bulk_chunk[1],
-                                                                    bulk_chunk[0], *args,
-                                                                    **kwargs)),
-                helpers._chunk_actions(expanded_actions, chunk_size, max_chunk_bytes,
-                                       client.transport.serializer)):
-            for item in result:
-                yield item
-    # here's our addition, catch any exception, terminate the pool and propagate it
-    except Exception as e:
-        # if we don't terminate the pool here the queue keeps growing and we'll run out of memory. I
-        # think there's some peculiar Python behaviour going on here too but this seems to resolve
-        # the issues
-        pool.terminate()
-        raise e
-    finally:
-        pool.close()
-        pool.join()
