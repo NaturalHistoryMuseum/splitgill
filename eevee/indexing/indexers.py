@@ -22,7 +22,7 @@ class Indexer(object):
     """
 
     def __init__(self, version, config, feeders_and_indexes, queue_size=4, pool_size=1,
-                 bulk_size=2000, update_status=True, check_batch_size=1000):
+                 bulk_size=2000, update_status=True, check_batch_size=1000, always_replace=False):
         """
         :param version: the version we're indexing up to
         :param config: the config object
@@ -38,6 +38,12 @@ class Indexer(object):
         :param check_batch_size: the number of ids to look up in elasticsearch at a time when
                                  checking the current state of a record's indexing documents. By
                                  batching a number of ids together we save time (default: 1000)
+        :param always_replace: flag indicating whether to always replace indexing documents during
+                               processing regardless of whether the replacement document is
+                               different to the one in elasticsearch. This is an optimisation as we
+                               can send fewer write updates to elasticsearch by leaving documents
+                               alone when they haven't changed. This doesn't impact how deletes are
+                               handled. (Default: False)
         """
         self.version = version
         self.config = config
@@ -48,6 +54,7 @@ class Indexer(object):
         self.bulk_size = bulk_size
         self.update_status = update_status
         self.check_batch_size = check_batch_size
+        self.always_replace = always_replace
 
         self.elasticsearch = get_elasticsearch_client(self.config, sniff_on_start=True,
                                                       sniff_on_connection_fail=True,
@@ -90,7 +97,7 @@ class Indexer(object):
                                                    index=index, indexing_stats=indexing_stats)
                 task = IndexingTask(feeder, index, partial_signal, indexing_stats, self.queue_size,
                                     self.pool_size, self.bulk_size, self.elasticsearch,
-                                    self.check_batch_size)
+                                    self.check_batch_size, self.always_replace)
                 task.run()
             except KeyboardInterrupt:
                 break
@@ -188,7 +195,7 @@ class IndexingTask:
     """
 
     def __init__(self, feeder, index, partial_signal, indexing_stats, queue_size, pool_size,
-                 bulk_size, elasticsearch, check_batch_size):
+                 bulk_size, elasticsearch, check_batch_size, always_replace):
         """
         :param feeder: the feeder object to get the mongo documents from
         :param index: the index object to get the index documents from
@@ -200,13 +207,15 @@ class IndexingTask:
         :param pool_size: the size of the pool of processes to use
         :param bulk_size: the number of index requests to send in each bulk request
         :param elasticsearch: an elasticsearch client object
-        :param check_batch_size: the batch size we should use when retrieving the existing documents
-                                 from elasticsearch. For write efficiency, before writing a document
-                                 to elasticsearch, we check to see if the existing document with
-                                 that the same id is the same as the one we're about to replace it
-                                 with. To do this we have to pull documents from elasticsearch and
-                                 this number used to control how many documents we look up at a
-                                 time.
+        :param check_batch_size: the number of ids to look up in elasticsearch at a time when
+                                 checking the current state of a record's indexing documents. By
+                                 batching a number of ids together we save time.
+        :param always_replace: flag indicating whether to always replace indexing documents during
+                               processing regardless of whether the replacement document is
+                               different to the one in elasticsearch. This is an optimisation as we
+                               can send fewer write updates to elasticsearch by leaving documents
+                               alone when they haven't changed. This doesn't impact how deletes are
+                               handled.
         """
         self.feeder = feeder
         self.index = index
@@ -217,6 +226,7 @@ class IndexingTask:
         self.pool_size = pool_size
         self.bulk_size = bulk_size
         self.elasticsearch = elasticsearch
+        self.always_replace = always_replace
 
         # this is used to track the records that are currently being indexed
         self.indexed_records = {}
@@ -291,7 +301,7 @@ class IndexingTask:
                 # indicate that we're handling it - either by leaving it alone or replacing it
                 handled.add(str(i))
 
-            if new_doc == existing_doc:
+            if not self.always_replace and new_doc == existing_doc:
                 # already indexed correctly, leave it alone
                 continue
             else:

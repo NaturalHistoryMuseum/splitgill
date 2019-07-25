@@ -136,7 +136,7 @@ class TestIndexingTask(object):
 
     def _create_indexing_task(self, feeder=None, index=None, partial_signal=None,
                               indexing_stats=None, queue_size=4, pool_size=1, bulk_size=2000,
-                              elasticsearch=None, check_batch_size=1000):
+                              elasticsearch=None, check_batch_size=1000, always_replace=False):
         feeder = feeder if feeder is not None else MagicMock()
         index = index if index is not None else MagicMock()
         partial_signal = partial_signal if partial_signal is not None else MagicMock()
@@ -144,7 +144,7 @@ class TestIndexingTask(object):
         elasticsearch = elasticsearch if elasticsearch is not None else MagicMock()
         return IndexingTask(feeder, index, partial_signal, indexing_stats, queue_size=queue_size,
                             pool_size=pool_size, bulk_size=bulk_size, elasticsearch=elasticsearch,
-                            check_batch_size=check_batch_size)
+                            check_batch_size=check_batch_size, always_replace=always_replace)
 
     def test_get_indexed_documents_clean(self):
         task = self._create_indexing_task()
@@ -203,75 +203,83 @@ class TestIndexingTask(object):
         assert filter_mock.call_args_list == [call(u'terms', **{u'data._id': ids})]
 
     def test_bulk_ops_empty(self):
-        task = self._create_indexing_task()
-        deleted_ops, indexed_ops = task.get_bulk_ops(u'123', [], {})
+        for always_replace in [False, True]:
+            task = self._create_indexing_task(always_replace=always_replace)
+            deleted_ops, indexed_ops = task.get_bulk_ops(u'123', [], {})
 
-        assert deleted_ops == []
-        assert indexed_ops == []
+            assert deleted_ops == []
+            assert indexed_ops == []
 
     def test_bulk_ops_empty_to_index_some_indexed(self):
-        task = self._create_indexing_task()
-        deleted_ops, indexed_ops = task.get_bulk_ops(u'123', [], {u'3': MagicMock(),
-                                                                  u'0': MagicMock()})
+        for always_replace in [False, True]:
+            task = self._create_indexing_task(always_replace=always_replace)
+            deleted_ops, indexed_ops = task.get_bulk_ops(u'123', [], {u'3': MagicMock(),
+                                                                      u'0': MagicMock()})
 
-        # sort to ensure our check isn't broken by order changing
-        assert sorted(deleted_ops) == sorted([(u'123-3', None), (u'123-0', None)])
-        assert indexed_ops == []
+            # sort to ensure our check isn't broken by order changing
+            assert sorted(deleted_ops) == sorted([(u'123-3', None), (u'123-0', None)])
+            assert indexed_ops == []
 
     def test_bulk_ops_some_to_index_empty_indexed(self):
-        task = self._create_indexing_task()
-        deleted_ops, indexed_ops = task.get_bulk_ops(u'123', [(100, dict(a=1)),
-                                                              (800, dict(a=4))], {})
+        for always_replace in [True, False]:
+            task = self._create_indexing_task(always_replace=always_replace)
+            deleted_ops, indexed_ops = task.get_bulk_ops(u'123', [(100, dict(a=1)),
+                                                                  (800, dict(a=4))], {})
 
-        assert deleted_ops == []
-        assert indexed_ops == [(u'123-0', dict(a=1)), (u'123-1', dict(a=4))]
+            assert deleted_ops == []
+            assert indexed_ops == [(u'123-0', dict(a=1)), (u'123-1', dict(a=4))]
 
     def test_bulk_ops_to_index_and_indexed_all_different(self):
-        to_index = [
-            (100, dict(a=1)),
-            (800, dict(a=5)),
-        ]
-        indexed = {
-            u'5': dict(a=10),
-            u'3': dict(a=2),
-        }
+        for always_replace in [True, False]:
+            to_index = [
+                (100, dict(a=1)),
+                (800, dict(a=5)),
+            ]
+            indexed = {
+                u'5': dict(a=10),
+                u'3': dict(a=2),
+            }
 
-        task = self._create_indexing_task()
-        deleted_ops, indexed_ops = task.get_bulk_ops(u'123', to_index, indexed)
+            task = self._create_indexing_task()
+            deleted_ops, indexed_ops = task.get_bulk_ops(u'123', to_index, indexed)
 
-        # sort to ensure our check isn't broken by order changing
-        assert sorted(deleted_ops) == sorted([(u'123-3', None), (u'123-5', None)])
-        assert indexed_ops == [(u'123-0', dict(a=1)), (u'123-1', dict(a=5))]
+            # sort to ensure our check isn't broken by order changing
+            assert sorted(deleted_ops) == sorted([(u'123-3', None), (u'123-5', None)])
+            assert indexed_ops == [(u'123-0', dict(a=1)), (u'123-1', dict(a=5))]
 
     def test_bulk_ops_to_index_and_indexed_compare_different(self):
-        to_index = [
-            (100, dict(a=1)),
-        ]
-        indexed = {
-            # this will be compared to the first dict in to_index and with a=10 it will be different
-            u'0': dict(a=10),
-        }
-
-        task = self._create_indexing_task()
-        deleted_ops, indexed_ops = task.get_bulk_ops(u'123', to_index, indexed)
-
-        assert deleted_ops == []
-        assert indexed_ops == [(u'123-0', dict(a=1))]
+        for always_replace in [True, False]:
+            to_index = [(100, dict(a=1))]
+            indexed = {
+                # this will be compared to the dict in to_index and with a=10 it will be different
+                u'0': dict(a=10),
+            }
+            task = self._create_indexing_task(always_replace=always_replace)
+            deleted_ops, indexed_ops = task.get_bulk_ops(u'123', to_index, indexed)
+            assert deleted_ops == []
+            assert indexed_ops == [(u'123-0', dict(a=1))]
 
     def test_bulk_ops_to_index_and_indexed_compare_same(self):
-        to_index = [
-            (100, dict(a=1)),
-        ]
+        to_index = [(100, dict(a=1))]
         indexed = {
             # this will be compared to the first dict in to_index and with a=1 it will be the same
             u'0': dict(a=1),
         }
-
-        task = self._create_indexing_task()
+        task = self._create_indexing_task(always_replace=False)
         deleted_ops, indexed_ops = task.get_bulk_ops(u'123', to_index, indexed)
-
         assert deleted_ops == []
         assert indexed_ops == []
+
+        to_index = [(100, dict(a=1))]
+        indexed = {
+            # this will be compared to the first dict in to_index and with a=1 it will be the same
+            u'0': dict(a=1),
+        }
+        task = self._create_indexing_task(always_replace=True)
+        deleted_ops, indexed_ops = task.get_bulk_ops(u'123', to_index, indexed)
+        assert deleted_ops == []
+        # we expect an index op because we've set always_replace to True
+        assert indexed_ops == [(u'123-0', dict(a=1))]
 
     def test_is_clean_index_and_it_is_clean(self, monkeypatch):
         name_mock = MagicMock()
@@ -682,7 +690,8 @@ class TestIndexer(object):
             assert feeder.total.called
             assert call(feeder, index, mock.ANY, indexing_stats_mock, indexer.queue_size,
                         indexer.pool_size, indexer.bulk_size, indexer.elasticsearch,
-                        indexer.check_batch_size) in indexing_task_mock.call_args_list
+                        indexer.check_batch_size,
+                        indexer.always_replace) in indexing_task_mock.call_args_list
         assert indexer.update_statuses.call_count == 1
         assert indexer.get_stats.call_args_list == [call(indexing_stats_mock)]
         assert indexer.finish_signal.send.call_args_list == [
