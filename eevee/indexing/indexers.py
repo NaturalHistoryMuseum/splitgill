@@ -22,7 +22,7 @@ class Indexer(object):
     """
 
     def __init__(self, version, config, feeders_and_indexes, queue_size=4, pool_size=1,
-                 bulk_size=2000, update_status=True):
+                 bulk_size=2000, update_status=True, check_batch_size=1000):
         """
         :param version: the version we're indexing up to
         :param config: the config object
@@ -30,9 +30,14 @@ class Indexer(object):
                                     object which provides the documents from mongo to index and an
                                     index object which will be used to generate the data to index
                                     from the feeder's documents
-        :param queue_size: the maximum size of the document indexing process queue (default: 16000)
-        :param pool_size: the size of the pool of processes to use (default: 3)
-        :param bulk_size: the number of index requests to send in each bulk request
+        :param queue_size: the maximum size of the document indexing process queue (default: 4)
+        :param pool_size: the size of the pool of processes to use (default: 1)
+        :param bulk_size: the number of index requests to send in each bulk request (default: 2000)
+        :param update_status: whether to update the status index after indexing is complete
+                              (default: True)
+        :param check_batch_size: the number of ids to look up in elasticsearch at a time when
+                                 checking the current state of a record's indexing documents. By
+                                 batching a number of ids together we save time (default: 1000)
         """
         self.version = version
         self.config = config
@@ -42,6 +47,8 @@ class Indexer(object):
         self.queue_size = queue_size
         self.bulk_size = bulk_size
         self.update_status = update_status
+        self.check_batch_size = check_batch_size
+
         self.elasticsearch = get_elasticsearch_client(self.config, sniff_on_start=True,
                                                       sniff_on_connection_fail=True,
                                                       sniffer_timeout=60, sniff_timeout=10,
@@ -81,7 +88,9 @@ class Indexer(object):
                 # the tasks can fire the signal
                 partial_signal = functools.partial(self.index_signal.send, self, feeder=feeder,
                                                    index=index, indexing_stats=indexing_stats)
-                task = IndexingTask(feeder, index, self, partial_signal, indexing_stats)
+                task = IndexingTask(feeder, index, partial_signal, indexing_stats, self.queue_size,
+                                    self.pool_size, self.bulk_size, self.elasticsearch,
+                                    self.check_batch_size)
                 task.run()
             except KeyboardInterrupt:
                 break
@@ -178,37 +187,36 @@ class IndexingTask:
     A class that encapsulates the task of indexing a single index from a single feeder.
     """
 
-    def __init__(self, feeder, index, indexer, partial_signal, indexing_stats,
-                 check_batch_size=1000):
+    def __init__(self, feeder, index, partial_signal, indexing_stats, queue_size, pool_size,
+                 bulk_size, elasticsearch, check_batch_size):
         """
         :param feeder: the feeder object to get the mongo documents from
         :param index: the index object to get the index documents from
-        :param indexer: the parent indexer object which created this task, used to retrieve
-                        settings and an elasticsearch client
         :param partial_signal: a partial function which we can use to send the index signal from the
                                parent indexer
         :param indexing_stats: an IndexingStats object to store stats on about the whole indexing
                                job, not just this task
+        :param queue_size: the maximum size of the document indexing process queue
+        :param pool_size: the size of the pool of processes to use
+        :param bulk_size: the number of index requests to send in each bulk request
+        :param elasticsearch: an elasticsearch client object
         :param check_batch_size: the batch size we should use when retrieving the existing documents
                                  from elasticsearch. For write efficiency, before writing a document
                                  to elasticsearch, we check to see if the existing document with
                                  that the same id is the same as the one we're about to replace it
                                  with. To do this we have to pull documents from elasticsearch and
                                  this number used to control how many documents we look up at a
-                                 time. Defaults to 1000.
+                                 time.
         """
         self.feeder = feeder
         self.index = index
-        self.indexer = indexer
         self.partial_signal = partial_signal
         self.indexing_stats = indexing_stats
         self.check_batch_size = check_batch_size
-
-        # copy over some properties from the indexer parent object
-        self.bulk_size = self.indexer.bulk_size
-        self.pool_size = self.indexer.pool_size
-        self.queue_size = self.indexer.queue_size
-        self.elasticsearch = self.indexer.elasticsearch
+        self.queue_size = queue_size
+        self.pool_size = pool_size
+        self.bulk_size = bulk_size
+        self.elasticsearch = elasticsearch
 
         # this is used to track the records that are currently being indexed
         self.indexed_records = {}
