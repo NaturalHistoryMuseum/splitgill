@@ -3,17 +3,11 @@
 
 from collections import OrderedDict
 
-import dictdiffer
-import six
 from mock import MagicMock, call
+from six.moves import zip
 
 from eevee.diffing import format_diff, DICT_DIFFER_DIFFER
 from eevee.indexing.utils import get_versions_and_data, update_refresh_interval
-
-if six.PY2:
-    # the builtin version of zip in python 2 returns a list, we need an iterator so we have to use
-    # the itertools version
-    from itertools import izip as zip
 
 
 def test_get_versions_and_data():
