@@ -7,7 +7,6 @@ from datetime import datetime
 
 import ujson
 from blinker import Signal
-from elasticsearch.helpers import parallel_bulk
 from elasticsearch_dsl import Search
 
 from eevee.indexing.utils import DOC_TYPE, get_elasticsearch_client, update_refresh_interval, \
