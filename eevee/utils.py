@@ -6,11 +6,7 @@ import calendar
 import itertools
 
 import six
-
-if six.PY2:
-    # the builtin version of zip in python 2 returns a list, we need an iterator so we have to use
-    # the itertools version
-    from itertools import izip as zip
+from six.moves import zip
 
 
 def chunk_iterator(iterable, chunk_size=1000):
