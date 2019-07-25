@@ -5,8 +5,8 @@
 
 A library providing base classes with the functionality to create, update and query versioned data. Uses MongoDB and Elasticsearch.
 
-**This project is currently under active development.**
-
+Note that this library is relatively stable but is still quite new and could still be significantly altered.
+A stable version 1.0 will be released soon!
 
 ### Running the tests
 
