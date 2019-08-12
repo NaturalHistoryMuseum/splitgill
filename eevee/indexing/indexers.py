@@ -477,7 +477,7 @@ class IndexedRecord:
         return not self.existing_documents
 
     @property
-    def last_data(self):
+    def last_index_document(self):
         """
         Get the index document sent to elasticsearch for this record's last version. Note that this
         may not be the current version of the data that is visible through elasticsearch if the
