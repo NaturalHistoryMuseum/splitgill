@@ -130,14 +130,14 @@ class TestIndexedRecord(object):
         indexed_record = IndexedRecord(MagicMock(), MagicMock(), MagicMock(), {}, 0, 0)
         assert indexed_record.is_new
 
-    def test_last_data(self):
+    def test_last_index_document(self):
         to_index = [
             (MagicMock(), MagicMock()),
             (MagicMock(), MagicMock()),
             (MagicMock(), MagicMock())
         ]
         indexed_record = IndexedRecord(MagicMock(), MagicMock(), to_index, MagicMock(), 0, 0)
-        assert indexed_record.last_data == to_index[-1][1]
+        assert indexed_record.last_index_document == to_index[-1][1]
 
     def test_get_versions(self):
         to_index = [
