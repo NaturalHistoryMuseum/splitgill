@@ -9,7 +9,7 @@ URL = 'https://github.com/NaturalHistoryMuseum/eevee'
 EMAIL = 'data@nhm.ac.uk'
 AUTHOR = 'Josh Humphries'
 REQUIRES_PYTHON = '>=2.7,!=3.0.*,!=3.1.*'
-VERSION = '1.0.1'
+VERSION = '1.0.2'
 
 with open('requirements.txt', 'r') as req_file:
     REQUIRED = [r.strip() for r in req_file.readlines()]
