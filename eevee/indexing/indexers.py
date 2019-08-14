@@ -315,7 +315,7 @@ class IndexingTask:
 
             for mongo_doc in mongo_docs:
                 # cache the record's id
-                record_id = mongo_doc[u'id']
+                record_id = str(mongo_doc[u'id'])
 
                 # generate the index documents for this mongo doc. Each element is a 2-tuple
                 # (version, dict to index). We wrap it in a list as it's a generator
