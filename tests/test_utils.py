@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
-import pytz
-from datetime import datetime
+from datetime import datetime, tzinfo, timedelta
 
 from eevee.utils import chunk_iterator, to_timestamp, iter_pairs
 
@@ -59,11 +58,24 @@ def test_chunk_iterator_when_iterator_is_empty():
 
 
 def test_to_timestamp():
+    # create a UTC timezone class so that we don't have to use any external libs just for this test
+    class UTC(tzinfo):
+        def utcoffset(self, dt):
+            return timedelta(0)
+
+        def tzname(self, dt):
+            return u'UTC'
+
+        def dst(self, dt):
+            return timedelta(0)
+
+    utc = UTC()
+
     # check that dates are treated as utc
-    assert to_timestamp(datetime.strptime(u'19700101', u'%Y%m%d').replace(tzinfo=pytz.utc)) == 0
+    assert to_timestamp(datetime.strptime(u'19700101', u'%Y%m%d').replace(tzinfo=utc)) == 0
     # check a later date too
     assert to_timestamp(
-        datetime.strptime(u'20180713', u'%Y%m%d').replace(tzinfo=pytz.utc)) == 1531440000000
+        datetime.strptime(u'20180713', u'%Y%m%d').replace(tzinfo=utc)) == 1531440000000
 
 
 def test_iter_pairs():
