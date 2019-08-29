@@ -74,4 +74,4 @@ class SimpleIndexFeeder(IndexFeeder):
         Counts and returns the number of documents which will match the condition.
         """
         with get_mongo(self.config, collection=self.mongo_collection) as mongo:
-            return mongo.count(self.condition)
+            return mongo.count_documents(self.condition)
