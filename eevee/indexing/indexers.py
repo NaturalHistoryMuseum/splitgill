@@ -366,10 +366,18 @@ class IndexingTask:
         """
         Indexes a set of records from mongo into elasticsearch.
         """
+        is_clean = self.is_clean_index()
         try:
-            # use some optimisations for loading data
-            update_refresh_interval(self.elasticsearch, [self.index], -1)
-            update_number_of_replicas(self.elasticsearch, [self.index], 0)
+            # for info on the refresh and replica settings changed here, see:
+            # https://www.elastic.co/guide/en/elasticsearch/reference/master/tune-for-indexing-speed.html
+            if is_clean:
+                # use some optimisations for loading initial data
+                update_refresh_interval(self.elasticsearch, [self.index], -1)
+                update_number_of_replicas(self.elasticsearch, [self.index], 0)
+            else:
+                # extend the refresh during updates, the default is 1 second so extending to 30
+                # seconds should improve performance a bit
+                update_refresh_interval(self.elasticsearch, [self.index], u'30s')
 
             # we can ignore the success value as if there is a problem streaming_bulk will raise an
             # exception
