@@ -407,7 +407,7 @@ class TestIndexingTask(object):
         for i, o in zip(inputs, outputs):
             assert task.expand_for_index(i) == o
 
-    def test_run_updates_index_settings(self, monkeypatch):
+    def test_run_updates_index_settings_clean(self, monkeypatch):
         update_refresh_interval_mock = MagicMock()
         update_number_of_replicas_mock = MagicMock()
         streaming_bulk_mock = MagicMock()
@@ -419,6 +419,9 @@ class TestIndexingTask(object):
 
         task = self._create_indexing_task()
 
+        # the index is clean!
+        task.is_clean_index = MagicMock(return_value=True)
+
         task.run()
 
         assert update_refresh_interval_mock.call_args_list == [
@@ -427,6 +430,31 @@ class TestIndexingTask(object):
         ]
         assert update_number_of_replicas_mock.call_args_list == [
             call(task.elasticsearch, [task.index], 0),
+            call(task.elasticsearch, [task.index], task.index.replicas)
+        ]
+
+    def test_run_updates_index_settings_not_clean(self, monkeypatch):
+        update_refresh_interval_mock = MagicMock()
+        update_number_of_replicas_mock = MagicMock()
+        streaming_bulk_mock = MagicMock()
+        monkeypatch.setattr(u'eevee.indexing.indexers.update_refresh_interval',
+                            update_refresh_interval_mock)
+        monkeypatch.setattr(u'eevee.indexing.indexers.update_number_of_replicas',
+                            update_number_of_replicas_mock)
+        monkeypatch.setattr(u'eevee.indexing.indexers.streaming_bulk', streaming_bulk_mock)
+
+        task = self._create_indexing_task()
+
+        # the index is not clean!
+        task.is_clean_index = MagicMock(return_value=False)
+
+        task.run()
+
+        assert update_refresh_interval_mock.call_args_list == [
+            call(task.elasticsearch, [task.index], u'30s'),
+            call(task.elasticsearch, [task.index], None)
+        ]
+        assert update_number_of_replicas_mock.call_args_list == [
             call(task.elasticsearch, [task.index], task.index.replicas)
         ]
 
@@ -441,6 +469,8 @@ class TestIndexingTask(object):
         monkeypatch.setattr(u'eevee.indexing.indexers.streaming_bulk', streaming_bulk_mock)
 
         task = self._create_indexing_task()
+
+        task.is_clean_index = MagicMock(return_value=True)
 
         with pytest.raises(Exception):
             task.run()
