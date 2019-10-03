@@ -377,7 +377,7 @@ class IndexingTask:
             else:
                 # extend the refresh during updates, the default is 1 second so extending to 30
                 # seconds should improve performance a bit
-                update_refresh_interval(self.elasticsearch, [self.index], 30)
+                update_refresh_interval(self.elasticsearch, [self.index], u'30s')
 
             # we can ignore the success value as if there is a problem streaming_bulk will raise an
             # exception
