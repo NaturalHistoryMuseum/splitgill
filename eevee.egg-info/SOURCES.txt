@@ -6,6 +6,7 @@ eevee/__init__.py
 eevee/config.py
 eevee/diffing.py
 eevee/mongo.py
+eevee/search.py
 eevee/utils.py
 eevee.egg-info/PKG-INFO
 eevee.egg-info/SOURCES.txt
@@ -21,5 +22,3 @@ eevee/ingestion/__init__.py
 eevee/ingestion/converters.py
 eevee/ingestion/feeders.py
 eevee/ingestion/ingesters.py
-eevee/search/__init__.py
-eevee/search/search.py
