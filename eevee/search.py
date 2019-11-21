@@ -44,7 +44,7 @@ def create_index_specific_version_filter(indexes_and_versions):
         return create_version_query(next(iter(by_version.keys())))
     else:
         filters = []
-        for version, indexes in by_version:
+        for version, indexes in by_version.items():
             version_filter = create_version_query(version)
             if len(indexes) == 1:
                 # there's only one index requiring this version so use a term query
