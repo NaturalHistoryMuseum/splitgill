@@ -3,5 +3,5 @@ dictdiffer==0.7.1
 elasticsearch<7.0.0,>=6.0.0
 elasticsearch-dsl<7.0.0,>=6.0.0
 pymongo==3.9.0
-six==1.11.0
+six>=1.11.0
 ujson==1.35
