@@ -10,8 +10,12 @@ from blinker import Signal
 from elasticsearch.helpers import streaming_bulk
 from elasticsearch_dsl import Search
 
-from eevee.indexing.utils import DOC_TYPE, get_elasticsearch_client, update_refresh_interval, \
-    update_number_of_replicas
+from eevee.indexing.utils import (
+    DOC_TYPE,
+    get_elasticsearch_client,
+    update_refresh_interval,
+    update_number_of_replicas,
+)
 from eevee.utils import chunk_iterator
 
 
@@ -20,8 +24,16 @@ class Indexer(object):
     Class encapsulating the functionality required to index records.
     """
 
-    def __init__(self, version, config, feeders_and_indexes, bulk_size=2000, update_status=True,
-                 check_batch_size=1000, always_replace=False):
+    def __init__(
+        self,
+        version,
+        config,
+        feeders_and_indexes,
+        bulk_size=2000,
+        update_status=True,
+        check_batch_size=1000,
+        always_replace=False,
+    ):
         """
         :param version: the version we're indexing up to
         :param config: the config object
@@ -51,24 +63,32 @@ class Indexer(object):
         self.check_batch_size = check_batch_size
         self.always_replace = always_replace
 
-        self.elasticsearch = get_elasticsearch_client(self.config, sniff_on_start=True,
-                                                      sniff_on_connection_fail=True,
-                                                      sniffer_timeout=60, sniff_timeout=10,
-                                                      http_compress=False)
+        self.elasticsearch = get_elasticsearch_client(
+            self.config,
+            sniff_on_start=True,
+            sniff_on_connection_fail=True,
+            sniffer_timeout=60,
+            sniff_timeout=10,
+            http_compress=False,
+        )
 
         # setup the signals
-        self.index_signal = Signal(doc=u'''Triggered when a record has been indexed. Only records
+        self.index_signal = Signal(
+            doc=u'''Triggered when a record has been indexed. Only records
                                            that have at least one version of their data indexed will
                                            be passed through this signal. The kwargs passed when
                                            this signal is sent are "indexed_record", "feeder",
                                            "index" and "indexing_stats" which hold the IndexedRecord
                                            object, the feeder object, the index object and an
-                                           IndexingStats object, respectively.''')
-        self.finish_signal = Signal(doc=u'''Triggered when the processing is complete. The kwargs
+                                           IndexingStats object, respectively.'''
+        )
+        self.finish_signal = Signal(
+            doc=u'''Triggered when the processing is complete. The kwargs
                                             passed when this signal is sent are "indexing_stats" and
                                             "stats", which hold an IndexingStats object and the
                                             report stats that will be entered into mongo,
-                                            respectively.''')
+                                            respectively.'''
+        )
         self.start = datetime.now()
 
     def index(self):
@@ -87,10 +107,23 @@ class Indexer(object):
             # create a partial of the index_signal's send function with the objects we have at
             # our disposal here, this saves us sending around a bunch of objects just so that
             # the tasks can fire the signal
-            partial_signal = functools.partial(self.index_signal.send, self, feeder=feeder,
-                                               index=index, indexing_stats=indexing_stats)
-            task = IndexingTask(feeder, index, partial_signal, indexing_stats, self.bulk_size,
-                                self.elasticsearch, self.check_batch_size, self.always_replace)
+            partial_signal = functools.partial(
+                self.index_signal.send,
+                self,
+                feeder=feeder,
+                index=index,
+                indexing_stats=indexing_stats,
+            )
+            task = IndexingTask(
+                feeder,
+                index,
+                partial_signal,
+                indexing_stats,
+                self.bulk_size,
+                self.elasticsearch,
+                self.check_batch_size,
+                self.always_replace,
+            )
             task.run()
 
         # update the status index
@@ -103,9 +136,11 @@ class Indexer(object):
 
     def get_stats(self, indexing_stats):
         """
-        Returns the statistics of a completed indexing in the form of a dict. The operations
-        parameter is expected to be a dict of the form {index_name -> {<op>: #, ...}} but can take
-        any form as long as it can be handled sensibly by any downstream functions.
+        Returns the statistics of a completed indexing in the form of a dict. The
+        operations parameter is expected to be a dict of the form {index_name -> {<op>:
+
+        #, ...}} but can take any form as long as it can be handled sensibly by any
+        downstream functions.
 
         :param indexing_stats: an IndexingStats object containing the various counters and stats
                                accumulators
@@ -125,14 +160,17 @@ class Indexer(object):
 
     def define_indexes(self):
         """
-        Run through the indexes, ensuring they exist and creating them if they don't. Elasticsearch
-        does create indexes automatically when they are first used but we want to set a custom
-        mapping so we need to manually create them first.
+        Run through the indexes, ensuring they exist and creating them if they don't.
+
+        Elasticsearch does create indexes automatically when they are first used but we
+        want to set a custom mapping so we need to manually create them first.
         """
         # use a set to ensure we don't try to create an index multiple times
         for index in set(self.indexes):
             if not self.elasticsearch.indices.exists(index.name):
-                self.elasticsearch.indices.create(index.name, body=index.get_index_create_body())
+                self.elasticsearch.indices.create(
+                    index.name, body=index.get_index_create_body()
+                )
 
     def update_statuses(self):
         """
@@ -143,30 +181,29 @@ class Indexer(object):
                 u'index': {
                     # this will always be a small index so no need to create a bunch of shards
                     u'number_of_shards': 1,
-                    u'number_of_replicas': 1
+                    u'number_of_replicas': 1,
                 }
             },
             u'mappings': {
                 DOC_TYPE: {
                     u'properties': {
-                        u'name': {
-                            u'type': u'keyword'
-                        },
-                        u'index_name': {
-                            u'type': u'keyword'
-                        },
+                        u'name': {u'type': u'keyword'},
+                        u'index_name': {u'type': u'keyword'},
                         u'latest_version': {
                             u'type': u'date',
-                            u'format': u'epoch_millis'
-                        }
+                            u'format': u'epoch_millis',
+                        },
                     }
                 }
-            }
+            },
         }
         # ensure the status index exists with the correct mapping
-        if not self.elasticsearch.indices.exists(self.config.elasticsearch_status_index_name):
-            self.elasticsearch.indices.create(self.config.elasticsearch_status_index_name,
-                                              body=index_definition)
+        if not self.elasticsearch.indices.exists(
+            self.config.elasticsearch_status_index_name
+        ):
+            self.elasticsearch.indices.create(
+                self.config.elasticsearch_status_index_name, body=index_definition
+            )
 
         if self.update_status:
             # use a set to avoid updating the status for an index multiple times
@@ -176,8 +213,12 @@ class Indexer(object):
                     u'index_name': index.name,
                     u'latest_version': self.version,
                 }
-                self.elasticsearch.index(self.config.elasticsearch_status_index_name, DOC_TYPE,
-                                         status_doc, id=index.name)
+                self.elasticsearch.index(
+                    self.config.elasticsearch_status_index_name,
+                    DOC_TYPE,
+                    status_doc,
+                    id=index.name,
+                )
 
 
 class IndexingTask:
@@ -185,8 +226,17 @@ class IndexingTask:
     A class that encapsulates the task of indexing a single index from a single feeder.
     """
 
-    def __init__(self, feeder, index, partial_signal, indexing_stats, bulk_size, elasticsearch,
-                 check_batch_size, always_replace):
+    def __init__(
+        self,
+        feeder,
+        index,
+        partial_signal,
+        indexing_stats,
+        bulk_size,
+        elasticsearch,
+        check_batch_size,
+        always_replace,
+    ):
         """
         :param feeder: the feeder object to get the mongo documents from
         :param index: the index object to get the index documents from
@@ -220,9 +270,9 @@ class IndexingTask:
 
     def is_clean_index(self):
         """
-        Check to see if the index contains any data currently or not, we can avoid looking up
-        existing documents in elasticsearch by checking this out before starting which saves a bunch
-        of processing time.
+        Check to see if the index contains any data currently or not, we can avoid
+        looking up existing documents in elasticsearch by checking this out before
+        starting which saves a bunch of processing time.
 
         :return: whether the index we're indexing into is empty or not
         """
@@ -230,10 +280,11 @@ class IndexingTask:
 
     def get_indexed_documents(self, mongo_docs, is_clean=False):
         """
-        Retrieve the indexed documents in elasticsearch for the given mongo docs. The documents are
-        found in one large terms query containing all the ids from the mongo docs and therefore the
-        number of documents passed through must not be enormous. The scroll API is used to retrieve
-        the results to avoid needing to set a size.
+        Retrieve the indexed documents in elasticsearch for the given mongo docs. The
+        documents are found in one large terms query containing all the ids from the
+        mongo docs and therefore the number of documents passed through must not be
+        enormous. The scroll API is used to retrieve the results to avoid needing to set
+        a size.
 
         :param mongo_docs: the mongo documents to get the indexed documents of (only the ids are
                            used)
@@ -245,8 +296,9 @@ class IndexingTask:
         indexed_docs = defaultdict(dict)
 
         if not is_clean:
-            search = Search(using=self.elasticsearch, index=self.index.name) \
-                .filter(u'terms', **{u'data._id': [int(m[u'id']) for m in mongo_docs]})
+            search = Search(using=self.elasticsearch, index=self.index.name).filter(
+                u'terms', **{u'data._id': [int(m[u'id']) for m in mongo_docs]}
+            )
 
             for hit in search.scan():
                 record_id, index_doc_number = hit.meta[u'id'].split(u'-')
@@ -257,11 +309,13 @@ class IndexingTask:
 
     def get_bulk_ops(self, record_id, to_index, indexed):
         """
-        Calculate and return tuples representing the bulk ops necessary to index the given record
-        id. Two lists of tuples are returned, the first is a list of deletion operations and the
-        second is a list of index operations. Both lists contain 2-tuples containing the index
-        document id (e.g. <record_id>-<index_doc_number>) and then the data. In the case of the
-        deletion operations this data is None whereas for index operations the data is a dict.
+        Calculate and return tuples representing the bulk ops necessary to index the
+        given record id. Two lists of tuples are returned, the first is a list of
+        deletion operations and the second is a list of index operations. Both lists
+        contain 2-tuples containing the index document id (e.g.
+
+        <record_id>-<index_doc_number>) and then the data. In the case of the deletion
+        operations this data is None whereas for index operations the data is a dict.
 
         :param record_id: the record's id, as a string
         :param to_index: a list of 2-tuples representing the documents that represent all the
@@ -297,19 +351,23 @@ class IndexingTask:
 
         # generate the list of deletion operations based on the handled set and return it along with
         # the index operations
-        return [(doc_id.format(i), None) for i in set(indexed.keys()) - handled], index_ops
+        return [
+            (doc_id.format(i), None) for i in set(indexed.keys()) - handled
+        ], index_ops
 
     def index_doc_iterator(self):
         """
-        Iterate over the mongo docs yielded by the feeder, generating and yielding tuples
-        representing the bulk operations required to index them.
+        Iterate over the mongo docs yielded by the feeder, generating and yielding
+        tuples representing the bulk operations required to index them.
 
         :return: a generator that yields 2-tuples of the index document's id and the index doc,
                  these are handled by our custom expand_for_index method
         """
         is_clean = self.is_clean_index()
 
-        for mongo_docs in chunk_iterator(self.feeder.documents(), self.check_batch_size):
+        for mongo_docs in chunk_iterator(
+            self.feeder.documents(), self.check_batch_size
+        ):
             # retrieve the currently indexed documents from elasticsearch for this batch
             indexed_docs = self.get_indexed_documents(mongo_docs, is_clean)
 
@@ -328,8 +386,14 @@ class IndexingTask:
                 # record
                 delete_ops, index_ops = self.get_bulk_ops(record_id, to_index, indexed)
 
-                indexed_record = IndexedRecord(record_id, mongo_doc, to_index, indexed,
-                                               len(index_ops), len(delete_ops))
+                indexed_record = IndexedRecord(
+                    record_id,
+                    mongo_doc,
+                    to_index,
+                    indexed,
+                    len(index_ops),
+                    len(delete_ops),
+                )
 
                 if index_ops or delete_ops:
                     # if there are bulk operations to do, add the IndexedRecord object to the
@@ -346,8 +410,8 @@ class IndexingTask:
 
     def expand_for_index(self, id_and_data):
         """
-        Expands the 2-tuple passed in and returns another 2-tuple of the action and data. This will
-        be used by the elasticsearch lib to create the bulk ops.
+        Expands the 2-tuple passed in and returns another 2-tuple of the action and
+        data. This will be used by the elasticsearch lib to create the bulk ops.
 
         :param id_and_data:
         :return: a 2-tuple containing the action dict and the data dict, both already serialised for
@@ -381,15 +445,17 @@ class IndexingTask:
 
             # we can ignore the success value as if there is a problem streaming_bulk will raise an
             # exception
-            for _success, info in streaming_bulk(client=self.elasticsearch,
-                                                 actions=self.index_doc_iterator(),
-                                                 expand_action_callback=self.expand_for_index,
-                                                 chunk_size=self.bulk_size,
-                                                 index=self.index.name,
-                                                 doc_type=DOC_TYPE,
-                                                 raise_on_error=True,
-                                                 raise_on_exception=True,
-                                                 max_retries=1):
+            for _success, info in streaming_bulk(
+                client=self.elasticsearch,
+                actions=self.index_doc_iterator(),
+                expand_action_callback=self.expand_for_index,
+                chunk_size=self.bulk_size,
+                index=self.index.name,
+                doc_type=DOC_TYPE,
+                raise_on_error=True,
+                raise_on_exception=True,
+                max_retries=1,
+            ):
                 # pull out the operation type and the details of the operation from the info
                 op_type, details = next(iter(info.items()))
                 # extract the id of the document we just modified
@@ -399,7 +465,9 @@ class IndexingTask:
 
                 # update the indexed record with the result and check if all the operations have
                 # been completed yet or not
-                done = indexed_record.update_with_result(op_type, details, int(index_doc_number))
+                done = indexed_record.update_with_result(
+                    op_type, details, int(index_doc_number)
+                )
                 # if we're not done, carry on until we are
                 if not done:
                     continue
@@ -416,7 +484,9 @@ class IndexingTask:
             # set the refresh interval back to the default
             update_refresh_interval(self.elasticsearch, [self.index], None)
             # update the number of replicas
-            update_number_of_replicas(self.elasticsearch, [self.index], self.index.replicas)
+            update_number_of_replicas(
+                self.elasticsearch, [self.index], self.index.replicas
+            )
 
 
 class IndexedRecord:
@@ -424,8 +494,15 @@ class IndexedRecord:
     Represents a record that is being indexed/has been indexed.
     """
 
-    def __init__(self, record_id, mongo_doc, index_documents, existing_documents, index_op_count,
-                 delete_op_count):
+    def __init__(
+        self,
+        record_id,
+        mongo_doc,
+        index_documents,
+        existing_documents,
+        index_op_count,
+        delete_op_count,
+    ):
         """
         :param record_id: the id of the record, as a string
         :param mongo_doc: the mongo doc for the record
@@ -453,8 +530,8 @@ class IndexedRecord:
 
     def update_with_result(self, op_type, details, index_document_number):
         """
-        Update the internal state with the new bulk action result. This result should either be an
-        index result or a delete result.
+        Update the internal state with the new bulk action result. This result should
+        either be an index result or a delete result.
 
         :param op_type: the bulk operation type, must be either index or delete or it will be
                         ignored
@@ -470,15 +547,18 @@ class IndexedRecord:
             self.index_results[index_document_number] = details
 
         # if all results are in, we're done
-        return (len(self.index_results) == self.index_op_count and
-                len(self.delete_results) == self.delete_op_count)
+        return (
+            len(self.index_results) == self.index_op_count
+            and len(self.delete_results) == self.delete_op_count
+        )
 
     @property
     def is_new(self):
         """
-        Whether this record is new to the index. To be "new" the first index document has to have
-        been created, not updated. Note that the concept of "new" here is dependant on the state of
-        the target index, e.g. if it's just been cleaned out everything will be new.
+        Whether this record is new to the index. To be "new" the first index document
+        has to have been created, not updated. Note that the concept of "new" here is
+        dependant on the state of the target index, e.g. if it's just been cleaned out
+        everything will be new.
 
         :return: True if this is the first time the record has appeared in the index, False if not
         """
@@ -487,10 +567,11 @@ class IndexedRecord:
     @property
     def last_index_document(self):
         """
-        Get the index document sent to elasticsearch for this record's last version. Note that this
-        may not be the current version of the data that is visible through elasticsearch if the
-        record has an embargo, a deletion or some other redaction prior to the current timestamp.
-        The return from this function can also be None if the record isn't indexed at all.
+        Get the index document sent to elasticsearch for this record's last version.
+        Note that this may not be the current version of the data that is visible
+        through elasticsearch if the record has an embargo, a deletion or some other
+        redaction prior to the current timestamp. The return from this function can also
+        be None if the record isn't indexed at all.
 
         :return: the index document for this record's last version or None if there is no current
                  version of the data in the index
@@ -508,8 +589,9 @@ class IndexedRecord:
 
 class IndexingStats:
     """
-    Class containing a series of stats variables. These all cover the entire indexing job, not
-    individual feeder/index combinations.
+    Class containing a series of stats variables.
+
+    These all cover the entire indexing job, not individual feeder/index combinations.
     """
 
     def __init__(self, document_total):

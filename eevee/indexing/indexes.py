@@ -36,19 +36,22 @@ class Index(object):
 
     def get_index_docs(self, mongo_doc):
         """
-        Yields all the index documents required for this mongo doc as a 2-tuples of the version and
-        the data dict, in version order.
+        Yields all the index documents required for this mongo doc as a 2-tuples of the
+        version and the data dict, in version order.
 
         :param mongo_doc: the mongo doc to handle
         :return: yields a 2-tuple of version and data dict for indexing
         """
         # iterate over the mongo_docs versions and send them to elasticsearch
-        for version, data, next_version in get_versions_and_data(mongo_doc, in_place=False):
+        for version, data, next_version in get_versions_and_data(
+            mongo_doc, in_place=False
+        ):
             yield version, self.create_index_document(data, version, next_version)
 
     def create_index_document(self, data, version, next_version):
         """
-        Creates the index dictionary for elasticsearch. This contains the actual data to be indexed.
+        Creates the index dictionary for elasticsearch. This contains the actual data to
+        be indexed.
 
         :param data: the data dict
         :param version: the version of the data
@@ -71,7 +74,8 @@ class Index(object):
 
     def create_metadata(self, version, next_version):
         """
-        Returns a dictionary of metadata to be stored in elasticsearch along with the data.
+        Returns a dictionary of metadata to be stored in elasticsearch along with the
+        data.
 
         :param version: the version of the data
         :param next_version: the next version of the data
@@ -90,7 +94,8 @@ class Index(object):
 
     def get_index_create_body(self):
         """
-        Returns a dict which will be passed to elasticsearch when the index is initialised.
+        Returns a dict which will be passed to elasticsearch when the index is
+        initialised.
 
         :return: a dict
         """
@@ -101,39 +106,32 @@ class Index(object):
                         u'lowercase_normalizer': {
                             u'type': u'custom',
                             u'char_filter': [],
-                            u'filter': [u'lowercase']
+                            u'filter': [u'lowercase'],
                         }
                     }
                 },
                 u'index': {
                     u'number_of_shards': self.shards,
                     u'number_of_replicas': self.replicas,
-                }
+                },
             },
             u'mappings': {
                 DOC_TYPE: {
                     u'properties': {
                         u'meta.versions': {
                             u'type': u'date_range',
-                            u'format': u'epoch_millis'
+                            u'format': u'epoch_millis',
                         },
-                        u'meta.version': {
-                            u'type': u'date',
-                            u'format': u'epoch_millis'
-                        },
+                        u'meta.version': {u'type': u'date', u'format': u'epoch_millis'},
                         u'meta.next_version': {
                             u'type': u'date',
-                            u'format': u'epoch_millis'
+                            u'format': u'epoch_millis',
                         },
                         # the values of each field will be copied into this field easy querying
-                        u'meta.all': {
-                            u'type': u'text'
-                        },
+                        u'meta.all': {u'type': u'text'},
                         # a geo point meta field. This is defined here but not filled in by eevee
                         # and therefore must be populated by subclassing the index process
-                        u'meta.geo': {
-                            u'type': u'geo_point'
-                        },
+                        u'meta.geo': {u'type': u'geo_point'},
                     },
                     u'dynamic_templates': [
                         {
@@ -165,15 +163,15 @@ class Index(object):
                                             u'type': u'double',
                                             # values that don't work as number should be ignored
                                             u'ignore_malformed': True,
-                                        }
+                                        },
                                     },
                                     u'copy_to': u'meta.all',
-                                }
+                                },
                             }
                         }
-                    ]
+                    ],
                 }
-            }
+            },
         }
 
     def __eq__(self, other):

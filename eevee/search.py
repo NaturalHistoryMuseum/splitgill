@@ -11,9 +11,9 @@ from eevee.indexing.utils import get_elasticsearch_client
 
 def create_version_query(version):
     """
-    Creates the elasticsearch-dsl term necessary to find the correct data from some searched
-    records given a version. You probably want to use the result of this function in a filter, for
-    example, to find all the records at a given version.
+    Creates the elasticsearch-dsl term necessary to find the correct data from some
+    searched records given a version. You probably want to use the result of this
+    function in a filter, for example, to find all the records at a given version.
 
     :param version: the requested version
     :return: an elasticsearch-dsl Query object
@@ -23,8 +23,10 @@ def create_version_query(version):
 
 def create_index_specific_version_filter(indexes_and_versions):
     """
-    Creates the elasticsearch-dsl Bool object necessary to query the given indexes at the given
-    specific versions. If there are multiple indexes that require the same version then a terms
+    Creates the elasticsearch-dsl Bool object necessary to query the given indexes at
+    the given specific versions. If there are multiple indexes that require the same
+    version then a terms.
+
     query will be created covering the group rather than several term queries for each index - this
     is probably no different in terms of performance but it does keep the size of the query down
     when large numbers of indexes are queried. If all indexes require the same version then a single
@@ -48,17 +50,24 @@ def create_index_specific_version_filter(indexes_and_versions):
             version_filter = create_version_query(version)
             if len(indexes) == 1:
                 # there's only one index requiring this version so use a term query
-                filters.append(Bool(filter=[Q(u'term', _index=indexes[0]), version_filter]))
+                filters.append(
+                    Bool(filter=[Q(u'term', _index=indexes[0]), version_filter])
+                )
             else:
                 # there are a few indexes using this version, query them using terms as a group
-                filters.append(Bool(filter=[Q(u'terms', _index=indexes), version_filter]))
+                filters.append(
+                    Bool(filter=[Q(u'terms', _index=indexes), version_filter])
+                )
         return Bool(should=filters, minimum_should_match=1)
 
 
 class SearchHelper(object):
     """
-    Class providing a set of helper functions for elasticsearch indexes created using eevee. This
-    class is threadsafe and therefore a single, global instance is the recommended way to use it.
+    Class providing a set of helper functions for elasticsearch indexes created using
+    eevee.
+
+    This class is threadsafe and therefore a single, global instance is the recommended
+    way to use it.
     """
 
     def __init__(self, config, client=None):
@@ -70,18 +79,22 @@ class SearchHelper(object):
         """
         self.config = config
         if client is None:
-            self.client = get_elasticsearch_client(self.config, sniff_on_start=True,
-                                                   sniff_on_connection_fail=True,
-                                                   sniffer_timeout=60, sniff_timeout=10,
-                                                   http_compress=False)
+            self.client = get_elasticsearch_client(
+                self.config,
+                sniff_on_start=True,
+                sniff_on_connection_fail=True,
+                sniffer_timeout=60,
+                sniff_timeout=10,
+                http_compress=False,
+            )
         else:
             self.client = client
 
     def get_latest_index_versions(self, indexes=None):
         """
-        Returns the current indexes and their latest versions as a dict. If the indexes parameter is
-        None then the details for all indexes are returned, if not then only the indexes that match
-        the names passed in the list are returned.
+        Returns the current indexes and their latest versions as a dict. If the indexes
+        parameter is None then the details for all indexes are returned, if not then
+        only the indexes that match the names passed in the list are returned.
 
         The index names passed should all be prefixed. The prefixed names will be returned in the
         dict returned too.
@@ -93,34 +106,41 @@ class SearchHelper(object):
         if not self.client.indices.exists(self.config.elasticsearch_status_index_name):
             return {}
 
-        search = Search(using=self.client, index=self.config.elasticsearch_status_index_name)
+        search = Search(
+            using=self.client, index=self.config.elasticsearch_status_index_name
+        )
         if indexes is not None:
             search = search.filter(
-                Q(u'bool',
-                  should=[Q(u'term', index_name=index) for index in indexes],
-                  minimum_should_match=1))
+                Q(
+                    u'bool',
+                    should=[Q(u'term', index_name=index) for index in indexes],
+                    minimum_should_match=1,
+                )
+            )
         return {hit.index_name: hit.latest_version for hit in search.scan()}
 
     def get_record_versions(self, index, record_id):
         """
-        Given the id of a record, returns all the available versions of that record in the given
-        index. The versions are timestamps represented by milliseconds since the UNIX epoch. They
-        are returned as a list in ascending order.
+        Given the id of a record, returns all the available versions of that record in
+        the given index. The versions are timestamps represented by milliseconds since
+        the UNIX epoch. They are returned as a list in ascending order.
 
         :param index: the prefixed index name
         :param record_id: the record id
         :return: a list of sorted versions available for the given record
         """
-        search = Search(using=self.client, index=index) \
-            .query(u'term', **{u'data._id': record_id}) \
+        search = (
+            Search(using=self.client, index=index)
+            .query(u'term', **{u'data._id': record_id})
             .source([u'meta.version'])
+        )
         return sorted(hit[u'meta'][u'version'] for hit in search.scan())
 
     def get_index_versions(self, index, search=None):
         """
-        Given an index, return a list of the versions available for that index. These will be
-        provided in ascending order. If the search argument is provided then the versions returned
-        will be limited to the versions covered by the search.
+        Given an index, return a list of the versions available for that index. These
+        will be provided in ascending order. If the search argument is provided then the
+        versions returned will be limited to the versions covered by the search.
 
         :param index: the prefixed index name
         :param search: a Search object, optional
@@ -153,8 +173,12 @@ class SearchHelper(object):
         # [0:0] ensures we don't waste time by getting hits back
         search = search.using(self.client).index(index)[0:0]
         # create an aggregation to count the number of records in the index at each version
-        search.aggs.bucket(u'versions', u'composite', size=1000,
-                           sources={u'version': A(u'terms', field=u'meta.version', order=u'asc')})
+        search.aggs.bucket(
+            u'versions',
+            u'composite',
+            size=1000,
+            sources={u'version': A(u'terms', field=u'meta.version', order=u'asc')},
+        )
         while True:
             # run the search and get the result, ignore_cache makes sure that calling execute gives
             # us back new data from the backend. We need this because we just sneakily change the
@@ -163,10 +187,12 @@ class SearchHelper(object):
 
             # iterate over the results
             for bucket in result[u'buckets']:
-                versions.append({
-                    u'version': bucket[u'key'][u'version'],
-                    u'changes': bucket[u'doc_count']
-                })
+                versions.append(
+                    {
+                        u'version': bucket[u'key'][u'version'],
+                        u'changes': bucket[u'doc_count'],
+                    }
+                )
 
             # retrieve the after key for pagination if there is one
             after_key = result.get(u'after_key', None)
@@ -181,9 +207,9 @@ class SearchHelper(object):
 
     def get_rounded_versions(self, indexes, target_version):
         """
-        Given a list of indexes, work out their individual rounded versions based on the target
-        version, i.e. round the target version down to the lowest, nearest version of each index's
-        data.
+        Given a list of indexes, work out their individual rounded versions based on the
+        target version, i.e. round the target version down to the lowest, nearest
+        version of each index's data.
 
         If the target version is lower than the oldest version of an index then the target version
         will be assigned to the index in returned dict.

@@ -12,7 +12,6 @@ from eevee.indexing.utils import DOC_TYPE
 
 
 class TestIndexingStats(object):
-
     def test_state(self):
         stats = IndexingStats(1029)
         # check the starting conditions for the stats variables
@@ -32,18 +31,17 @@ class TestIndexingStats(object):
         indexed_record = MagicMock(
             index_op_count=3,
             delete_op_count=1,
-            stats={
-                u'updated': 4,
-                u'created': 1,
-                u'deleted': 1
-            },
-            get_versions=MagicMock(return_value={1290, 10000, 18}))
+            stats={u'updated': 4, u'created': 1, u'deleted': 1},
+            get_versions=MagicMock(return_value={1290, 10000, 18}),
+        )
         stats.update(index_name, indexed_record)
         assert stats.document_total == 1029
         assert stats.document_count == 1
         assert stats.indexed_count == 3
         assert stats.deleted_count == 1
-        assert stats.op_stats == {index_name: {u'updated': 4, u'created': 1, u'deleted': 1}}
+        assert stats.op_stats == {
+            index_name: {u'updated': 4, u'created': 1, u'deleted': 1}
+        }
         assert stats.seen_versions == {1290, 10000, 18}
 
         # create another mock IndexedRecord object and update the stats with it. Note that this one
@@ -51,19 +49,34 @@ class TestIndexingStats(object):
         indexed_record2 = MagicMock(
             index_op_count=10,
             delete_op_count=0,
-            stats={
-                u'updated': 1,
-                u'created': 9,
-                u'deleted': 0
-            },
-            get_versions=MagicMock(return_value={23, 24, 25, 26, 27, 28, 29, 30, 31, 32}))
+            stats={u'updated': 1, u'created': 9, u'deleted': 0},
+            get_versions=MagicMock(
+                return_value={23, 24, 25, 26, 27, 28, 29, 30, 31, 32}
+            ),
+        )
         stats.update(index_name, indexed_record2)
         assert stats.document_total == 1029
         assert stats.document_count == 2
         assert stats.indexed_count == 13
         assert stats.deleted_count == 1
-        assert stats.op_stats == {index_name: {u'updated': 5, u'created': 10, u'deleted': 1}}
-        assert stats.seen_versions == {1290, 10000, 18, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32}
+        assert stats.op_stats == {
+            index_name: {u'updated': 5, u'created': 10, u'deleted': 1}
+        }
+        assert stats.seen_versions == {
+            1290,
+            10000,
+            18,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+        }
 
         # update the stats with the first IndexedRecord object again, but this time it's going into
         # a different index
@@ -74,9 +87,23 @@ class TestIndexingStats(object):
         assert stats.deleted_count == 2
         assert stats.op_stats == {
             index_name: {u'updated': 5, u'created': 10, u'deleted': 1},
-            index_name2: {u'updated': 4, u'created': 1, u'deleted': 1}
+            index_name2: {u'updated': 4, u'created': 1, u'deleted': 1},
         }
-        assert stats.seen_versions == {1290, 10000, 18, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32}
+        assert stats.seen_versions == {
+            1290,
+            10000,
+            18,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+        }
 
     def test_update_no_stats(self):
         stats = IndexingStats(1029)
@@ -86,7 +113,8 @@ class TestIndexingStats(object):
             index_op_count=0,
             delete_op_count=0,
             stats=Counter(),
-            get_versions=MagicMock(return_value=set()))
+            get_versions=MagicMock(return_value=set()),
+        )
         stats.update(index_name, indexed_record)
         assert stats.document_total == 1029
         assert stats.document_count == 1
@@ -97,9 +125,10 @@ class TestIndexingStats(object):
 
 
 class TestIndexedRecord(object):
-
     def test_update_with_result(self):
-        indexed_record = IndexedRecord(MagicMock(), MagicMock(), MagicMock(), MagicMock(), 3, 2)
+        indexed_record = IndexedRecord(
+            MagicMock(), MagicMock(), MagicMock(), MagicMock(), 3, 2
+        )
 
         returns = [
             indexed_record.update_with_result(u'delete', dict(result=u'deleted'), 5),
@@ -116,15 +145,24 @@ class TestIndexedRecord(object):
         assert indexed_record.stats == {u'deleted': 2, u'created': 2, u'updated': 1}
 
     def test_update_with_result_ignores_other_bulk_results(self):
-        indexed_record = IndexedRecord(MagicMock(), MagicMock(), MagicMock(), MagicMock(), 1, 0)
-        done = indexed_record.update_with_result(u'some other op', dict(result=u'something'),
-                                                 MagicMock())
+        indexed_record = IndexedRecord(
+            MagicMock(), MagicMock(), MagicMock(), MagicMock(), 1, 0
+        )
+        done = indexed_record.update_with_result(
+            u'some other op', dict(result=u'something'), MagicMock()
+        )
         assert not done
         assert indexed_record.stats == {u'something': 1}
 
     def test_is_new(self):
-        indexed_record = IndexedRecord(MagicMock(), MagicMock(), MagicMock(),
-                                       {u'0': MagicMock(), u'1': MagicMock()}, 0, 0)
+        indexed_record = IndexedRecord(
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            {u'0': MagicMock(), u'1': MagicMock()},
+            0,
+            0,
+        )
         assert not indexed_record.is_new
 
         indexed_record = IndexedRecord(MagicMock(), MagicMock(), MagicMock(), {}, 0, 0)
@@ -134,47 +172,83 @@ class TestIndexedRecord(object):
         to_index = [
             (MagicMock(), MagicMock()),
             (MagicMock(), MagicMock()),
-            (MagicMock(), MagicMock())
+            (MagicMock(), MagicMock()),
         ]
-        indexed_record = IndexedRecord(MagicMock(), MagicMock(), to_index, MagicMock(), 0, 0)
+        indexed_record = IndexedRecord(
+            MagicMock(), MagicMock(), to_index, MagicMock(), 0, 0
+        )
         assert indexed_record.last_index_document == to_index[-1][1]
 
     def test_get_versions(self):
         to_index = [
             (MagicMock(), MagicMock()),
             (MagicMock(), MagicMock()),
-            (MagicMock(), MagicMock())
+            (MagicMock(), MagicMock()),
         ]
-        indexed_record = IndexedRecord(MagicMock(), MagicMock(), to_index, MagicMock(), 0, 0)
-        assert indexed_record.get_versions() == (to_index[0][0], to_index[1][0], to_index[2][0])
+        indexed_record = IndexedRecord(
+            MagicMock(), MagicMock(), to_index, MagicMock(), 0, 0
+        )
+        assert indexed_record.get_versions() == (
+            to_index[0][0],
+            to_index[1][0],
+            to_index[2][0],
+        )
 
 
 class TestIndexingTask(object):
-
-    def _create_indexing_task(self, feeder=None, index=None, partial_signal=None,
-                              indexing_stats=None, bulk_size=2000, elasticsearch=None,
-                              check_batch_size=1000, always_replace=False):
+    def _create_indexing_task(
+        self,
+        feeder=None,
+        index=None,
+        partial_signal=None,
+        indexing_stats=None,
+        bulk_size=2000,
+        elasticsearch=None,
+        check_batch_size=1000,
+        always_replace=False,
+    ):
         feeder = feeder if feeder is not None else MagicMock()
         index = index if index is not None else MagicMock()
         partial_signal = partial_signal if partial_signal is not None else MagicMock()
         indexing_stats = indexing_stats if indexing_stats is not None else MagicMock()
         elasticsearch = elasticsearch if elasticsearch is not None else MagicMock()
-        return IndexingTask(feeder, index, partial_signal, indexing_stats, bulk_size=bulk_size,
-                            elasticsearch=elasticsearch, check_batch_size=check_batch_size,
-                            always_replace=always_replace)
+        return IndexingTask(
+            feeder,
+            index,
+            partial_signal,
+            indexing_stats,
+            bulk_size=bulk_size,
+            elasticsearch=elasticsearch,
+            check_batch_size=check_batch_size,
+            always_replace=always_replace,
+        )
 
     def test_get_indexed_documents_clean(self):
         task = self._create_indexing_task()
-        assert task.get_indexed_documents(MagicMock(), is_clean=True) == defaultdict(dict)
+        assert task.get_indexed_documents(MagicMock(), is_clean=True) == defaultdict(
+            dict
+        )
 
     def test_get_indexed_documents_hit_processing(self, monkeypatch):
-        scan_mock = MagicMock(return_value=[
-            MagicMock(meta=dict(id=u'123-0'), to_dict=MagicMock(return_value=dict(a=1))),
-            MagicMock(meta=dict(id=u'789-5'), to_dict=MagicMock(return_value=dict(a=2))),
-            MagicMock(meta=dict(id=u'123-2'), to_dict=MagicMock(return_value=dict(a=3))),
-            MagicMock(meta=dict(id=u'456-0'), to_dict=MagicMock(return_value=dict(a=4))),
-            MagicMock(meta=dict(id=u'123-5'), to_dict=MagicMock(return_value=dict(a=5))),
-        ])
+        scan_mock = MagicMock(
+            return_value=[
+                MagicMock(
+                    meta=dict(id=u'123-0'), to_dict=MagicMock(return_value=dict(a=1))
+                ),
+                MagicMock(
+                    meta=dict(id=u'789-5'), to_dict=MagicMock(return_value=dict(a=2))
+                ),
+                MagicMock(
+                    meta=dict(id=u'123-2'), to_dict=MagicMock(return_value=dict(a=3))
+                ),
+                MagicMock(
+                    meta=dict(id=u'456-0'), to_dict=MagicMock(return_value=dict(a=4))
+                ),
+                MagicMock(
+                    meta=dict(id=u'123-5'), to_dict=MagicMock(return_value=dict(a=5))
+                ),
+            ]
+        )
         monkeypatch.setattr(u'eevee.indexing.indexers.Search.scan', scan_mock)
 
         task = self._create_indexing_task()
@@ -208,14 +282,18 @@ class TestIndexingTask(object):
         search_mock = MagicMock(return_value=MagicMock(filter=filter_mock))
         monkeypatch.setattr(u'eevee.indexing.indexers.Search', search_mock)
 
-        task = self._create_indexing_task(elasticsearch=elasticsearch_mock, index=index_mock)
+        task = self._create_indexing_task(
+            elasticsearch=elasticsearch_mock, index=index_mock
+        )
         # the ids as integers
         ids = list(range(10))
         # mock up a list of mongo docs, all we need is the id, each should be a string though
         task.get_indexed_documents([dict(id=str(i)) for i in ids], is_clean=False)
 
         # check the constructor args
-        assert search_mock.call_args_list == [call(using=elasticsearch_mock, index=name_mock)]
+        assert search_mock.call_args_list == [
+            call(using=elasticsearch_mock, index=name_mock)
+        ]
         # check filter is called with a terms query plus the ids as integers
         assert filter_mock.call_args_list == [call(u'terms', **{u'data._id': ids})]
 
@@ -230,8 +308,9 @@ class TestIndexingTask(object):
     def test_bulk_ops_empty_to_index_some_indexed(self):
         for always_replace in [False, True]:
             task = self._create_indexing_task(always_replace=always_replace)
-            deleted_ops, indexed_ops = task.get_bulk_ops(u'123', [], {u'3': MagicMock(),
-                                                                      u'0': MagicMock()})
+            deleted_ops, indexed_ops = task.get_bulk_ops(
+                u'123', [], {u'3': MagicMock(), u'0': MagicMock()}
+            )
 
             # sort to ensure our check isn't broken by order changing
             assert sorted(deleted_ops) == sorted([(u'123-3', None), (u'123-0', None)])
@@ -240,8 +319,9 @@ class TestIndexingTask(object):
     def test_bulk_ops_some_to_index_empty_indexed(self):
         for always_replace in [True, False]:
             task = self._create_indexing_task(always_replace=always_replace)
-            deleted_ops, indexed_ops = task.get_bulk_ops(u'123', [(100, dict(a=1)),
-                                                                  (800, dict(a=4))], {})
+            deleted_ops, indexed_ops = task.get_bulk_ops(
+                u'123', [(100, dict(a=1)), (800, dict(a=4))], {}
+            )
 
             assert deleted_ops == []
             assert indexed_ops == [(u'123-0', dict(a=1)), (u'123-1', dict(a=4))]
@@ -306,23 +386,33 @@ class TestIndexingTask(object):
         search_mock = MagicMock(return_value=MagicMock(count=MagicMock(return_value=0)))
         monkeypatch.setattr(u'eevee.indexing.indexers.Search', search_mock)
 
-        task = self._create_indexing_task(index=index_mock, elasticsearch=elasticsearch_mock)
+        task = self._create_indexing_task(
+            index=index_mock, elasticsearch=elasticsearch_mock
+        )
         assert task.is_clean_index()
         # check the constructor args
-        assert search_mock.call_args_list == [call(using=elasticsearch_mock, index=name_mock)]
+        assert search_mock.call_args_list == [
+            call(using=elasticsearch_mock, index=name_mock)
+        ]
 
     def test_is_clean_index_and_it_is_not_clean(self, monkeypatch):
         name_mock = MagicMock()
         index_mock = MagicMock()
         index_mock.configure_mock(name=name_mock)
         elasticsearch_mock = MagicMock()
-        search_mock = MagicMock(return_value=MagicMock(count=MagicMock(return_value=1234567)))
+        search_mock = MagicMock(
+            return_value=MagicMock(count=MagicMock(return_value=1234567))
+        )
         monkeypatch.setattr(u'eevee.indexing.indexers.Search', search_mock)
 
-        task = self._create_indexing_task(index=index_mock, elasticsearch=elasticsearch_mock)
+        task = self._create_indexing_task(
+            index=index_mock, elasticsearch=elasticsearch_mock
+        )
         assert not task.is_clean_index()
         # check the constructor args
-        assert search_mock.call_args_list == [call(using=elasticsearch_mock, index=name_mock)]
+        assert search_mock.call_args_list == [
+            call(using=elasticsearch_mock, index=name_mock)
+        ]
 
     def test_index_doc_iterator_is_generator(self):
         task = self._create_indexing_task()
@@ -348,12 +438,15 @@ class TestIndexingTask(object):
         feeder = MagicMock(documents=MagicMock(return_value=mongo_docs))
         partial_signal = MagicMock()
         indexing_stats = create_autospec(IndexingStats)
-        task = self._create_indexing_task(feeder=feeder, partial_signal=partial_signal,
-                                          indexing_stats=indexing_stats)
+        task = self._create_indexing_task(
+            feeder=feeder, partial_signal=partial_signal, indexing_stats=indexing_stats
+        )
 
         task.is_clean_index = create_autospec(task.is_clean_index)
         task.get_indexed_documents = create_autospec(task.get_indexed_documents)
-        task.get_bulk_ops = create_autospec(task.get_bulk_ops, return_value=(delete_ops, index_ops))
+        task.get_bulk_ops = create_autospec(
+            task.get_bulk_ops, return_value=(delete_ops, index_ops)
+        )
 
         ops = list(task.index_doc_iterator())
         assert ops == []
@@ -373,12 +466,15 @@ class TestIndexingTask(object):
         feeder = MagicMock(documents=MagicMock(return_value=mongo_docs))
         partial_signal = MagicMock()
         indexing_stats = create_autospec(IndexingStats)
-        task = self._create_indexing_task(feeder=feeder, partial_signal=partial_signal,
-                                          indexing_stats=indexing_stats)
+        task = self._create_indexing_task(
+            feeder=feeder, partial_signal=partial_signal, indexing_stats=indexing_stats
+        )
 
         task.is_clean_index = create_autospec(task.is_clean_index)
         task.get_indexed_documents = create_autospec(task.get_indexed_documents)
-        task.get_bulk_ops = create_autospec(task.get_bulk_ops, return_value=(delete_ops, index_ops))
+        task.get_bulk_ops = create_autospec(
+            task.get_bulk_ops, return_value=(delete_ops, index_ops)
+        )
 
         ops = list(task.index_doc_iterator())
         assert len(ops) == len(mongo_docs) * (len(delete_ops) + len(index_ops))
@@ -411,11 +507,17 @@ class TestIndexingTask(object):
         update_refresh_interval_mock = MagicMock()
         update_number_of_replicas_mock = MagicMock()
         streaming_bulk_mock = MagicMock()
-        monkeypatch.setattr(u'eevee.indexing.indexers.update_refresh_interval',
-                            update_refresh_interval_mock)
-        monkeypatch.setattr(u'eevee.indexing.indexers.update_number_of_replicas',
-                            update_number_of_replicas_mock)
-        monkeypatch.setattr(u'eevee.indexing.indexers.streaming_bulk', streaming_bulk_mock)
+        monkeypatch.setattr(
+            u'eevee.indexing.indexers.update_refresh_interval',
+            update_refresh_interval_mock,
+        )
+        monkeypatch.setattr(
+            u'eevee.indexing.indexers.update_number_of_replicas',
+            update_number_of_replicas_mock,
+        )
+        monkeypatch.setattr(
+            u'eevee.indexing.indexers.streaming_bulk', streaming_bulk_mock
+        )
 
         task = self._create_indexing_task()
 
@@ -426,22 +528,28 @@ class TestIndexingTask(object):
 
         assert update_refresh_interval_mock.call_args_list == [
             call(task.elasticsearch, [task.index], -1),
-            call(task.elasticsearch, [task.index], None)
+            call(task.elasticsearch, [task.index], None),
         ]
         assert update_number_of_replicas_mock.call_args_list == [
             call(task.elasticsearch, [task.index], 0),
-            call(task.elasticsearch, [task.index], task.index.replicas)
+            call(task.elasticsearch, [task.index], task.index.replicas),
         ]
 
     def test_run_updates_index_settings_not_clean(self, monkeypatch):
         update_refresh_interval_mock = MagicMock()
         update_number_of_replicas_mock = MagicMock()
         streaming_bulk_mock = MagicMock()
-        monkeypatch.setattr(u'eevee.indexing.indexers.update_refresh_interval',
-                            update_refresh_interval_mock)
-        monkeypatch.setattr(u'eevee.indexing.indexers.update_number_of_replicas',
-                            update_number_of_replicas_mock)
-        monkeypatch.setattr(u'eevee.indexing.indexers.streaming_bulk', streaming_bulk_mock)
+        monkeypatch.setattr(
+            u'eevee.indexing.indexers.update_refresh_interval',
+            update_refresh_interval_mock,
+        )
+        monkeypatch.setattr(
+            u'eevee.indexing.indexers.update_number_of_replicas',
+            update_number_of_replicas_mock,
+        )
+        monkeypatch.setattr(
+            u'eevee.indexing.indexers.streaming_bulk', streaming_bulk_mock
+        )
 
         task = self._create_indexing_task()
 
@@ -452,21 +560,29 @@ class TestIndexingTask(object):
 
         assert update_refresh_interval_mock.call_args_list == [
             call(task.elasticsearch, [task.index], u'30s'),
-            call(task.elasticsearch, [task.index], None)
+            call(task.elasticsearch, [task.index], None),
         ]
         assert update_number_of_replicas_mock.call_args_list == [
             call(task.elasticsearch, [task.index], task.index.replicas)
         ]
 
-    def test_run_updates_index_settings_even_when_theres_an_exception(self, monkeypatch):
+    def test_run_updates_index_settings_even_when_theres_an_exception(
+        self, monkeypatch
+    ):
         update_refresh_interval_mock = MagicMock()
         update_number_of_replicas_mock = MagicMock()
         streaming_bulk_mock = MagicMock(side_effect=Exception(u'woops!'))
-        monkeypatch.setattr(u'eevee.indexing.indexers.update_refresh_interval',
-                            update_refresh_interval_mock)
-        monkeypatch.setattr(u'eevee.indexing.indexers.update_number_of_replicas',
-                            update_number_of_replicas_mock)
-        monkeypatch.setattr(u'eevee.indexing.indexers.streaming_bulk', streaming_bulk_mock)
+        monkeypatch.setattr(
+            u'eevee.indexing.indexers.update_refresh_interval',
+            update_refresh_interval_mock,
+        )
+        monkeypatch.setattr(
+            u'eevee.indexing.indexers.update_number_of_replicas',
+            update_number_of_replicas_mock,
+        )
+        monkeypatch.setattr(
+            u'eevee.indexing.indexers.streaming_bulk', streaming_bulk_mock
+        )
 
         task = self._create_indexing_task()
 
@@ -476,11 +592,11 @@ class TestIndexingTask(object):
             task.run()
         assert update_refresh_interval_mock.call_args_list == [
             call(task.elasticsearch, [task.index], -1),
-            call(task.elasticsearch, [task.index], None)
+            call(task.elasticsearch, [task.index], None),
         ]
         assert update_number_of_replicas_mock.call_args_list == [
             call(task.elasticsearch, [task.index], 0),
-            call(task.elasticsearch, [task.index], task.index.replicas)
+            call(task.elasticsearch, [task.index], task.index.replicas),
         ]
 
     def test_run(self, monkeypatch):
@@ -489,21 +605,30 @@ class TestIndexingTask(object):
             (MagicMock(), dict(index=dict(_id=u'123-1', result=u'created'))),
             (MagicMock(), dict(index=dict(_id=u'123-0', result=u'updated'))),
         ]
-        indexed_record = MagicMock(update_with_result=MagicMock(side_effect=[False, False, True]))
+        indexed_record = MagicMock(
+            update_with_result=MagicMock(side_effect=[False, False, True])
+        )
 
         update_refresh_interval_mock = MagicMock()
         update_number_of_replicas_mock = MagicMock()
         streaming_bulk_mock = MagicMock(return_value=bulk_results)
-        monkeypatch.setattr(u'eevee.indexing.indexers.update_refresh_interval',
-                            update_refresh_interval_mock)
-        monkeypatch.setattr(u'eevee.indexing.indexers.update_number_of_replicas',
-                            update_number_of_replicas_mock)
-        monkeypatch.setattr(u'eevee.indexing.indexers.streaming_bulk', streaming_bulk_mock)
+        monkeypatch.setattr(
+            u'eevee.indexing.indexers.update_refresh_interval',
+            update_refresh_interval_mock,
+        )
+        monkeypatch.setattr(
+            u'eevee.indexing.indexers.update_number_of_replicas',
+            update_number_of_replicas_mock,
+        )
+        monkeypatch.setattr(
+            u'eevee.indexing.indexers.streaming_bulk', streaming_bulk_mock
+        )
 
         partial_signal = MagicMock()
         indexing_stats = create_autospec(IndexingStats)
-        task = self._create_indexing_task(partial_signal=partial_signal,
-                                          indexing_stats=indexing_stats)
+        task = self._create_indexing_task(
+            partial_signal=partial_signal, indexing_stats=indexing_stats
+        )
         task.indexed_records = {
             u'123': indexed_record,
         }
@@ -519,17 +644,21 @@ class TestIndexingTask(object):
         assert len(task.indexed_records) == 0
 
         assert indexed_record.update_with_result.call_count == len(bulk_results)
-        for update_call, (_version, info) in zip(indexed_record.update_with_result.call_args_list,
-                                                 bulk_results):
+        for update_call, (_version, info) in zip(
+            indexed_record.update_with_result.call_args_list, bulk_results
+        ):
             op_type, details = next(iter(info.items()))
-            assert update_call == call(op_type, details, int(details[u'_id'].split(u'-')[1]))
+            assert update_call == call(
+                op_type, details, int(details[u'_id'].split(u'-')[1])
+            )
 
 
 class TestIndexer(object):
-
     @mock.patch(u'eevee.indexing.indexers.get_elasticsearch_client')
-    @mock.patch(u'eevee.indexing.indexers.datetime', now=MagicMock(
-        side_effect=[datetime(2019, 1, 1), datetime(2019, 1, 2)]))
+    @mock.patch(
+        u'eevee.indexing.indexers.datetime',
+        now=MagicMock(side_effect=[datetime(2019, 1, 1), datetime(2019, 1, 2)]),
+    )
     def test_get_stats(self, elasticsearch_mock, datetime_mock):
         version = 32904324234
         feeders_and_indexes = [
@@ -542,8 +671,9 @@ class TestIndexer(object):
         feeders_and_indexes[2][1].configure_mock(name=u'some-index')
 
         indexer = Indexer(version, MagicMock(), feeders_and_indexes)
-        indexing_stats = create_autospec(IndexingStats, seen_versions={390234, 324, 1000},
-                                         op_stats=MagicMock())
+        indexing_stats = create_autospec(
+            IndexingStats, seen_versions={390234, 324, 1000}, op_stats=MagicMock()
+        )
 
         stats = indexer.get_stats(indexing_stats)
 
@@ -559,9 +689,12 @@ class TestIndexer(object):
 
     def test_define_indexes(self, monkeypatch):
         elasticsearch_mock = MagicMock(
-            indices=MagicMock(exists=MagicMock(side_effect=lambda n: n == u'index3')))
-        monkeypatch.setattr(u'eevee.indexing.indexers.get_elasticsearch_client',
-                            MagicMock(return_value=elasticsearch_mock))
+            indices=MagicMock(exists=MagicMock(side_effect=lambda n: n == u'index3'))
+        )
+        monkeypatch.setattr(
+            u'eevee.indexing.indexers.get_elasticsearch_client',
+            MagicMock(return_value=elasticsearch_mock),
+        )
 
         index1 = MagicMock()
         index1.configure_mock(name=u'index1')
@@ -584,13 +717,19 @@ class TestIndexer(object):
             assert call(index_name) in elasticsearch_mock.indices.exists.call_args_list
         assert elasticsearch_mock.indices.create.call_count == 2
         for index in [index1, index2]:
-            assert call(index.name,
-                        body=index.get_index_create_body()) in elasticsearch_mock.indices.create.call_args_list
+            assert (
+                call(index.name, body=index.get_index_create_body())
+                in elasticsearch_mock.indices.create.call_args_list
+            )
 
     def test_update_statuses_no_update(self, monkeypatch):
-        elasticsearch_mock = MagicMock(indices=MagicMock(exists=MagicMock(return_value=False)))
-        monkeypatch.setattr(u'eevee.indexing.indexers.get_elasticsearch_client',
-                            MagicMock(return_value=elasticsearch_mock))
+        elasticsearch_mock = MagicMock(
+            indices=MagicMock(exists=MagicMock(return_value=False))
+        )
+        monkeypatch.setattr(
+            u'eevee.indexing.indexers.get_elasticsearch_client',
+            MagicMock(return_value=elasticsearch_mock),
+        )
 
         index1 = MagicMock()
         index1.configure_mock(name=u'index1')
@@ -609,28 +748,26 @@ class TestIndexer(object):
                 u'index': {
                     # this will always be a small index so no need to create a bunch of shards
                     u'number_of_shards': 1,
-                    u'number_of_replicas': 1
+                    u'number_of_replicas': 1,
                 }
             },
             u'mappings': {
                 DOC_TYPE: {
                     u'properties': {
-                        u'name': {
-                            u'type': u'keyword'
-                        },
-                        u'index_name': {
-                            u'type': u'keyword'
-                        },
+                        u'name': {u'type': u'keyword'},
+                        u'index_name': {u'type': u'keyword'},
                         u'latest_version': {
                             u'type': u'date',
-                            u'format': u'epoch_millis'
-                        }
+                            u'format': u'epoch_millis',
+                        },
                     }
                 }
-            }
+            },
         }
 
-        indexer = Indexer(MagicMock(), MagicMock(), feeders_and_indexes, update_status=False)
+        indexer = Indexer(
+            MagicMock(), MagicMock(), feeders_and_indexes, update_status=False
+        )
 
         indexer.update_statuses()
 
@@ -643,9 +780,13 @@ class TestIndexer(object):
         assert not elasticsearch_mock.index.called
 
     def test_update_statuses_with_update(self, monkeypatch):
-        elasticsearch_mock = MagicMock(indices=MagicMock(exists=MagicMock(return_value=False)))
-        monkeypatch.setattr(u'eevee.indexing.indexers.get_elasticsearch_client',
-                            MagicMock(return_value=elasticsearch_mock))
+        elasticsearch_mock = MagicMock(
+            indices=MagicMock(exists=MagicMock(return_value=False))
+        )
+        monkeypatch.setattr(
+            u'eevee.indexing.indexers.get_elasticsearch_client',
+            MagicMock(return_value=elasticsearch_mock),
+        )
         index1 = MagicMock()
         index1.configure_mock(name=u'index1', unprefixed_name=u'unprefixed1')
         index2 = MagicMock()
@@ -663,25 +804,21 @@ class TestIndexer(object):
                 u'index': {
                     # this will always be a small index so no need to create a bunch of shards
                     u'number_of_shards': 1,
-                    u'number_of_replicas': 1
+                    u'number_of_replicas': 1,
                 }
             },
             u'mappings': {
                 DOC_TYPE: {
                     u'properties': {
-                        u'name': {
-                            u'type': u'keyword'
-                        },
-                        u'index_name': {
-                            u'type': u'keyword'
-                        },
+                        u'name': {u'type': u'keyword'},
+                        u'index_name': {u'type': u'keyword'},
                         u'latest_version': {
                             u'type': u'date',
-                            u'format': u'epoch_millis'
-                        }
+                            u'format': u'epoch_millis',
+                        },
                     }
                 }
-            }
+            },
         }
         version = 2093423
         indexer = Indexer(version, MagicMock(), feeders_and_indexes, update_status=True)
@@ -696,15 +833,28 @@ class TestIndexer(object):
         ]
         assert elasticsearch_mock.index.call_count == 3
         for index in [index1, index2, index3]:
-            assert call(indexer.config.elasticsearch_status_index_name, DOC_TYPE,
-                        dict(name=index.unprefixed_name, index_name=index.name,
-                             latest_version=version),
-                        id=index.name) in elasticsearch_mock.index.call_args_list
+            assert (
+                call(
+                    indexer.config.elasticsearch_status_index_name,
+                    DOC_TYPE,
+                    dict(
+                        name=index.unprefixed_name,
+                        index_name=index.name,
+                        latest_version=version,
+                    ),
+                    id=index.name,
+                )
+                in elasticsearch_mock.index.call_args_list
+            )
 
     def test_index(self, monkeypatch):
-        monkeypatch.setattr(u'eevee.indexing.indexers.get_elasticsearch_client', MagicMock())
+        monkeypatch.setattr(
+            u'eevee.indexing.indexers.get_elasticsearch_client', MagicMock()
+        )
         indexing_stats_mock = MagicMock()
-        indexing_stats = create_autospec(IndexingStats, return_value=indexing_stats_mock)
+        indexing_stats = create_autospec(
+            IndexingStats, return_value=indexing_stats_mock
+        )
         monkeypatch.setattr(u'eevee.indexing.indexers.IndexingStats', indexing_stats)
         indexing_task_mock = create_autospec(IndexingTask)
         monkeypatch.setattr(u'eevee.indexing.indexers.IndexingTask', indexing_task_mock)
@@ -735,9 +885,19 @@ class TestIndexer(object):
         assert indexing_task_mock.call_count == len(feeders_and_indexes)
         for feeder, index in feeders_and_indexes:
             assert feeder.total.called
-            assert call(feeder, index, mock.ANY, indexing_stats_mock, indexer.bulk_size,
-                        indexer.elasticsearch, indexer.check_batch_size,
-                        indexer.always_replace) in indexing_task_mock.call_args_list
+            assert (
+                call(
+                    feeder,
+                    index,
+                    mock.ANY,
+                    indexing_stats_mock,
+                    indexer.bulk_size,
+                    indexer.elasticsearch,
+                    indexer.check_batch_size,
+                    indexer.always_replace,
+                )
+                in indexing_task_mock.call_args_list
+            )
         assert indexer.update_statuses.call_count == 1
         assert indexer.get_stats.call_args_list == [call(indexing_stats_mock)]
         assert indexer.finish_signal.send.call_args_list == [

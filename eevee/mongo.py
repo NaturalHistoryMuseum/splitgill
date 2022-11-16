@@ -11,9 +11,9 @@ from eevee.utils import OpBuffer
 @contextmanager
 def get_mongo(config, database=None, collection=None):
     """
-    Context manager allowing safe opening and closing of a mongo client and convenient access to the
-    client, a database or a collection. The yielded value is different depending on the parameters
-    provided, specifically:
+    Context manager allowing safe opening and closing of a mongo client and convenient
+    access to the client, a database or a collection. The yielded value is different
+    depending on the parameters provided, specifically:
 
         - get_mongo(config) will yield the client itself
         - get_mongo(config, database='someDatabase') will yield the database requested
@@ -40,8 +40,8 @@ def get_mongo(config, database=None, collection=None):
 
 class MongoOpBuffer(OpBuffer):
     """
-    Wrapper around the OpBuffer which when handling the ops added simply passes them to mongo's
-    bulk_write function.
+    Wrapper around the OpBuffer which when handling the ops added simply passes them to
+    mongo's bulk_write function.
     """
 
     def __init__(self, config, mongo_context, size=1000):

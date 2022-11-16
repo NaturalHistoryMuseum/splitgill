@@ -6,7 +6,8 @@ from eevee.diffing import DICT_DIFFER_DIFFER, SHALLOW_DIFFER, format_diff
 
 class RecordToMongoConverter(object):
     """
-    This class provides functions to convert a record into a document to be inserted into mongo.
+    This class provides functions to convert a record into a document to be inserted
+    into mongo.
     """
 
     def __init__(self, version, ingestion_time, differs=None):
@@ -31,9 +32,9 @@ class RecordToMongoConverter(object):
     def ingestion_time(self):
         """
         Returns the ingestion time datetime object which will be attached to all records
-        create/modified by this converter. This allows easy understanding of which records were
-        modified at the same time (or at least another way of finding this out aside from the
-        versions).
+        create/modified by this converter. This allows easy understanding of which
+        records were modified at the same time (or at least another way of finding this
+        out aside from the versions).
 
         :return: a datetime object
         """
@@ -41,9 +42,9 @@ class RecordToMongoConverter(object):
 
     def diff_data(self, existing_data, new_data):
         """
-        Diffs the two data dicts, returning a 3-tuple where the first element indicates whether a
-        change has occurred, the second element is the differ object chosen to do the diff and the
-        third object is the resulting diff.
+        Diffs the two data dicts, returning a 3-tuple where the first element indicates
+        whether a change has occurred, the second element is the differ object chosen to
+        do the diff and the third object is the resulting diff.
 
         :param existing_data: the data as it was
         :param new_data: the data as it is now
@@ -58,8 +59,8 @@ class RecordToMongoConverter(object):
 
     def for_insert(self, record):
         """
-        Returns the dictionary that should be inserted into mongo to add the record's information to
-        the collection.
+        Returns the dictionary that should be inserted into mongo to add the record's
+        information to the collection.
 
         :param record:  the record
         :return: a dict
@@ -100,8 +101,8 @@ class RecordToMongoConverter(object):
 
     def for_update(self, record, mongo_doc):
         """
-        Returns a dict to update the mongo representation of the given record with the new record
-        version.
+        Returns a dict to update the mongo representation of the given record with the
+        new record version.
 
         :param record:      the record
         :param mongo_doc:   the existing mongo document
@@ -115,17 +116,21 @@ class RecordToMongoConverter(object):
         converted_record = record.convert()
 
         # generate a diff of the new record against the existing version in mongo
-        should_update, differ, diff = self.diff_data(mongo_doc[u'data'], converted_record)
+        should_update, differ, diff = self.diff_data(
+            mongo_doc[u'data'], converted_record
+        )
         if should_update:
             # set some new values
-            sets.update({
-                u'data': converted_record,
-                u'latest_version': self.version,
-                u'last_ingested': self.ingestion_time,
-                u'diffs.{}'.format(self.version): format_diff(differ, diff),
-                # allow modification of the metadata dict
-                u'metadata': record.modify_metadata(mongo_doc[u'metadata']),
-            })
+            sets.update(
+                {
+                    u'data': converted_record,
+                    u'latest_version': self.version,
+                    u'last_ingested': self.ingestion_time,
+                    u'diffs.{}'.format(self.version): format_diff(differ, diff),
+                    # allow modification of the metadata dict
+                    u'metadata': record.modify_metadata(mongo_doc[u'metadata']),
+                }
+            )
             # add the new version to the versions array, ensuring there are no duplicates
             add_to_sets.update({u'versions': self.version})
 

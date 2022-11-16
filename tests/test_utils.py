@@ -72,23 +72,40 @@ def test_to_timestamp():
     utc = UTC()
 
     # check that dates are treated as utc
-    assert to_timestamp(datetime.strptime(u'19700101', u'%Y%m%d').replace(tzinfo=utc)) == 0
+    assert (
+        to_timestamp(datetime.strptime(u'19700101', u'%Y%m%d').replace(tzinfo=utc)) == 0
+    )
     # check a later date too
-    assert to_timestamp(
-        datetime.strptime(u'20180713', u'%Y%m%d').replace(tzinfo=utc)) == 1531440000000
+    assert (
+        to_timestamp(datetime.strptime(u'20180713', u'%Y%m%d').replace(tzinfo=utc))
+        == 1531440000000
+    )
 
 
 def test_iter_pairs():
     # check the default final_partner is None
     assert list(iter_pairs([1, 2, 3, 4])) == [(1, 2), (2, 3), (3, 4), (4, None)]
     # check simple scenario
-    assert list(iter_pairs([1, 2, 3, 4], u'final')) == [(1, 2), (2, 3), (3, 4), (4, u'final')]
+    assert list(iter_pairs([1, 2, 3, 4], u'final')) == [
+        (1, 2),
+        (2, 3),
+        (3, 4),
+        (4, u'final'),
+    ]
     # check empty iterator
     assert list(iter_pairs([], u'final')) == []
     # check scenario when final partner is itself a sequence
     assert list(iter_pairs([1, 2, 3], (1, 2))) == [(1, 2), (2, 3), (3, (1, 2))]
     # check when everything is None
-    assert list(iter_pairs([None, None, None], u'final')) == [(None, None), (None, None),
-                                                              (None, u'final')]
+    assert list(iter_pairs([None, None, None], u'final')) == [
+        (None, None),
+        (None, None),
+        (None, u'final'),
+    ]
     # check that it can handle iterators too
-    assert list(iter_pairs(range(0, 4), u'final')) == [(0, 1), (1, 2), (2, 3), (3, u'final')]
+    assert list(iter_pairs(range(0, 4), u'final')) == [
+        (0, 1),
+        (1, 2),
+        (2, 3),
+        (3, u'final'),
+    ]

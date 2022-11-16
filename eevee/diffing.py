@@ -51,9 +51,9 @@ class Differ(object):
     @abc.abstractmethod
     def diff(self, old, new, ignore=None):
         """
-        Produce a diff that when provided to the patch function can modify the old data state to the
-        new data state. If ignore is provided then the keys within it will be ignored during the
-        diff.
+        Produce a diff that when provided to the patch function can modify the old data
+        state to the new data state. If ignore is provided then the keys within it will
+        be ignored during the diff.
 
         :param old: the old data
         :param new: the new data
@@ -65,10 +65,10 @@ class Differ(object):
     @abc.abstractmethod
     def patch(self, diff_result, old, in_place=False):
         """
-        Given the return from the diff function and some data, apply the diff to patch the old data.
-        If the in_place parameter is True then the patch will be applied in place and the old data
-        passed in will be returned. If in_place is False (the default) then the old data is copied
-        before applying the patch.
+        Given the return from the diff function and some data, apply the diff to patch
+        the old data. If the in_place parameter is True then the patch will be applied
+        in place and the old data passed in will be returned. If in_place is False (the
+        default) then the old data is copied before applying the patch.
 
         :param diff_result: the diff to apply
         :param old: the old data
@@ -80,7 +80,9 @@ class Differ(object):
 
 class DictDifferDiffer(Differ):
     """
-    A Differ that uses the dictdiffer lib to diff the dicts. The ID used for this differ is 'dd'.
+    A Differ that uses the dictdiffer lib to diff the dicts.
+
+    The ID used for this differ is 'dd'.
     """
 
     def __init__(self):
@@ -97,9 +99,9 @@ class DictDifferDiffer(Differ):
 
     def diff(self, old, new, ignore=None):
         """
-        Diffs the two data dicts using dictdiffer and returns the diff as a list. The ignore
-        parameter is passed straight through to dictdiffer.diff so refer to that doc for information
-        on how it should be provided.
+        Diffs the two data dicts using dictdiffer and returns the diff as a list. The
+        ignore parameter is passed straight through to dictdiffer.diff so refer to that
+        doc for information on how it should be provided.
 
         :param old: the old data
         :param new: the new data
@@ -110,11 +112,12 @@ class DictDifferDiffer(Differ):
 
     def patch(self, diff_result, old, in_place=False):
         """
-        Given a dictdiffer diff result and some data, apply the diff to patch the old data.
-        If the in_place parameter is True then the patch will be applied in place and the old data
-        passed in will be returned. If in_place is False (the default) then the old data is copied
-        before applying the patch. The copy is done using marshall rather than copy.deepcopy (as it
-        is in the dictdiffer lib) as it is the fastest way to copy an object.
+        Given a dictdiffer diff result and some data, apply the diff to patch the old
+        data. If the in_place parameter is True then the patch will be applied in place
+        and the old data passed in will be returned. If in_place is False (the default)
+        then the old data is copied before applying the patch. The copy is done using
+        marshall rather than copy.deepcopy (as it is in the dictdiffer lib) as it is the
+        fastest way to copy an object.
 
         :param diff_result: the diff to apply
         :param old: the old data
@@ -129,9 +132,10 @@ class DictDifferDiffer(Differ):
 
 class ShallowDiffer(Differ):
     """
-    A Differ that only works on dicts that don't have nested dicts. Assuming this allows it to use
-    dict.update to patch the old data dict to the new which is really quick! The ID used for this
-    differ is 'sd'.
+    A Differ that only works on dicts that don't have nested dicts.
+
+    Assuming this allows it to use dict.update to patch the old data dict to the new
+    which is really quick! The ID used for this differ is 'sd'.
     """
 
     def __init__(self):
@@ -184,8 +188,9 @@ class ShallowDiffer(Differ):
 
     def patch(self, diff_result, old, in_place=False):
         """
-        Given a diff result from this differs diff function and some data, apply the diff to patch
-        the old data using the dict.update function and `del` to remove the removed keys.
+        Given a diff result from this differs diff function and some data, apply the
+        diff to patch the old data using the dict.update function and `del` to remove
+        the removed keys.
 
         If the in_place parameter is True then the patch will be applied in place and the old data
         passed in will be returned. If in_place is False (the default) then the old data is copied

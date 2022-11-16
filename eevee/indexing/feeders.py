@@ -33,8 +33,10 @@ class IndexFeeder(object):
     @abc.abstractmethod
     def total(self):
         """
-        Returns the total number of documents that will be indexed if the documents generator is
-        exhausted. This method will always be called before the `documents` method and is purely
+        Returns the total number of documents that will be indexed if the documents
+        generator is exhausted.
+
+        This method will always be called before the `documents` method and is purely
         used for monitoring purposes (currently!).
         """
         pass
@@ -42,8 +44,8 @@ class IndexFeeder(object):
 
 class SimpleIndexFeeder(IndexFeeder):
     """
-    Simple index feeder class which uses a a lower and upper version to filter which documents get
-    indexed.
+    Simple index feeder class which uses a a lower and upper version to filter which
+    documents get indexed.
     """
 
     def __init__(self, config, mongo_collection, lower_version, upper_version):
@@ -63,7 +65,8 @@ class SimpleIndexFeeder(IndexFeeder):
 
     def documents(self):
         """
-        Iterates over the collection using the filter condition and yields each document in turn.
+        Iterates over the collection using the filter condition and yields each document
+        in turn.
         """
         with get_mongo(self.config, collection=self.mongo_collection) as mongo:
             for document in mongo.find(self.condition):

@@ -11,10 +11,10 @@ DOC_TYPE = u'_doc'
 
 def get_versions_and_data(mongo_doc, future_next_version=float(u'inf'), in_place=False):
     """
-    Returns a generator which will yield, in order, the version, data and next version from the
-    given record as a 3=tuple in that order. The next version is provided for convenience. The last
-    version will be yielded with its data and the value of the future_next_version parameter which
-    defaults to +infinity.
+    Returns a generator which will yield, in order, the version, data and next version
+    from the given record as a 3=tuple in that order. The next version is provided for
+    convenience. The last version will be yielded with its data and the value of the
+    future_next_version parameter which defaults to +infinity.
 
     The data yielded points to the same data variable held internally between iterations and
     therefore cannot be modified in case this causes a diff failure. If you need to modify the data
@@ -32,8 +32,10 @@ def get_versions_and_data(mongo_doc, future_next_version=float(u'inf'), in_place
     # is the starting point assumed by the ingestion code when creating a records first diff
     data = {}
     # iterate over the versions
-    for version, next_version in iter_pairs(sorted(int(version) for version in mongo_doc[u'diffs']),
-                                            final_partner=future_next_version):
+    for version, next_version in iter_pairs(
+        sorted(int(version) for version in mongo_doc[u'diffs']),
+        final_partner=future_next_version,
+    ):
         # retrieve the diff for the version
         raw_diff = mongo_doc[u'diffs'][str(version)]
         # extract the differ used and the diff object itself
@@ -46,9 +48,9 @@ def get_versions_and_data(mongo_doc, future_next_version=float(u'inf'), in_place
 
 def get_elasticsearch_client(config, **kwargs):
     """
-    Returns an elasticsearch client created using the hosts attribute of the passed config object.
-    All kwargs are passed on to the elasticsearch client constructor to allow for more precise
-    control over the client object.
+    Returns an elasticsearch client created using the hosts attribute of the passed
+    config object. All kwargs are passed on to the elasticsearch client constructor to
+    allow for more precise control over the client object.
 
     :param config: the config object
     :param kwargs: kwargs for the elasticsearch client constructor
@@ -59,7 +61,8 @@ def get_elasticsearch_client(config, **kwargs):
 
 def delete_index(config, index, **kwargs):
     """
-    Deletes the specified index, any aliases for it and the status entry for it if there is one.
+    Deletes the specified index, any aliases for it and the status entry for it if there
+    is one.
 
     :param config: the config object
     :param index: the index to remove
@@ -89,31 +92,39 @@ def delete_index(config, index, **kwargs):
 
 def update_refresh_interval(elasticsearch, indexes, refresh_interval):
     """
-    Updates the refresh interval for the given indexes to the given value using the given client.
+    Updates the refresh interval for the given indexes to the given value using the
+    given client.
 
     :param elasticsearch: the elasticsearch client object to connect to the cluster with
     :param indexes: the indexes to update (this should be an iterable of Index objects)
     :param refresh_interval: the refresh interval value to update the indexes with
     """
     for index in set(indexes):
-        elasticsearch.indices.put_settings({
-            u'index': {
-                u'refresh_interval': refresh_interval,
-            }
-        }, index.name)
+        elasticsearch.indices.put_settings(
+            {
+                u'index': {
+                    u'refresh_interval': refresh_interval,
+                }
+            },
+            index.name,
+        )
 
 
 def update_number_of_replicas(elasticsearch, indexes, number):
     """
-    Updates the number of replicas for the given indexes to the given value using the given client.
+    Updates the number of replicas for the given indexes to the given value using the
+    given client.
 
     :param elasticsearch: the elasticsearch client object to connect to the cluster with
     :param indexes: the indexes to update (this should be an iterable of Index objects)
     :param number: the number of replicas
     """
     for index in set(indexes):
-        elasticsearch.indices.put_settings({
-            u'index': {
-                u'number_of_replicas': number,
-            }
-        }, index.name)
+        elasticsearch.indices.put_settings(
+            {
+                u'index': {
+                    u'number_of_replicas': number,
+                }
+            },
+            index.name,
+        )

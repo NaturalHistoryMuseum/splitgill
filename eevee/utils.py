@@ -11,8 +11,9 @@ from six.moves import zip
 
 def chunk_iterator(iterable, chunk_size=1000):
     """
-    Iterates over an iterable, yielding lists of size chunk_size until the iterable is exhausted.
-    The final list could be smaller than chunk_size but will always have a length > 0.
+    Iterates over an iterable, yielding lists of size chunk_size until the iterable is
+    exhausted. The final list could be smaller than chunk_size but will always have a
+    length > 0.
 
     :param iterable: the iterable to chunk up
     :param chunk_size: the maximum size of each yielded chunk
@@ -29,15 +30,15 @@ def chunk_iterator(iterable, chunk_size=1000):
 
 def to_timestamp(moment):
     """
-    Converts a datetime into a timestamp value. The timestamp returned is an int. The timestamp
-    value is the number of milliseconds that have elapsed between the UNIX epoch and the given
-    moment.
+    Converts a datetime into a timestamp value. The timestamp returned is an int. The
+    timestamp value is the number of milliseconds that have elapsed between the UNIX
+    epoch and the given moment.
 
     :param moment: a datetime object
     :return: the timestamp (number of milliseconds between the UNIX epoch and the moment) as an int
     """
     if six.PY2:
-        ts = (calendar.timegm(moment.timetuple()) + moment.microsecond / 1000000.0)
+        ts = calendar.timegm(moment.timetuple()) + moment.microsecond / 1000000.0
     else:
         ts = moment.timestamp()
     # multiply by 1000 to get the time in milliseconds and use int to remove any decimal places
@@ -46,9 +47,9 @@ def to_timestamp(moment):
 
 def iter_pairs(iterable, final_partner=None):
     """
-    Produces a generator that iterates over the iterable provided, yielding a tuple of consecutive
-    items. When the final item in the iterable is reached, it is yielded with the final partner
-    parameter. For example, printing the result of:
+    Produces a generator that iterates over the iterable provided, yielding a tuple of
+    consecutive items. When the final item in the iterable is reached, it is yielded
+    with the final partner parameter. For example, printing the result of:
 
         iter_pairs([1,2,3,4])
 
@@ -71,8 +72,8 @@ def iter_pairs(iterable, final_partner=None):
 @six.add_metaclass(abc.ABCMeta)
 class OpBuffer(object):
     """
-    Convenience class and context manager which allows buffering operations and then handling them
-    in bulk.
+    Convenience class and context manager which allows buffering operations and then
+    handling them in bulk.
     """
 
     def __init__(self, size):
@@ -118,8 +119,9 @@ class OpBuffer(object):
     @abc.abstractmethod
     def handle_ops(self):
         """
-        Handles the ops in the buffer currently. There is no need to clear the buffer in the
-        implementing subclass.
+        Handles the ops in the buffer currently.
+
+        There is no need to clear the buffer in the implementing subclass.
         """
         pass
 
