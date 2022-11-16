@@ -17,7 +17,7 @@ theme:
   favicon: assets/logo.png
 
 watch:
-  - ckanext
+  - eevee
 
 plugins:
   - search
