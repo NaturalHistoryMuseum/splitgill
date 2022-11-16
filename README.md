@@ -4,6 +4,7 @@
 [![Coveralls](https://img.shields.io/coveralls/github/NaturalHistoryMuseum/eevee/master?style=flat-square)](https://coveralls.io/github/NaturalHistoryMuseum/eevee)
 [![Python version](https://img.shields.io/badge/python-2.7%20%7C%203.7-blue?style=flat-square)](https://www.python.org/downloads)
 [![Docs](https://img.shields.io/readthedocs/eevee?style=flat-square)](https://eevee.readthedocs.io)
+<!--header-end-->
 
 A library providing base classes with the functionality to create, update and query versioned data. Uses MongoDB and Elasticsearch.
 
