@@ -12,6 +12,11 @@
 splitgill is a library providing base classes with the functionality to create, update and query versioned data. Uses MongoDB and Elasticsearch.
 
 Note that this library is relatively stable but is still quite new and could still be significantly altered.
+
+### Split-gill mushroom
+
+The split-gill mushroom is a fungus with a [very high level of genetic diversity](https://doi.org/10.1093/molbev/msv153) (a lot of _versions_, you could say).
+
 <!--overview-end-->
 
 ## Installation
