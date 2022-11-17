@@ -3,7 +3,7 @@
 
 [![Tests](https://img.shields.io/github/workflow/status/NaturalHistoryMuseum/splitgill/Tests?style=flat-square)](https://github.com/NaturalHistoryMuseum/splitgill/actions/workflows/main.yml)
 [![Coveralls](https://img.shields.io/coveralls/github/NaturalHistoryMuseum/splitgill/master?style=flat-square)](https://coveralls.io/github/NaturalHistoryMuseum/splitgill)
-[![Python version](https://img.shields.io/badge/python-2.7%20%7C%203.7-blue?style=flat-square)](https://www.python.org/downloads)
+[![Python version](https://img.shields.io/badge/python-2.7%20%7C%203.7%20%7C%203.8%20%7C%203.9-blue?style=flat-square)](https://www.python.org/downloads)
 [![Docs](https://img.shields.io/readthedocs/splitgill?style=flat-square)](https://splitgill.readthedocs.io)
 <!--header-end-->
 
