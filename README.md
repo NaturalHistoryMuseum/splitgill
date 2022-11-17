@@ -21,7 +21,12 @@ The split-gill mushroom is a fungus with a [very high level of genetic diversity
 
 ## Installation
 <!--installation-start-->
-Currently, splitgill can only be installed from Github:
+splitgill can be installed from PyPI:
+```shell
+pip install splitgill
+```
+
+Or from Github:
 ```shell
 pip install git+git://github.com/NaturalHistoryMuseum/splitgill.git#egg=splitgill
 ```
