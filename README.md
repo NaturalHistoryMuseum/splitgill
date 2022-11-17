@@ -1,3 +1,4 @@
+<!--header-start-->
 # Eevee
 
 [![Tests](https://img.shields.io/github/workflow/status/NaturalHistoryMuseum/eevee/Tests?style=flat-square)](https://github.com/NaturalHistoryMuseum/eevee/actions/workflows/main.yml)
@@ -6,15 +7,26 @@
 [![Docs](https://img.shields.io/readthedocs/eevee?style=flat-square)](https://eevee.readthedocs.io)
 <!--header-end-->
 
-A library providing base classes with the functionality to create, update and query versioned data. Uses MongoDB and Elasticsearch.
+## Overview
+<!--overview-start-->
+Eevee is a library providing base classes with the functionality to create, update and query versioned data. Uses MongoDB and Elasticsearch.
 
 Note that this library is relatively stable but is still quite new and could still be significantly altered.
-A stable version 1.0 will be released soon!
+<!--overview-end-->
 
-### Running the tests
+## Installation
+<!--installation-start-->
+Currently, Eevee can only be installed from Github:
+```shell
+pip install git+git://github.com/NaturalHistoryMuseum/eevee.git#egg=eevee
+```
+<!--installation-end-->
 
+## Tests
+<!--tests-start-->
 Make sure you've installed the test requirements into your virtualenv - `pip install .[test]`, then:
 
  - To run the tests against all python versions this library is compatible with, run `tox`
  - To run the tests against the python version installed in your virtualenv, run `pytest`
  - To run the tests against the python version installed in your virtualenv and get a coverage report too, run `pytest --cov=eevee`
+<!--tests-end-->
