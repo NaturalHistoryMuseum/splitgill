@@ -9,13 +9,28 @@ version_files = [
 ]
 
 [tool.commitizen.customize]
-bump_pattern = "^(break|feat|fix|new|patch)"
-bump_map = { "break" = "MAJOR", "feat" = "MINOR", "fix" = "PATCH", "new" = "MINOR", "patch" = "PATCH" }
+bump_pattern = "^(BREAKING|feat|fix|refactor|perf|new|patch)"
+bump_map = { "BREAKING" = "MAJOR", "feat" = "MINOR", "fix" = "PATCH", "refactor" = "PATCH", "perf" = "PATCH", "new" = "MINOR", "patch" = "PATCH" }
+change_type_order = ["BREAKING CHANGE", "feat", "fix", "refactor", "perf"]
+commit_parser = "^(?P<change_type>feat|fix|refactor|perf|docs|style|test|build|ci|chore|BREAKING CHANGE)(?:\\((?P<scope>[^)\r\n]+)\\))?: (?P<message>[^\n]+)"
 message_template = """{{ prefix }}{% if scope %}({{ scope }}){% endif %}: {{ subject }} \
 {% if body or is_breaking_change %}\n\n{% endif %} \
-{% if is_breaking_change %}BREAKING CHANGE: {% endif %} \
+{% if is_breaking_change %}BREAKING CHANGE: {{subject}}\n\n{% endif %} \
 {% if body %}{{ body }}{% endif %} \
 {% if footer %}\n\nCloses: {{ footer }}{% endif %}"""
+
+[tool.commitizen.customize.change_type_map]
+feat = "Feature"
+fix = "Fix"
+refactor = "Refactor"
+perf = "Performance"
+docs = "Docs"
+style = "Style"
+test = "Tests"
+build = "Build"
+ci = "CI"
+chore = "Misc"
+"BREAKING CHANGE" = "Breaking changes"
 
 [[tool.commitizen.customize.questions]]
 type = "list"
