@@ -3,11 +3,10 @@
 
 from mock import MagicMock, call
 
-from eevee.ingestion.feeders import IngestionFeeder
+from splitgill.ingestion.feeders import IngestionFeeder
 
 
 class ExampleFeederForTests(IngestionFeeder):
-
     def __init__(self, version, test_records):
         super(ExampleFeederForTests, self).__init__(version)
         self.test_records = test_records
@@ -40,7 +39,7 @@ def test_feeder_signals():
         call(feeder, number=1, record=u'1'),
         call(feeder, number=2, record=u'beans'),
         call(feeder, number=3, record=u'a'),
-        call(feeder, number=4, record=u'00000000')
+        call(feeder, number=4, record=u'00000000'),
     ]
 
 

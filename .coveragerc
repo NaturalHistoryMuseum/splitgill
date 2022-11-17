@@ -1,5 +1,5 @@
 [run]
-include=eevee/*
+include=splitgill/*
 
 [report]
 omit=
