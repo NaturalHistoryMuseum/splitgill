@@ -6,7 +6,7 @@ from collections import defaultdict
 from elasticsearch_dsl import Search, Q, A
 from elasticsearch_dsl.query import Bool
 
-from eevee.indexing.utils import get_elasticsearch_client
+from splitgill.indexing.utils import get_elasticsearch_client
 
 
 def create_version_query(version):
@@ -64,7 +64,7 @@ def create_index_specific_version_filter(indexes_and_versions):
 class SearchHelper(object):
     """
     Class providing a set of helper functions for elasticsearch indexes created using
-    eevee.
+    splitgill.
 
     This class is threadsafe and therefore a single, global instance is the recommended
     way to use it.

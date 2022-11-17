@@ -7,8 +7,13 @@ import pytest
 import ujson
 from mock import MagicMock, call, create_autospec
 
-from eevee.indexing.indexers import IndexingStats, IndexedRecord, IndexingTask, Indexer
-from eevee.indexing.utils import DOC_TYPE
+from splitgill.indexing.indexers import (
+    IndexingStats,
+    IndexedRecord,
+    IndexingTask,
+    Indexer,
+)
+from splitgill.indexing.utils import DOC_TYPE
 
 
 class TestIndexingStats(object):
@@ -249,7 +254,7 @@ class TestIndexingTask(object):
                 ),
             ]
         )
-        monkeypatch.setattr(u'eevee.indexing.indexers.Search.scan', scan_mock)
+        monkeypatch.setattr(u'splitgill.indexing.indexers.Search.scan', scan_mock)
 
         task = self._create_indexing_task()
         indexed = task.get_indexed_documents(MagicMock(), is_clean=False)
@@ -264,7 +269,7 @@ class TestIndexingTask(object):
 
     def test_get_indexed_documents_no_hit_processing(self, monkeypatch):
         scan_mock = MagicMock(return_value=[])
-        monkeypatch.setattr(u'eevee.indexing.indexers.Search.scan', scan_mock)
+        monkeypatch.setattr(u'splitgill.indexing.indexers.Search.scan', scan_mock)
 
         task = self._create_indexing_task()
         indexed = task.get_indexed_documents(MagicMock(), is_clean=False)
@@ -280,7 +285,7 @@ class TestIndexingTask(object):
         scan_mock = MagicMock(return_value=[])
         filter_mock = MagicMock(return_value=MagicMock(scan=scan_mock))
         search_mock = MagicMock(return_value=MagicMock(filter=filter_mock))
-        monkeypatch.setattr(u'eevee.indexing.indexers.Search', search_mock)
+        monkeypatch.setattr(u'splitgill.indexing.indexers.Search', search_mock)
 
         task = self._create_indexing_task(
             elasticsearch=elasticsearch_mock, index=index_mock
@@ -384,7 +389,7 @@ class TestIndexingTask(object):
         index_mock.configure_mock(name=name_mock)
         elasticsearch_mock = MagicMock()
         search_mock = MagicMock(return_value=MagicMock(count=MagicMock(return_value=0)))
-        monkeypatch.setattr(u'eevee.indexing.indexers.Search', search_mock)
+        monkeypatch.setattr(u'splitgill.indexing.indexers.Search', search_mock)
 
         task = self._create_indexing_task(
             index=index_mock, elasticsearch=elasticsearch_mock
@@ -403,7 +408,7 @@ class TestIndexingTask(object):
         search_mock = MagicMock(
             return_value=MagicMock(count=MagicMock(return_value=1234567))
         )
-        monkeypatch.setattr(u'eevee.indexing.indexers.Search', search_mock)
+        monkeypatch.setattr(u'splitgill.indexing.indexers.Search', search_mock)
 
         task = self._create_indexing_task(
             index=index_mock, elasticsearch=elasticsearch_mock
@@ -508,15 +513,15 @@ class TestIndexingTask(object):
         update_number_of_replicas_mock = MagicMock()
         streaming_bulk_mock = MagicMock()
         monkeypatch.setattr(
-            u'eevee.indexing.indexers.update_refresh_interval',
+            u'splitgill.indexing.indexers.update_refresh_interval',
             update_refresh_interval_mock,
         )
         monkeypatch.setattr(
-            u'eevee.indexing.indexers.update_number_of_replicas',
+            u'splitgill.indexing.indexers.update_number_of_replicas',
             update_number_of_replicas_mock,
         )
         monkeypatch.setattr(
-            u'eevee.indexing.indexers.streaming_bulk', streaming_bulk_mock
+            u'splitgill.indexing.indexers.streaming_bulk', streaming_bulk_mock
         )
 
         task = self._create_indexing_task()
@@ -540,15 +545,15 @@ class TestIndexingTask(object):
         update_number_of_replicas_mock = MagicMock()
         streaming_bulk_mock = MagicMock()
         monkeypatch.setattr(
-            u'eevee.indexing.indexers.update_refresh_interval',
+            u'splitgill.indexing.indexers.update_refresh_interval',
             update_refresh_interval_mock,
         )
         monkeypatch.setattr(
-            u'eevee.indexing.indexers.update_number_of_replicas',
+            u'splitgill.indexing.indexers.update_number_of_replicas',
             update_number_of_replicas_mock,
         )
         monkeypatch.setattr(
-            u'eevee.indexing.indexers.streaming_bulk', streaming_bulk_mock
+            u'splitgill.indexing.indexers.streaming_bulk', streaming_bulk_mock
         )
 
         task = self._create_indexing_task()
@@ -573,15 +578,15 @@ class TestIndexingTask(object):
         update_number_of_replicas_mock = MagicMock()
         streaming_bulk_mock = MagicMock(side_effect=Exception(u'woops!'))
         monkeypatch.setattr(
-            u'eevee.indexing.indexers.update_refresh_interval',
+            u'splitgill.indexing.indexers.update_refresh_interval',
             update_refresh_interval_mock,
         )
         monkeypatch.setattr(
-            u'eevee.indexing.indexers.update_number_of_replicas',
+            u'splitgill.indexing.indexers.update_number_of_replicas',
             update_number_of_replicas_mock,
         )
         monkeypatch.setattr(
-            u'eevee.indexing.indexers.streaming_bulk', streaming_bulk_mock
+            u'splitgill.indexing.indexers.streaming_bulk', streaming_bulk_mock
         )
 
         task = self._create_indexing_task()
@@ -613,15 +618,15 @@ class TestIndexingTask(object):
         update_number_of_replicas_mock = MagicMock()
         streaming_bulk_mock = MagicMock(return_value=bulk_results)
         monkeypatch.setattr(
-            u'eevee.indexing.indexers.update_refresh_interval',
+            u'splitgill.indexing.indexers.update_refresh_interval',
             update_refresh_interval_mock,
         )
         monkeypatch.setattr(
-            u'eevee.indexing.indexers.update_number_of_replicas',
+            u'splitgill.indexing.indexers.update_number_of_replicas',
             update_number_of_replicas_mock,
         )
         monkeypatch.setattr(
-            u'eevee.indexing.indexers.streaming_bulk', streaming_bulk_mock
+            u'splitgill.indexing.indexers.streaming_bulk', streaming_bulk_mock
         )
 
         partial_signal = MagicMock()
@@ -654,9 +659,9 @@ class TestIndexingTask(object):
 
 
 class TestIndexer(object):
-    @mock.patch(u'eevee.indexing.indexers.get_elasticsearch_client')
+    @mock.patch(u'splitgill.indexing.indexers.get_elasticsearch_client')
     @mock.patch(
-        u'eevee.indexing.indexers.datetime',
+        u'splitgill.indexing.indexers.datetime',
         now=MagicMock(side_effect=[datetime(2019, 1, 1), datetime(2019, 1, 2)]),
     )
     def test_get_stats(self, elasticsearch_mock, datetime_mock):
@@ -692,7 +697,7 @@ class TestIndexer(object):
             indices=MagicMock(exists=MagicMock(side_effect=lambda n: n == u'index3'))
         )
         monkeypatch.setattr(
-            u'eevee.indexing.indexers.get_elasticsearch_client',
+            u'splitgill.indexing.indexers.get_elasticsearch_client',
             MagicMock(return_value=elasticsearch_mock),
         )
 
@@ -727,7 +732,7 @@ class TestIndexer(object):
             indices=MagicMock(exists=MagicMock(return_value=False))
         )
         monkeypatch.setattr(
-            u'eevee.indexing.indexers.get_elasticsearch_client',
+            u'splitgill.indexing.indexers.get_elasticsearch_client',
             MagicMock(return_value=elasticsearch_mock),
         )
 
@@ -784,7 +789,7 @@ class TestIndexer(object):
             indices=MagicMock(exists=MagicMock(return_value=False))
         )
         monkeypatch.setattr(
-            u'eevee.indexing.indexers.get_elasticsearch_client',
+            u'splitgill.indexing.indexers.get_elasticsearch_client',
             MagicMock(return_value=elasticsearch_mock),
         )
         index1 = MagicMock()
@@ -849,15 +854,19 @@ class TestIndexer(object):
 
     def test_index(self, monkeypatch):
         monkeypatch.setattr(
-            u'eevee.indexing.indexers.get_elasticsearch_client', MagicMock()
+            u'splitgill.indexing.indexers.get_elasticsearch_client', MagicMock()
         )
         indexing_stats_mock = MagicMock()
         indexing_stats = create_autospec(
             IndexingStats, return_value=indexing_stats_mock
         )
-        monkeypatch.setattr(u'eevee.indexing.indexers.IndexingStats', indexing_stats)
+        monkeypatch.setattr(
+            u'splitgill.indexing.indexers.IndexingStats', indexing_stats
+        )
         indexing_task_mock = create_autospec(IndexingTask)
-        monkeypatch.setattr(u'eevee.indexing.indexers.IndexingTask', indexing_task_mock)
+        monkeypatch.setattr(
+            u'splitgill.indexing.indexers.IndexingTask', indexing_task_mock
+        )
 
         index1 = MagicMock()
         index1.configure_mock(name=u'index1', unprefixed_name=u'unprefixed1')

@@ -1,4 +1,4 @@
-# Eevee
+# splitgill
 
 {%
     include-markdown "../README.md"

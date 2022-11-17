@@ -5,7 +5,7 @@ from contextlib import contextmanager
 
 from pymongo import MongoClient
 
-from eevee.utils import OpBuffer
+from splitgill.utils import OpBuffer
 
 
 @contextmanager

@@ -3,7 +3,7 @@
 
 from datetime import datetime, tzinfo, timedelta
 
-from eevee.utils import chunk_iterator, to_timestamp, iter_pairs
+from splitgill.utils import chunk_iterator, to_timestamp, iter_pairs
 
 
 def test_chunk_iterator_when_iterator_len_equals_chunk_size():

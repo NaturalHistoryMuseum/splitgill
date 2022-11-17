@@ -5,7 +5,7 @@ from mock import MagicMock
 from pymongo.collection import Collection
 from pymongo.database import Database
 
-from eevee.mongo import get_mongo, MongoOpBuffer
+from splitgill.mongo import get_mongo, MongoOpBuffer
 
 from pymongo import MongoClient
 

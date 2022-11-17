@@ -3,8 +3,8 @@
 
 from elasticsearch import Elasticsearch, NotFoundError
 
-from eevee.diffing import extract_diff
-from eevee.utils import iter_pairs
+from splitgill.diffing import extract_diff
+from splitgill.utils import iter_pairs
 
 DOC_TYPE = u'_doc'
 

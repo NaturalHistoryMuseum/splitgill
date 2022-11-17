@@ -6,7 +6,7 @@ import abc
 
 import six
 
-from eevee.mongo import get_mongo
+from splitgill.mongo import get_mongo
 
 
 @six.add_metaclass(abc.ABCMeta)

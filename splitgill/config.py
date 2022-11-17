@@ -6,11 +6,11 @@ class Config(object):
     def __init__(
         self,
         elasticsearch_hosts=None,
-        elasticsearch_index_prefix=u'eevee-',
+        elasticsearch_index_prefix=u'splitgill-',
         elasticsearch_status_index_name=u'status',
         mongo_host=u'localhost',
         mongo_port=27017,
-        mongo_database=u'eevee',
+        mongo_database=u'splitgill',
         search_from=0,
         search_size=100,
         search_default_indexes=None,

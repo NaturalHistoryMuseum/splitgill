@@ -10,13 +10,13 @@ from blinker import Signal
 from elasticsearch.helpers import streaming_bulk
 from elasticsearch_dsl import Search
 
-from eevee.indexing.utils import (
+from splitgill.indexing.utils import (
     DOC_TYPE,
     get_elasticsearch_client,
     update_refresh_interval,
     update_number_of_replicas,
 )
-from eevee.utils import chunk_iterator
+from splitgill.utils import chunk_iterator
 
 
 class Indexer(object):

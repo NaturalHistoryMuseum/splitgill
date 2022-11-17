@@ -4,8 +4,8 @@
 import dictdiffer
 from mock import MagicMock, call
 
-from eevee.diffing import DICT_DIFFER_DIFFER, SHALLOW_DIFFER
-from eevee.ingestion.converters import RecordToMongoConverter
+from splitgill.diffing import DICT_DIFFER_DIFFER, SHALLOW_DIFFER
+from splitgill.ingestion.converters import RecordToMongoConverter
 
 
 def test_diff_data():
@@ -36,11 +36,12 @@ def test_diff_data():
 
 def test_for_insert(monkeypatch):
     mock_format_diff = MagicMock(return_value=u'formatted_diff')
-    monkeypatch.setattr(u'eevee.ingestion.converters.format_diff', mock_format_diff)
+    monkeypatch.setattr(u'splitgill.ingestion.converters.format_diff', mock_format_diff)
     mock_differ = MagicMock()
     mock_diff_data = MagicMock(return_value=(True, mock_differ, u'the_diff'))
     monkeypatch.setattr(
-        u'eevee.ingestion.converters.RecordToMongoConverter.diff_data', mock_diff_data
+        u'splitgill.ingestion.converters.RecordToMongoConverter.diff_data',
+        mock_diff_data,
     )
 
     record = MagicMock(
@@ -68,7 +69,8 @@ def test_for_insert(monkeypatch):
 def test_for_insert_no_insert(monkeypatch):
     mock_diff_data = MagicMock(return_value=(False, MagicMock(), u'the_diff'))
     monkeypatch.setattr(
-        u'eevee.ingestion.converters.RecordToMongoConverter.diff_data', mock_diff_data
+        u'splitgill.ingestion.converters.RecordToMongoConverter.diff_data',
+        mock_diff_data,
     )
 
     record = MagicMock(id=3, convert=MagicMock(return_value={}))
@@ -81,11 +83,12 @@ def test_for_insert_no_insert(monkeypatch):
 
 def test_for_update(monkeypatch):
     mock_format_diff = MagicMock(return_value=u'formatted_diff')
-    monkeypatch.setattr(u'eevee.ingestion.converters.format_diff', mock_format_diff)
+    monkeypatch.setattr(u'splitgill.ingestion.converters.format_diff', mock_format_diff)
     mock_differ = MagicMock()
     mock_diff_data = MagicMock(return_value=(True, mock_differ, u'the_diff'))
     monkeypatch.setattr(
-        u'eevee.ingestion.converters.RecordToMongoConverter.diff_data', mock_diff_data
+        u'splitgill.ingestion.converters.RecordToMongoConverter.diff_data',
+        mock_diff_data,
     )
 
     record = MagicMock(
@@ -109,10 +112,11 @@ def test_for_update(monkeypatch):
 
 def test_for_update_no_update(monkeypatch):
     mock_format_diff = MagicMock(return_value=u'formatted_diff')
-    monkeypatch.setattr(u'eevee.ingestion.converters.format_diff', mock_format_diff)
+    monkeypatch.setattr(u'splitgill.ingestion.converters.format_diff', mock_format_diff)
     mock_diff_data = MagicMock(return_value=(False, MagicMock(), u'the_diff'))
     monkeypatch.setattr(
-        u'eevee.ingestion.converters.RecordToMongoConverter.diff_data', mock_diff_data
+        u'splitgill.ingestion.converters.RecordToMongoConverter.diff_data',
+        mock_diff_data,
     )
 
     record = MagicMock(id=3, convert=MagicMock(return_value={u'a': 4}))

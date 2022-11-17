@@ -1,5 +1,5 @@
 [project]
-name = "eevee"
+name = "splitgill"
 version = "1.2.2"
 description = "Versioned search library"
 readme = "README.md"
@@ -16,8 +16,8 @@ classifiers = [
 dynamic = ["dependencies", "optional-dependencies"]
 
 [project.urls]
-repository = "https://github.com/NaturalHistoryMuseum/eevee"
-changelog = "https://github.com/NaturalHistoryMuseum/eevee/blob/main/CHANGELOG.md"
+repository = "https://github.com/NaturalHistoryMuseum/splitgill"
+changelog = "https://github.com/NaturalHistoryMuseum/splitgill/blob/main/CHANGELOG.md"
 
 
 [build-system]

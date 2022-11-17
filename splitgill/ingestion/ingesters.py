@@ -7,8 +7,8 @@ from datetime import datetime
 from blinker import Signal
 from pymongo import InsertOne, UpdateOne
 
-from eevee import utils
-from eevee.mongo import get_mongo
+from splitgill import utils
+from splitgill.mongo import get_mongo
 
 
 class Ingester(object):

@@ -1,7 +1,7 @@
 # Support
 
 ## Documentation
-- [eevee documentation](https://eevee.readthedocs.io)
+- [splitgill documentation](https://splitgill.readthedocs.io)
 
 ## Contact Us
 - [Gitter](https://gitter.im/nhm-data-portal/lobby)

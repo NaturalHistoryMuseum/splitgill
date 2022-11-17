@@ -3,7 +3,7 @@
 
 from mock import MagicMock, call
 
-from eevee.ingestion.feeders import IngestionFeeder
+from splitgill.ingestion.feeders import IngestionFeeder
 
 
 class ExampleFeederForTests(IngestionFeeder):

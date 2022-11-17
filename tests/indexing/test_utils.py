@@ -6,8 +6,8 @@ from collections import OrderedDict
 from mock import MagicMock, call
 from six.moves import zip
 
-from eevee.diffing import format_diff, DICT_DIFFER_DIFFER
-from eevee.indexing.utils import get_versions_and_data, update_refresh_interval
+from splitgill.diffing import format_diff, DICT_DIFFER_DIFFER
+from splitgill.indexing.utils import get_versions_and_data, update_refresh_interval
 
 
 def test_get_versions_and_data():

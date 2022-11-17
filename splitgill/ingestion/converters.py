@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
-from eevee.diffing import DICT_DIFFER_DIFFER, SHALLOW_DIFFER, format_diff
+from splitgill.diffing import DICT_DIFFER_DIFFER, SHALLOW_DIFFER, format_diff
 
 
 class RecordToMongoConverter(object):

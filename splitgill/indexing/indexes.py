@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
-from eevee.indexing.utils import get_versions_and_data, DOC_TYPE
+from splitgill.indexing.utils import get_versions_and_data, DOC_TYPE
 
 
 class Index(object):
@@ -129,7 +129,7 @@ class Index(object):
                         },
                         # the values of each field will be copied into this field easy querying
                         u'meta.all': {u'type': u'text'},
-                        # a geo point meta field. This is defined here but not filled in by eevee
+                        # a geo point meta field. This is defined here but not filled in by splitgill
                         # and therefore must be populated by subclassing the index process
                         u'meta.geo': {u'type': u'geo_point'},
                     },

@@ -1,4 +1,4 @@
-site_name: eevee docs
+site_name: splitgill docs
 
 theme:
   name: material
@@ -17,7 +17,7 @@ theme:
   favicon: assets/logo.png
 
 watch:
-  - eevee
+  - splitgill
 
 plugins:
   - search

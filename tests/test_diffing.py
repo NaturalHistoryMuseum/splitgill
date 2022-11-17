@@ -1,6 +1,6 @@
 import pytest
 
-from eevee.diffing import SHALLOW_DIFFER
+from splitgill.diffing import SHALLOW_DIFFER
 
 
 class TestShallowDiffer(object):

@@ -13,7 +13,7 @@ import mkdocs_gen_files
 
 nav = mkdocs_gen_files.Nav()
 
-root = 'eevee'
+root = 'splitgill'
 
 py_files = sorted(Path(root).rglob('*.py'))
 
@@ -37,7 +37,7 @@ for path in py_files:
 
     with mkdocs_gen_files.open(full_doc_path, "w") as fd:
         ident = '.'.join(parts)
-        fd.write(f'::: eevee.{ident}')
+        fd.write(f'::: splitgill.{ident}')
 
     mkdocs_gen_files.set_edit_path(full_doc_path, path)
 
