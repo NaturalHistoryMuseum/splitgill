@@ -13,6 +13,7 @@ repos:
     rev: v2.35.0
     hooks:
       - id: commitizen
+        additional_dependencies: [git+https://github.com/NaturalHistoryMuseum/cz-nhm.git]
   - repo: https://github.com/psf/black
     rev: 22.10.0
     hooks:
