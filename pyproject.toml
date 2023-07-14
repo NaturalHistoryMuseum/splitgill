@@ -13,7 +13,16 @@ classifiers = [
     "Programming Language :: Python :: 2",
     "Programming Language :: Python :: 3",
 ]
-dynamic = ["dependencies", "optional-dependencies"]
+
+dependencies = [
+    "blinker==1.4",
+    "dictdiffer==0.7.1",
+    "elasticsearch>=6.0.0,<7.0.0",
+    "elasticsearch-dsl>=6.0.0,<7.0.0",
+    "pymongo==3.9.0",
+    "six>=1.11.0",
+    "ujson==2.0.3",
+]
 
 [project.urls]
 repository = "https://github.com/NaturalHistoryMuseum/splitgill"
@@ -31,12 +40,6 @@ zip-safe = false
 
 [tool.setuptools.packages.find]
 exclude = ["tests", "docs"]
-
-[tool.setuptools.dynamic]
-dependencies = { file = ["requirements.txt"] }
-
-[tool.setuptools.dynamic.optional-dependencies]
-test = { file = ["tests/requirements.txt"] }
 
 [tool.commitizen]
 name = "cz_nhm"
