@@ -34,9 +34,13 @@ pip install git+git://github.com/NaturalHistoryMuseum/splitgill.git#egg=splitgil
 
 ## Tests
 <!--tests-start-->
-Make sure you've installed the test requirements into your virtualenv - `pip install .[test]`, then:
+Tests are run through docker-compose so that MongoDB and Elasticsearch are available for
+real testing.
 
- - To run the tests against all python versions this library is compatible with, run `tox`
- - To run the tests against the python version installed in your virtualenv, run `pytest`
- - To run the tests against the python version installed in your virtualenv and get a coverage report too, run `pytest --cov=splitgill`
+To run the tests:
+
+```bash
+docker-compose build
+docker-compose run sg
+```
 <!--tests-end-->
