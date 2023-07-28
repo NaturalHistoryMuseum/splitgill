@@ -54,6 +54,15 @@ def now() -> int:
 
 
 def partition(iterable: Iterable, size: int) -> Iterable[list]:
+    """
+    Partitions the given iterable into chunks. Each chunk yielded will be a list which
+    is at most `size` in length. The final list yielded may be smaller if the length of
+    the iterable isn't wholly divisible by the size.
+
+    :param iterable: the iterable to partition
+    :param size: the maximum size of list chunk to yield
+    :return: yields lists
+    """
     it = iter(iterable)
     while chunk := list(islice(it, size)):
         yield chunk
