@@ -6,8 +6,8 @@ from splitgill.manager import (
 
 
 class TestSplitgillClient:
-    def test_database_property(self, splitgill: SplitgillClient):
-        assert splitgill.database.name == MONGO_DATABASE_NAME
+    def test_database(self, splitgill: SplitgillClient):
+        assert splitgill.get_database().name == MONGO_DATABASE_NAME
 
     def test_get_status_collection(self, splitgill: SplitgillClient):
         assert splitgill.get_status_collection().name == STATUS_COLLECTION_NAME
