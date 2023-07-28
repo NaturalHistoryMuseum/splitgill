@@ -61,7 +61,20 @@ class SplitgillClient:
 
 
 class SplitgillDatabase:
+    """
+    Represents a single set of data to be managed by Splitgill.
+
+    Under the hood, this data will exist in several MongoDB collections and
+    Elasticsearch indices, but this object provides an abstraction layer to access all
+    of that from one object.
+    """
+
     def __init__(self, name: str, connection: SplitgillClient):
+        """
+        :param name: the name of the database, needs to be a valid MongoDB collection
+                     name and a valid Elasticsearch index name
+        :param connection: a SplitgillClient object
+        """
         self.name = name
         self._connection = connection
         self.data_collection = self._connection.get_data_collection(self.name)
