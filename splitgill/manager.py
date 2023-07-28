@@ -16,26 +16,53 @@ OPS_SIZE = 500
 
 
 @dataclass
-class SplitgillConnection:
+class SplitgillClient:
+    """
+    Splitgill client class which holds a mongo connection, an elasticsearch connection
+    and any other general information Splitgill needs to manage the databases.
+    """
+
     mongo: MongoClient
     elasticsearch: Elasticsearch
 
     @property
     def database(self) -> Database:
+        """
+        Returns the MongoDB database in use.
+
+        :return: a pymongo Database object
+        """
         return self.mongo.get_database(MONGO_DATABASE_NAME)
 
     def get_status_collection(self) -> Collection:
+        """
+        Returns the status collection.
+
+        :return: a pymongo Collection object
+        """
         return self.database.get_collection(STATUS_COLLECTION_NAME)
 
     def get_data_collection(self, name: str) -> Collection:
+        """
+        Returns the data collection for the given Splitgill database.
+
+        :param name: the name of the Splitgill database
+        :return: a pymongo Collection object
+        """
         return self.database.get_collection(f"data-{name}")
 
     def get_config_collection(self, name: str) -> Collection:
+        """
+        Returns the config collection for the given Splitgill database.
+
+        :param name: the name of the Splitgill database
+        :return: a pymongo Collection object
+        """
         return self.database.get_collection(f"config-{name}")
 
 
 class SplitgillDatabase:
-    def __init__(self, name: str, connection: SplitgillConnection):
+    def __init__(self, name: str, connection: SplitgillClient):
         self.name = name
         self._connection = connection
         self.data_collection = self._connection.get_data_collection(self.name)

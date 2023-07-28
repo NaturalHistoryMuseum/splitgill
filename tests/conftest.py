@@ -6,7 +6,7 @@ from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
 
-from splitgill.manager import SplitgillConnection
+from splitgill.manager import SplitgillClient
 
 
 @pytest.fixture
@@ -41,5 +41,5 @@ def elasticsearch_client() -> Elasticsearch:
 @pytest.fixture
 def splitgill(
     mongo_client: MongoClient, elasticsearch_client: Elasticsearch
-) -> SplitgillConnection:
-    return SplitgillConnection(mongo_client, elasticsearch_client)
+) -> SplitgillClient:
+    return SplitgillClient(mongo_client, elasticsearch_client)
