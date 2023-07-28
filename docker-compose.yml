@@ -13,6 +13,20 @@ services:
       - es
       - mongo
 
+  # serves the docs locally with realtime auto-reloading
+  docs:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    environment:
+      PYTHONUNBUFFERED: 1
+      PYTHONDONTWRITEBYTECODE: 1
+    command: mkdocs serve -f mkdocs.yml -a 0.0.0.0:8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - "./docs:/usr/src/app/docs"
+
   es:
     image: elasticsearch:7.17.10
     environment:
