@@ -1,3 +1,5 @@
+from unittest.mock import patch, MagicMock
+
 from freezegun import freeze_time
 
 from splitgill.manager import (
@@ -129,3 +131,43 @@ class TestCommit:
 
         second_status = database.get_status()
         assert second_status.m_version > first_status.m_version
+
+
+class TestDetermineNextStatus:
+    def test_no_status_no_data_version(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        with patch("splitgill.manager.now", MagicMock(return_value=100)):
+            assert database.determine_next_version() == 100
+
+    def test_no_status_has_data_version(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        with freeze_time("2012-01-14 12:00:01"):
+            database.add([Record.new({"x": 5})], commit=False)
+        assert database.determine_next_version() == 1326542401000
+
+    def test_has_status_no_data_version(self, splitgill: SplitgillClient):
+        name = "test"
+        database = SplitgillDatabase(name, splitgill)
+        database.get_status = MagicMock(return_value=Status(name, 100))
+        database.clear_status = MagicMock()
+        with freeze_time("2012-01-14 12:00:01"):
+            assert database.determine_next_version() == 1326542401000
+        database.clear_status.assert_called_once()
+
+    def test_has_status_and_data_version_continuation(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        with freeze_time("2012-01-02 12:00:01"):
+            database.add([Record.new({"x": 5})], commit=True)
+
+        with freeze_time("2012-01-14 12:00:01"):
+            database.add([Record.new({"x": 5})], commit=False)
+
+        assert database.determine_next_version() == 1326542401000
+
+    def test_has_status_and_data_version_new_data(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        with freeze_time("2012-01-02 12:00:01"):
+            database.add([Record.new({"x": 5})], commit=True)
+
+        with freeze_time("2012-01-14 12:00:01"):
+            assert database.determine_next_version() == 1326542401000

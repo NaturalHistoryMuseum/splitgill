@@ -137,7 +137,15 @@ class SplitgillDatabase:
         )
         return True
 
-    def _determine_add_version(self) -> int:
+    def determine_next_version(self) -> int:
+        """
+        Figure out what version should be used with the next record(s) added to this
+        database. If a transaction is in progress and changes haven't been committed
+        then the latest version from the data collection will be returned, but if there
+        is no current add in progress then the current time as a UNIX epoch is returned.
+
+        :return: a version timestamp to use for adding
+        """
         status_version = self.data_version
         data_version = get_version(self.data_collection)
 
@@ -167,7 +175,7 @@ class SplitgillDatabase:
                 return now()
 
     def add(self, records: Iterable[Record], commit=True):
-        version = self._determine_add_version()
+        version = self.determine_next_version()
 
         # this does nothing if the indexes already exist
         self.data_collection.create_indexes(
