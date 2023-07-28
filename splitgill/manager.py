@@ -1,4 +1,4 @@
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from typing import Optional, Iterable
 
 from elasticsearch import Elasticsearch
@@ -103,42 +103,39 @@ class SplitgillDatabase:
         doc = self.status_collection.find_one({"name": self.name})
         return Status(**doc) if doc else None
 
-    def set_status(self, status: Status):
-        """
-        Updates the current status by replacing the current status with the given status
-        object.
-
-        :param status: the new Status object
-        """
-        assert self.name == status.name, "Database name doesn't match name in status"
-        self.status_collection.replace_one(
-            {"name": self.name}, status.to_doc(), upsert=True
-        )
-
     def clear_status(self):
         """
         Clears the status for this database by deleting the doc.
         """
         self.status_collection.delete_one({"name": self.name})
 
-    def commit(self):
+    def commit(self) -> bool:
+        """
+        Updates the status of this database with the latest version in the data
+        collection. After this, no more records at that latest version can be added to
+        the database, they must all be newer.
+
+        :return: True if the status was updated, False if not
+        """
         # get the latest version in the data collection
         version = get_version(self.data_collection)
         if version is None:
             # nothing to commit
-            return
+            return False
 
-        # either update the existing status, or create a new one
         status = self.get_status()
         if status is None:
+            # make a new status object
             status = Status(name=self.name, m_version=version)
         else:
-            if version > status.m_version:
-                raise Exception("oh no")
+            # update the existing status object
             status.m_version = version
 
-        # write the new status
-        self.set_status(status)
+        # replace (or insert) the current status
+        self.status_collection.replace_one(
+            {"name": self.name}, status.to_doc(), upsert=True
+        )
+        return True
 
     def _determine_add_version(self) -> int:
         status_version = self.data_version

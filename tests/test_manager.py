@@ -1,5 +1,3 @@
-import pytest
-from bson import ObjectId
 from freezegun import freeze_time
 
 from splitgill.manager import (
@@ -74,52 +72,19 @@ class TestSplitgillDatabaseDataVersion:
         assert database.data_version == 1326542401000
 
 
-class TestSplitgillDatabaseStatusCrud:
+class TestSplitgillDatabaseGetStatus:
     def test_no_status(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
         assert database.get_status() is None
 
-    def test_set_status_first_time(self, splitgill: SplitgillClient):
-        name = "test"
-        database = SplitgillDatabase(name, splitgill)
-        status = Status(name, 1000)
-
-        database.set_status(status)
-
-        status_in_db = database.get_status()
-        assert status_in_db.name == status.name
-        assert status_in_db.m_version == status.m_version
-        assert status_in_db.e_version == status.e_version
-        assert status_in_db._id is not None
-
-    def test_set_status_twice(self, splitgill: SplitgillClient):
-        name = "test"
-        database = SplitgillDatabase(name, splitgill)
-
-        status = Status(name, 1000)
-        database.set_status(status)
-        status_in_db = database.get_status()
-        assert status_in_db.name == status.name
-        assert status_in_db.m_version == status.m_version
-        assert status_in_db.e_version == status.e_version
-        assert status_in_db._id is not None
-
-        status = Status(name, 1001)
-        database.set_status(status)
-        status_in_db = database.get_status()
-        assert status_in_db.name == status.name
-        assert status_in_db.m_version == status.m_version
-        assert status_in_db.e_version == status.e_version
-        assert status_in_db._id is not None
-
-    def test_set_status_incorrect_name(self, splitgill: SplitgillClient):
-        name = "test"
-        other_name = "not_test"
-        database = SplitgillDatabase(name, splitgill)
-
-        status = Status(other_name, 100)
-        with pytest.raises(AssertionError):
-            database.set_status(status)
+    @freeze_time("2012-01-14 12:00:01")
+    def test_get(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        database.add([Record.new({"x": 5})], commit=True)
+        status = database.get_status()
+        assert status is not None
+        assert status.name == database.name
+        assert status.m_version == 1326542401000
 
     def test_delete_status_no_status(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
@@ -129,8 +94,38 @@ class TestSplitgillDatabaseStatusCrud:
     def test_delete_status(self, splitgill: SplitgillClient):
         name = "test"
         database = SplitgillDatabase(name, splitgill)
-        database.set_status(Status(name, 100))
+        database.add([Record.new({"x": 5})], commit=True)
 
         assert database.get_status() is not None
         database.clear_status()
         assert database.get_status() is None
+
+
+class TestCommit:
+    def test_nothing_to_commit(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        assert not database.commit()
+        assert database.get_status() is None
+
+    @freeze_time("2012-01-14 12:00:01")
+    def test_no_status(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        database.add([Record.new({"x": 5})], commit=False)
+
+        assert database.commit()
+        assert database.get_status().m_version == 1326542401000
+
+    def test_update_status(self, splitgill: SplitgillClient):
+        name = "test"
+        database = SplitgillDatabase(name, splitgill)
+        database.add([Record.new({"x": 5})], commit=False)
+        database.commit()
+
+        first_status = database.get_status()
+        assert first_status is not None
+
+        database.add([Record.new({"x": 5})], commit=False)
+        database.commit()
+
+        second_status = database.get_status()
+        assert second_status.m_version > first_status.m_version
