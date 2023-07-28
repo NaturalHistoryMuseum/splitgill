@@ -99,7 +99,7 @@ class SplitgillDatabase:
         return Status(**doc) if doc else None
 
     def set_status(self, status: Status):
-        self.status_collection.update_one(
+        self.status_collection.replace_one(
             {"name": self.name}, asdict(status), upsert=True
         )
 
