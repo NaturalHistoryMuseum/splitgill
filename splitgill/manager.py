@@ -69,16 +69,16 @@ class SplitgillDatabase:
     of that from one object.
     """
 
-    def __init__(self, name: str, connection: SplitgillClient):
+    def __init__(self, name: str, client: SplitgillClient):
         """
         :param name: the name of the database, needs to be a valid MongoDB collection
                      name and a valid Elasticsearch index name
-        :param connection: a SplitgillClient object
+        :param client: a SplitgillClient object
         """
         self.name = name
-        self._connection = connection
-        self.data_collection = self._connection.get_data_collection(self.name)
-        self.status_collection = self._connection.get_status_collection()
+        self._client = client
+        self.data_collection = self._client.get_data_collection(self.name)
+        self.status_collection = self._client.get_status_collection()
 
     @property
     def data_version(self) -> Optional[int]:
