@@ -1,0 +1,30 @@
+version: "3"
+
+services:
+  # runs the tests
+  sg:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    environment:
+      PYTHONUNBUFFERED: 1
+      PYTHONDONTWRITEBYTECODE: 1
+    depends_on:
+      - es
+      - mongo
+
+  es:
+    image: elasticsearch:7.17.10
+    environment:
+      - "discovery.type=single-node"
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+    ports:
+      - "9200:9200"
+      - "9100:9100"
+    volumes:
+      - ./docker/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
+
+  mongo:
+    image: mongo:6.0.8
+    ports:
+      - "27017:27017"
