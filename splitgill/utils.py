@@ -1,134 +1,98 @@
-#!/usr/bin/env python
-# encoding: utf-8
+from contextlib import contextmanager
+from datetime import datetime, timezone
+from itertools import islice
+from typing import Optional, Iterable
 
-import abc
-import calendar
-import itertools
-
-import six
-from six.moves import zip
+from dateutil.tz import UTC
+from elasticsearch import Elasticsearch
 
 
-def chunk_iterator(iterable, chunk_size=1000):
+def to_timestamp(moment: datetime) -> int:
     """
-    Iterates over an iterable, yielding lists of size chunk_size until the iterable is
-    exhausted. The final list could be smaller than chunk_size but will always have a
-    length > 0.
+    Converts a datetime object into a timestamp value. The timestamp returned is an int.
+    The timestamp value is the number of milliseconds that have elapsed between the UNIX
+    epoch and the given moment.
 
-    :param iterable: the iterable to chunk up
-    :param chunk_size: the maximum size of each yielded chunk
+    Any precision greater than milliseconds held within the datetime is simply ignored
+    and no rounding occurs.
+
+    :param moment: a datetime object
+    :return: the timestamp (number of milliseconds between the UNIX epoch and the
+             moment) as an int
     """
-    chunk = []
-    for element in iterable:
-        chunk.append(element)
-        if len(chunk) == chunk_size:
-            yield chunk
-            chunk = []
-    if chunk:
+    return int(moment.timestamp() * 1000)
+
+
+def parse_to_timestamp(
+    datetime_string: str, datetime_format: str, tzinfo: datetime.tzinfo = UTC
+) -> int:
+    """
+    Parses the given string using the given format and returns a timestamp.
+
+    If the datetime object built from parsing the string with the given format doesn't
+    contain a tzinfo component, then the tzinfo parameter is added as a replacement
+    value. This defaults to UTC.
+
+    :param datetime_string: the datetime as a string
+    :param datetime_format: the format as a string
+    :param tzinfo: the timezone to use (default: UTC)
+    :return: the parsed datetime as the number of milliseconds since the UNIX epoch as
+             an int
+    """
+    date = datetime.strptime(datetime_string, datetime_format)
+    # if no timezone info was provided, apply UTC as a default to ensure consistency
+    if date.tzinfo is None:
+        date = date.replace(tzinfo=tzinfo)
+    return to_timestamp(date)
+
+
+def now() -> int:
+    """
+    Get the current datetime as a timestamp.
+    """
+    return to_timestamp(datetime.utcnow())
+
+
+def partition(iterable: Iterable, size: int) -> Iterable[list]:
+    it = iter(iterable)
+    while chunk := list(islice(it, size)):
         yield chunk
 
 
-def to_timestamp(moment):
-    """
-    Converts a datetime into a timestamp value. The timestamp returned is an int. The
-    timestamp value is the number of milliseconds that have elapsed between the UNIX
-    epoch and the given moment.
-
-    :param moment: a datetime object
-    :return: the timestamp (number of milliseconds between the UNIX epoch and the moment) as an int
-    """
-    if six.PY2:
-        ts = calendar.timegm(moment.timetuple()) + moment.microsecond / 1000000.0
-    else:
-        ts = moment.timestamp()
-    # multiply by 1000 to get the time in milliseconds and use int to remove any decimal places
-    return int(ts * 1000)
-
-
-def iter_pairs(iterable, final_partner=None):
-    """
-    Produces a generator that iterates over the iterable provided, yielding a tuple of
-    consecutive items. When the final item in the iterable is reached, it is yielded
-    with the final partner parameter. For example, printing the result of:
-
-        iter_pairs([1,2,3,4])
-
-    would produce
-
-        (1, 2)
-        (2, 3)
-        (3, 4)
-        (4, None)
-
-    :param iterable: the iterable or iterator to pair up
-    :param final_partner: the value that will partner the final item in the iterable (defaults to
-                          None)
-    :return: a generator object
-    """
-    i1, i2 = itertools.tee(iterable)
-    return zip(i1, itertools.chain(itertools.islice(i2, 1, None), [final_partner]))
-
-
-@six.add_metaclass(abc.ABCMeta)
-class OpBuffer(object):
-    """
-    Convenience class and context manager which allows buffering operations and then
-    handling them in bulk.
-    """
-
-    def __init__(self, size):
-        """
-        :param size: the number of ops to buffer up before handling as a batch
-        """
-        self.ops = []
-        self.size = size
-
-    def add(self, op):
-        """
-        Adds the op to the buffer and if the buffer has reached it's limit, flush it.
-
-        :param op: the op
-        :return: True if the buffer was handled, False if not
-        """
-        self.ops.append(op)
-        # check greater than or equal to instead of just equal to to avoid any issues with the op
-        # list being modified out of sequence
-        if len(self.ops) >= self.size:
-            self.handle_ops()
-            self.ops = []
-            return True
-        return False
-
-    def add_all(self, ops):
-        """
-        Adds all the given ops to the buffer one by one.
-
-        :param ops: the ops to add
-        :return: True if the buffer was handled whilst adding the ops, False if not
-        """
-        return any(set(map(self.add, ops)))
-
-    def flush(self):
-        """
-        Flushes any remaining ops in the buffer.
-        """
-        if self.ops:
-            self.handle_ops()
-            self.ops = []
-
-    @abc.abstractmethod
-    def handle_ops(self):
-        """
-        Handles the ops in the buffer currently.
-
-        There is no need to clear the buffer in the implementing subclass.
-        """
-        pass
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        # only flush if there are no exceptions
-        if exc_type is None and exc_val is None and exc_tb is None:
-            self.flush()
+# @contextmanager
+# def optimal_index_settings(client: Elasticsearch, index_name: str):
+#     client.indices.put_settings(
+#         settings={
+#             "index": {
+#                 "refresh_interval": -1,
+#             }
+#         },
+#         index=index_name,
+#     )
+#     client.indices.put_settings(
+#         settings={
+#             "index": {
+#                 "number_of_replicas": 0,
+#             }
+#         },
+#         index=index_name,
+#     )
+#
+#     yield
+#
+#     client.indices.put_settings(
+#         settings={
+#             "index": {
+#                 "refresh_interval": None,
+#             }
+#         },
+#         index=index_name,
+#     )
+#     client.indices.put_settings(
+#         settings={
+#             "index": {
+#                 "number_of_replicas": None,
+#             }
+#         },
+#         index=index_name,
+#     )

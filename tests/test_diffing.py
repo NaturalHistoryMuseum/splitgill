@@ -1,55 +1,206 @@
+from datetime import datetime
+
 import pytest
 
-from splitgill.diffing import SHALLOW_DIFFER
+from splitgill.diffing import (
+    prepare,
+    diff,
+    DiffOp,
+    DiffingTypeComparisonException,
+    patch,
+)
 
 
-class TestShallowDiffer(object):
-    def test_can_diff(self):
-        assert SHALLOW_DIFFER.can_diff({})
-        assert SHALLOW_DIFFER.can_diff({u'a': 4, u'x': [1, 2, 3]})
-        assert not SHALLOW_DIFFER.can_diff({u'a': 4, u'x': {u'l': u'beans'}})
+class TestPrepare:
+    def test_none(self):
+        assert prepare(None) is None
 
-    def test_diff(self):
-        assert SHALLOW_DIFFER.diff({}, {}) == {}
-        assert (
-            SHALLOW_DIFFER.diff({u'x': 4, u'y': [1, 2, 3]}, {u'x': 4, u'y': [1, 2, 3]})
-            == {}
+    def test_str(self):
+        assert prepare("beans") == "beans"
+
+    def test_numbers(self):
+        assert prepare(23) == "23"
+        assert prepare(23.456) == "23.456"
+        assert prepare(-20.5012) == "-20.5012"
+        assert prepare(complex(3, 4)) == "(3+4j)"
+        assert prepare(0) == "0"
+
+    def test_bool(self):
+        assert prepare(True) == "true"
+        assert prepare(False) == "false"
+
+    def test_datetime(self):
+        now = datetime.now()
+        assert prepare(now) == now.isoformat()
+
+    def test_dict(self):
+        assert prepare({}) == {}
+        assert prepare({"x": "beans"}) == {"x": "beans"}
+        assert prepare({"x": "4"}) == {"x": prepare(4)}
+        assert prepare({3: True}) == {prepare(3): prepare(True)}
+        assert prepare({4: {6: 1}}) == {prepare(4): {prepare(6): prepare(1)}}
+
+    def test_list(self):
+        assert prepare([]) == tuple()
+        assert prepare([1, 2, 3]) == ("1", "2", "3")
+        assert prepare([1, True, 3]) == ("1", "true", "3")
+
+    def test_set(self):
+        assert prepare(set()) == tuple()
+
+        prepared = prepare({1, 2, 3, "beans"})
+        assert isinstance(prepared, tuple)
+        assert "1" in prepared
+        assert "2" in prepared
+        assert "3" in prepared
+        assert "beans" in prepared
+
+    def test_tuple(self):
+        assert prepare(tuple()) == tuple()
+        assert prepare((1, 2, 3)) == ("1", "2", "3")
+        assert prepare((1, True, 3)) == ("1", "true", "3")
+
+    def test_mix(self):
+        now = datetime.now()
+        prepared = prepare(
+            {
+                "x": "4",
+                "y": True,
+                "z": [1, 2, 3],
+                "a": {
+                    "x": [4, 20.7],
+                    "y": now,
+                },
+                "b": [{"x": 1}, {"x": "4.2"}],
+            }
         )
-        assert SHALLOW_DIFFER.diff(
-            {u'x': 4, u'y': [1, 2, 3]}, {u'x': 4, u'y': [1, 2, 6]}
-        ) == {u'c': {u'y': [1, 2, 6]}}
-        assert SHALLOW_DIFFER.diff(
-            {u'x': 8, u'y': [1, 2, 3]}, {u'x': u'8', u'y': [1, 2, 3]}
-        ) == {u'c': {u'x': u'8'}}
-        assert SHALLOW_DIFFER.diff(
-            {u'x': 8, u'y': [54, 2, 3]}, {u'x': u'8', u'y': [1, 2, 6]}
-        ) == {u'c': {u'x': u'8', u'y': [1, 2, 6]}}
-        assert SHALLOW_DIFFER.diff({u'x': 4, u'y': u'beans'}, {u'x': 4}) == {
-            u'r': [u'y']
+        assert prepared == {
+            "x": "4",
+            "y": "true",
+            "z": ("1", "2", "3"),
+            "a": {
+                "x": ("4", "20.7"),
+                "y": now.isoformat(),
+            },
+            "b": ({"x": "1"}, {"x": "4.2"}),
         }
-        diff = SHALLOW_DIFFER.diff({u'x': 4, u'y': u'beans'}, {})
-        assert isinstance(diff[u'r'], list)
-        assert u'x' in diff[u'r']
-        assert u'y' in diff[u'r']
-        assert SHALLOW_DIFFER.diff({}, {u'x': 4}) == {u'c': {u'x': 4}}
-        assert SHALLOW_DIFFER.diff(
-            {u'l': u'beans'}, {u'l': u'beans', u'x': 4, u'y': 12}
-        ) == {u'c': {u'x': 4, u'y': 12}}
-        assert SHALLOW_DIFFER.diff(
-            {u'x': 4, u'y': u'beans'}, {u'l': 24246, u'x': 5}
-        ) == {u'r': [u'y'], u'c': {u'l': 24246, u'x': 5}}
 
-    def test_patch(self):
-        assert SHALLOW_DIFFER.patch({}, {}) == {}
-        assert SHALLOW_DIFFER.patch({u'c': {u'x': 4}}, {}) == {u'x': 4}
-        assert SHALLOW_DIFFER.patch({u'c': {u'x': 4}}, {u'x': 5}) == {u'x': 4}
-        assert SHALLOW_DIFFER.patch({u'c': {u'x': 4}}, {u'y': 5}) == {u'y': 5, u'x': 4}
-        assert SHALLOW_DIFFER.patch({u'r': [u'x']}, {u'x': 2380}) == {}
-        assert SHALLOW_DIFFER.patch({u'r': [u'x']}, {u'x': 2380, u'y': u'goat'}) == {
-            u'y': u'goat'
+
+class TestDiff:
+    def test_equal(self):
+        base = {"x": "4"}
+        new = {"x": "4"}
+        assert list(diff(base, new)) == []
+
+    def test_equal_is(self):
+        base = new = {"x": "4"}
+        assert list(diff(base, new)) == []
+
+    def test_not_dicts(self):
+        with pytest.raises(DiffingTypeComparisonException):
+            list(diff(("1", "2", "3"), {"a": "4"}))
+        with pytest.raises(DiffingTypeComparisonException):
+            list(diff({"a": "4"}, ("1", "2", "3")))
+        with pytest.raises(DiffingTypeComparisonException):
+            list(diff("4", "beans"))
+
+    def test_dict_new(self):
+        base = {"a": "4"}
+        new = {"a": "4", "b": "3"}
+        assert list(diff(base, new)) == [DiffOp(tuple(), {"dn": {"b": "3"}})]
+
+    def test_dict_delete(self):
+        base = {"a": "4", "b": "3"}
+        new = {"a": "4"}
+        assert list(diff(base, new)) == [DiffOp(tuple(), {"dd": ["b"]})]
+
+    def test_dict_change(self):
+        base = {"a": "4", "b": "3"}
+        new = {"a": "4", "b": "6"}
+        assert list(diff(base, new)) == [DiffOp(tuple(), {"dc": {"b": "6"}})]
+
+    def test_tuple_new(self):
+        base = {"a": ("1", "2", "3")}
+        new = {"a": ("1", "2", "3", "4", "5")}
+        assert list(diff(base, new)) == [DiffOp(("a",), {"tn": ("4", "5")})]
+
+    def test_tuple_delete(self):
+        base = {"a": ("1", "2", "3", "4", "5")}
+        new = {"a": ("1", "2", "3")}
+        assert list(diff(base, new)) == [DiffOp(("a",), {"td": 3})]
+
+    def test_tuple_change(self):
+        base = {"a": ("1", "2", "3", "4", "5")}
+        new = {"a": ("1", "2", "3", "10", "5")}
+        assert list(diff(base, new)) == [DiffOp(("a",), {"tc": [(3, "10")]})]
+
+    def test_tuple_with_embeds(self):
+        base = {
+            "a": ({"y": "4"}, {"z": "5"}),
+            "b": (("1", "2", "3"), ("4", "5", "6"), ("7", "8", "9")),
         }
-        with pytest.raises(KeyError):
-            assert SHALLOW_DIFFER.patch({u'r': [u'x']}, {})
-        assert SHALLOW_DIFFER.patch({u'r': [u'x'], u'c': {u'b': 2}}, {u'x': 2380}) == {
-            u'b': 2
+        new = {
+            "a": ({"y": "4"}, {"z": "3"}),
+            "b": (("1", "10", "3"), ("4", "5", "6"), ("4", "8", "9")),
         }
+        assert list(diff(base, new)) == [
+            DiffOp(
+                path=("b",), ops={"tc": [(0, ("1", "10", "3")), (2, ("4", "8", "9"))]}
+            ),
+            DiffOp(path=("a", 1), ops={"dc": {"z": "3"}}),
+        ]
+
+    def test_dict_embeds(self):
+        base = {"a": {"b": "5", "c": "6"}}
+        new = {"a": {"a": "2", "c": "4"}}
+        assert list(diff(base, new)) == [
+            DiffOp(path=("a",), ops={"dn": {"a": "2"}, "dd": ["b"], "dc": {"c": "4"}})
+        ]
+
+
+# TODO: make this a more complete, systematic set of scenarios
+patching_scenarios = [
+    # a basic example
+    ({"x": "4"}, {"x": "5"}),
+    # basic tuples
+    ({"x": ("1", "2", "3")}, {"x": ("1", "5")}),
+    # basic dicts
+    ({"x": {"y": "5"}}, {"x": {"y": "6"}}),
+    # tuple or tuples
+    (
+        {"x": (("1", "2", "3"), ("4", "5", "6"), ("7", "8", "9"))},
+        {"x": (("1", "2", "4"), ("4", "10", "6"), ("0", "8", "9"))},
+    ),
+    # tuple of dicts
+    ({"x": ({"y": "5"}, {"y": "7"})}, {"x": ({"y": "3"}, {"y": "7"})}),
+    # tuple of dicts with tuples and changing types
+    (
+        {"x": ({"y": ("1", "2", "3")}, {"y": ("7", "8")})},
+        {"x": ({"y": "nope"}, {"y": ("3", "8")})},
+    ),
+    # tuple of tuples becomes tuple of not-tuples (and vice versa)
+    (
+        {"x": (("1", "2", "3"), ("4", "5", "6"), ("7", "8", "9"))},
+        {"x": ("not", "a", "tuple")},
+    ),
+    (
+        {"x": ("not", "a", "tuple")},
+        {"x": (("1", "2", "3"), ("4", "5", "6"), ("7", "8", "9"))},
+    ),
+]
+
+
+class TestPatch:
+    def test_empty(self):
+        assert patch({"c": "4"}, []) == {"c": "4"}
+
+    def test_always_a_new_dict(self):
+        base = {"c": "4"}
+        assert patch(base, []) is not base
+        assert patch(base, list(diff(base, {"c": "5"}))) is not base
+
+    @pytest.mark.parametrize(("base", "new"), patching_scenarios)
+    def test_patching(self, base: dict, new: dict):
+        diff_ops = list(diff(base, new))
+        patched_base = patch(base, diff_ops)
+        assert patched_base == new

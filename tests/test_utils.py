@@ -1,111 +1,83 @@
-#!/usr/bin/env python
-# encoding: utf-8
+from datetime import datetime, timedelta
 
-from datetime import datetime, tzinfo, timedelta
+from dateutil.tz import UTC, tzoffset
+from freezegun import freeze_time
 
-from splitgill.utils import chunk_iterator, to_timestamp, iter_pairs
-
-
-def test_chunk_iterator_when_iterator_len_equals_chunk_size():
-    iterator = range(0, 10)
-    expected_chunk = list(range(0, 10))
-    chunks = list(chunk_iterator(iterator, chunk_size=10))
-
-    assert len(chunks) == 1
-    assert len(chunks[0]) == 10
-    assert all([a == b for a, b in zip(expected_chunk, chunks[0])])
+from splitgill.utils import to_timestamp, parse_to_timestamp, now, partition
 
 
-def test_chunk_iterator_when_iterator_len_is_a_multiple_of_chunk_size():
-    iterator = range(0, 10)
-    expected_chunks = [list(range(0, 5)), list(range(5, 10))]
-    chunks = list(chunk_iterator(iterator, chunk_size=5))
+class TestToTimestamp:
+    @freeze_time("2012-01-14 12:00:01")
+    def test_no_tz(self):
+        assert to_timestamp(datetime.now(tz=None)) == 1326542401000
 
-    assert len(chunks) == 2
-    assert len(chunks[0]) == 5
-    assert len(chunks[1]) == 5
-    assert all([a == b for a, b in zip(expected_chunks[0], chunks[0])])
-    assert all([a == b for a, b in zip(expected_chunks[1], chunks[1])])
+    @freeze_time("2012-01-14 12:00:01")
+    def test_with_utc_tz(self):
+        assert to_timestamp(datetime.now(tz=UTC)) == 1326542401000
 
+    @freeze_time("2012-01-14 12:00:01")
+    def test_with_other_tz(self):
+        four_hours_ahead = tzoffset("test", timedelta(hours=4))
+        assert to_timestamp(datetime.now(tz=four_hours_ahead)) == 1326542401000
 
-def test_chunk_iterator_when_iterator_len_is_not_a_multiple_of_chunk_size():
-    iterator = range(0, 8)
-    expected_chunks = [list(range(0, 5)), list(range(5, 8))]
-    chunks = list(chunk_iterator(iterator, chunk_size=5))
-
-    assert len(chunks) == 2
-    assert len(chunks[0]) == 5
-    assert len(chunks[1]) == 3
-    assert all([a == b for a, b in zip(expected_chunks[0], chunks[0])])
-    assert all([a == b for a, b in zip(expected_chunks[1], chunks[1])])
+    @freeze_time("2012-01-14 12:00:01.333999")
+    def test_no_rounding(self):
+        # check that the 9 doesn't round the 3 up, it just gets cut off
+        assert to_timestamp(datetime.now(tz=None)) == 1326542401000 + 333
 
 
-def test_chunk_iterator_when_iterator_len_is_less_than_chunk_size():
-    iterator = range(0, 10)
-    expected_chunk = list(range(0, 10))
-    chunks = list(chunk_iterator(iterator, chunk_size=15))
+class TestParseTimestamp:
+    def test_default_no_tz(self):
+        assert parse_to_timestamp("2012-01-14", "%Y-%m-%d") == 1326499200000
 
-    assert len(chunks) == 1
-    assert len(chunks[0]) == 10
-    assert all([a == b for a, b in zip(expected_chunk, chunks[0])])
+    def test_default_no_tz_is_utc(self):
+        no_tz = parse_to_timestamp("2012-01-14", "%Y-%m-%d")
+        with_utc_tz = parse_to_timestamp("2012-01-14", "%Y-%m-%d", UTC)
+        assert no_tz == with_utc_tz
 
+    def test_different_tz(self):
+        five_hours_behind = tzoffset("test", timedelta(hours=-5))
+        assert (
+            parse_to_timestamp(
+                "2012-01-14 15:30:54", "%Y-%m-%d %H:%M:%S", five_hours_behind
+            )
+            == 1326573054000
+        )
 
-def test_chunk_iterator_when_iterator_is_empty():
-    iterator = []
-    chunks = list(chunk_iterator(iterator, chunk_size=10))
+    def test_when_format_has_tz(self):
+        # if UTC was used instead of the tz in the formatted string, we'd expect to get
+        # 1326555054000 as the result
+        assert (
+            parse_to_timestamp("2012-01-14 15:30:54 +0300", "%Y-%m-%d %H:%M:%S %z")
+            == 1326544254000
+        )
 
-    assert len(chunks) == 0
-
-
-def test_to_timestamp():
-    # create a UTC timezone class so that we don't have to use any external libs just for this test
-    class UTC(tzinfo):
-        def utcoffset(self, dt):
-            return timedelta(0)
-
-        def tzname(self, dt):
-            return u'UTC'
-
-        def dst(self, dt):
-            return timedelta(0)
-
-    utc = UTC()
-
-    # check that dates are treated as utc
-    assert (
-        to_timestamp(datetime.strptime(u'19700101', u'%Y%m%d').replace(tzinfo=utc)) == 0
-    )
-    # check a later date too
-    assert (
-        to_timestamp(datetime.strptime(u'20180713', u'%Y%m%d').replace(tzinfo=utc))
-        == 1531440000000
-    )
+    def test_when_format_has_tz_and_we_give_tz(self):
+        ten_hours_ahead = tzoffset("test", timedelta(hours=10))
+        # if the +10 tz was applied here then we'd expect 1326519054000 to come out, but
+        # it is ignored because the timezone is specified in the formatted string
+        assert (
+            parse_to_timestamp(
+                "2012-01-14 15:30:54 +0300", "%Y-%m-%d %H:%M:%S %z", ten_hours_ahead
+            )
+            == 1326544254000
+        )
 
 
-def test_iter_pairs():
-    # check the default final_partner is None
-    assert list(iter_pairs([1, 2, 3, 4])) == [(1, 2), (2, 3), (3, 4), (4, None)]
-    # check simple scenario
-    assert list(iter_pairs([1, 2, 3, 4], u'final')) == [
-        (1, 2),
-        (2, 3),
-        (3, 4),
-        (4, u'final'),
-    ]
-    # check empty iterator
-    assert list(iter_pairs([], u'final')) == []
-    # check scenario when final partner is itself a sequence
-    assert list(iter_pairs([1, 2, 3], (1, 2))) == [(1, 2), (2, 3), (3, (1, 2))]
-    # check when everything is None
-    assert list(iter_pairs([None, None, None], u'final')) == [
-        (None, None),
-        (None, None),
-        (None, u'final'),
-    ]
-    # check that it can handle iterators too
-    assert list(iter_pairs(range(0, 4), u'final')) == [
-        (0, 1),
-        (1, 2),
-        (2, 3),
-        (3, u'final'),
-    ]
+@freeze_time("2012-01-14 12:00:01")
+def test_now():
+    assert now() == 1326542401000
+
+
+class TestPartition:
+    def test_empty(self):
+        assert list(partition([], 10)) == []
+
+    def test_even(self):
+        assert list(partition([1, 2, 3, 4, 5, 6], 2)) == [[1, 2], [3, 4], [5, 6]]
+
+    def test_uneven(self):
+        assert list(partition([1, 2, 3, 4, 5], 2)) == [[1, 2], [3, 4], [5]]
+
+    def test_more(self):
+        assert list(partition([1, 2, 3, 4, 5], 100)) == [[1, 2, 3, 4, 5]]

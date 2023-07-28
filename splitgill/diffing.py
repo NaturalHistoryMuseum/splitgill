@@ -1,217 +1,185 @@
-import abc
-import marshal
+import numbers
+from collections import deque, namedtuple
+from datetime import datetime
+from itertools import chain, zip_longest
+from typing import Iterable, Tuple, Any, Union, NamedTuple, Dict
 
-import dictdiffer
-import six
+from cytoolz import get_in
 
 
-def format_diff(differ, diff):
+def prepare(value: Any) -> Union[str, dict, tuple]:
     """
-    Formats the given differ and diff for mongo storage.
+    Prepares the given value for storage in MongoDB. Conversions are completed like so:
 
-    :param differ: the differ object
-    :param diff: the diff
-    :return: a dict for storage
+        - strings and None values are returned with no changes made
+        - numeric values are converted using str(value)
+        - bool values are converted to either 'true' or 'false'
+        - datetime values are converted to isoformat strings
+        - dict values are returned as a new dict instance, with all the keys converted
+          to strings and all the values recursively prepared using this function.
+        - lists, sets, and tuples are converted to tuples with each element of the value
+          prepared by this function.
+
+    :param value: the value to store in MongoDB
+    :return: a str, dict or tuple depending on the value passed
     """
-    return {u'id': differ.differ_id, u'd': diff}
+    if value is None or isinstance(value, str):
+        return value
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    # TODO: using str(value) when the value is a float is a bit meh as str(value) will
+    #  chop the precision of the float represented in the value inconsistently. Might be
+    #  worth using a more predictable method so that we can tell users something like
+    #  "we can only accurately represent floats up to x decimal places".
+    if isinstance(value, numbers.Number):
+        # this could just fall to the fallback as it's the same outcome, but as ints and
+        # floats are likely inputs, it makes sense to catch them early with an if rather
+        # than let them fall through all the other types we check for manually
+        return str(value)
+    if isinstance(value, datetime):
+        # stringifying this ensures the tz info is recorded and won't change going
+        # in/out mongo
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {str(key): prepare(value) for key, value in value.items()}
+    if isinstance(value, (list, set, tuple)):
+        return tuple(map(prepare, value))
+    # fallback
+    return str(value)
 
 
-def extract_diff(raw_diff):
+# a namedtuple describing the differences found by the diff function below. Each DiffOp
+# includes a tuple path and a dict of the changes made at that path.
+DiffOp = NamedTuple("DiffOp", path=Tuple[Union[str, int], ...], ops=Dict[str, Any])
+
+
+class DiffingTypeComparisonException(Exception):
+    pass
+
+
+def diff(base: dict, new: dict) -> Iterable[DiffOp]:
     """
-    Given a diff from mongo storage, return the differ object used and the diff itself.
+    Finds the differences between the two dicts, yielding DiffOps. The DiffOps describe
+    how to get the new dict from the base dict.
 
-    :param raw_diff: the diff from mongo
-    :return: a 2-tuple of the differ object used to create the diff and the diff itself
+    This function only deals with dicts, tuples, and strs. Use the prepare function
+    above before passing the dicts in.
+
+    :param base: this dict is treated as the current version
+    :param new: this dict is treated as the new version
+    :return: yields DiffOps (if any changes are found)
     """
-    return differs[raw_diff[u'id']], raw_diff[u'd']
+    if base == new:
+        return
+
+    if not isinstance(base, dict) or not isinstance(new, dict):
+        raise DiffingTypeComparisonException("Both base and new must be dicts")
+
+    missing = object()
+    queue = deque(((tuple(), base, new),))
+
+    while queue:
+        path, left, right = queue.popleft()
+        ops = {}
+
+        if isinstance(left, dict) and isinstance(right, dict):
+            new_values = {key: value for key, value in right.items() if key not in left}
+            if new_values:
+                ops["dn"] = new_values
+
+            deleted_keys = [key for key in left if key not in right]
+            if deleted_keys:
+                ops["dd"] = deleted_keys
+
+            changes = {}
+            for key, left_value in left.items():
+                right_value = right.get(key, missing)
+                # deletion or equality, nothing to do
+                if right_value is missing or left_value == right_value:
+                    continue
+
+                if isinstance(left_value, (dict, tuple)) and isinstance(
+                    right_value, (dict, tuple)
+                ):
+                    queue.append(((*path, key), left_value, right_value))
+                else:
+                    changes[key] = right_value
+
+            if changes:
+                ops["dc"] = changes
+
+        elif isinstance(left, tuple) and isinstance(right, tuple):
+            changes = []
+            for index, (left_value, right_value) in enumerate(
+                zip_longest(left, right, fillvalue=missing)
+            ):
+                if left_value == right_value:
+                    continue
+
+                if left_value is missing:
+                    # add
+                    ops["tn"] = right[index:]
+                    break
+                elif right_value is missing:
+                    # delete
+                    ops["td"] = index
+                    break
+                else:
+                    # change
+                    if isinstance(left_value, dict) and isinstance(right_value, dict):
+                        # only queue dicts, if we go into tuples we can't (easily)
+                        # reconstruct
+                        queue.append(((*path, index), left_value, right_value))
+                    else:
+                        changes.append((index, right_value))
+
+            if changes:
+                ops["tc"] = changes
+
+        else:
+            raise DiffingTypeComparisonException(f"Cannot diff {left} and {right}")
+
+        if ops:
+            yield DiffOp(path, ops)
 
 
-@six.add_metaclass(abc.ABCMeta)
-class Differ(object):
+def patch(base: dict, ops: Iterable[Union[Tuple[str, dict], DiffOp]]) -> dict:
     """
-    Abstract class defining the Differ interface methods.
+    Applies the operations in the ops iterable to the base dict, returning a new dict.
+    This function always returns a new dict, even if there are no ops to perform.
+
+    :param base: the starting dict
+    :param ops: the DiffOps to apply to the base dict (can be pure tuples, doesn't have
+                to be DiffOp objects)
+    :return: a new dict with the changes applied
     """
+    base = base.copy()
 
-    def __init__(self, differ_id):
-        """
-        :param differ_id: the id of the differ, this will be stored alongside the diffs produced
-        """
-        self.differ_id = differ_id
+    for path, op in ops:
+        # dict ops
+        if "dc" in op:
+            get_in(path, base).update(op["dc"])
+        if "dn" in op:
+            get_in(path, base).update(op["dn"])
+        if "dd" in op:
+            target = get_in(path, base)
+            for key in op["dd"]:
+                del target[key]
 
-    @abc.abstractmethod
-    def can_diff(self, data):
-        """
-        Whether this differ can diff the given data.
+        # tuple ops
+        if "tc" in op:
+            # turn into a list so that we can manipulate it
+            target = list(get_in(path, base))
+            for index, value in op["tc"]:
+                target[index] = value
+            parent = get_in(path[:-1], base)
+            parent[path[-1]] = tuple(target)
+        if "tn" in op:
+            parent = get_in(path[:-1], base)
+            # in case we get a tuple and a list, chain instead of concat
+            parent[path[-1]] = tuple(chain(parent[path[-1]], op["tn"]))
+        if "td" in op:
+            parent = get_in(path[:-1], base)
+            parent[path[-1]] = parent[path[-1]][: op["td"]]
 
-        :param data: the data to check
-        :return: True or False
-        """
-        pass
-
-    @abc.abstractmethod
-    def diff(self, old, new, ignore=None):
-        """
-        Produce a diff that when provided to the patch function can modify the old data
-        state to the new data state. If ignore is provided then the keys within it will
-        be ignored during the diff.
-
-        :param old: the old data
-        :param new: the new data
-        :param ignore: the keys to ignore. This should be a list or a set.
-        :return: the diff
-        """
-        pass
-
-    @abc.abstractmethod
-    def patch(self, diff_result, old, in_place=False):
-        """
-        Given the return from the diff function and some data, apply the diff to patch
-        the old data. If the in_place parameter is True then the patch will be applied
-        in place and the old data passed in will be returned. If in_place is False (the
-        default) then the old data is copied before applying the patch.
-
-        :param diff_result: the diff to apply
-        :param old: the old data
-        :param in_place: whether to update the old data in place or not (default: False)
-        :return: the updated data
-        """
-        pass
-
-
-class DictDifferDiffer(Differ):
-    """
-    A Differ that uses the dictdiffer lib to diff the dicts.
-
-    The ID used for this differ is 'dd'.
-    """
-
-    def __init__(self):
-        super(DictDifferDiffer, self).__init__(u'dd')
-
-    def can_diff(self, data):
-        """
-        We can diff any dict! Wee!
-
-        :param data: the data to check
-        :return: True
-        """
-        return True
-
-    def diff(self, old, new, ignore=None):
-        """
-        Diffs the two data dicts using dictdiffer and returns the diff as a list. The
-        ignore parameter is passed straight through to dictdiffer.diff so refer to that
-        doc for information on how it should be provided.
-
-        :param old: the old data
-        :param new: the new data
-        :param ignore: the keys to ignore
-        :return: the diff as a list
-        """
-        return list(dictdiffer.diff(old, new, ignore=ignore))
-
-    def patch(self, diff_result, old, in_place=False):
-        """
-        Given a dictdiffer diff result and some data, apply the diff to patch the old
-        data. If the in_place parameter is True then the patch will be applied in place
-        and the old data passed in will be returned. If in_place is False (the default)
-        then the old data is copied before applying the patch. The copy is done using
-        marshall rather than copy.deepcopy (as it is in the dictdiffer lib) as it is the
-        fastest way to copy an object.
-
-        :param diff_result: the diff to apply
-        :param old: the old data
-        :param in_place: whether to update the old data in place or not (default: False)
-        :return: the updated data
-        """
-
-        if not in_place:
-            old = marshal.loads(marshal.dumps(old))
-        return dictdiffer.patch(diff_result, old, in_place=True)
-
-
-class ShallowDiffer(Differ):
-    """
-    A Differ that only works on dicts that don't have nested dicts.
-
-    Assuming this allows it to use dict.update to patch the old data dict to the new
-    which is really quick! The ID used for this differ is 'sd'.
-    """
-
-    def __init__(self):
-        super(ShallowDiffer, self).__init__(u'sd')
-
-    def can_diff(self, data):
-        """
-        We can only diff the data if it doesn't contain any nested dicts.
-
-        :param data: the data to check
-        :return: True if the data dict passed contains no nested dicts
-        """
-        return all(not isinstance(value, dict) for value in data.values())
-
-    def diff(self, old, new, ignore=None):
-        """
-        Diffs the two data dicts and returns the diff as a dict containing two keys:
-
-            - 'r':  a list of keys that were removed
-            - 'c': a dict of changes made
-
-        Any keys present in the ignored parameter are ignored in the diff.
-
-        :param old: the old data
-        :param new: the new data
-        :param ignore: the keys to ignore
-        """
-        diff = {}
-        if ignore is None:
-            ignore = []
-        new_keys = set(new.keys()) - set(ignore)
-
-        removes = set(old.keys()) - new_keys
-        if removes:
-            diff[u'r'] = list(removes)
-
-        changes = {}
-        for key in new_keys:
-            if key in old:
-                if old[key] != new[key]:
-                    # a value has changed
-                    changes[key] = new[key]
-            else:
-                # a new value has been added
-                changes[key] = new[key]
-        if changes:
-            diff[u'c'] = changes
-
-        return diff
-
-    def patch(self, diff_result, old, in_place=False):
-        """
-        Given a diff result from this differs diff function and some data, apply the
-        diff to patch the old data using the dict.update function and `del` to remove
-        the removed keys.
-
-        If the in_place parameter is True then the patch will be applied in place and the old data
-        passed in will be returned. If in_place is False (the default) then the old data is copied
-        before applying the patch. The copy is done using marshall rather for speed.
-
-        :param diff_result: the diff to apply
-        :param old: the old data
-        :param in_place: whether to update the old data in place or not (default: False)
-        :return: the updated data
-        """
-        if not in_place:
-            old = marshal.loads(marshal.dumps(old))
-        for key in diff_result.get(u'r', []):
-            del old[key]
-        old.update(diff_result.get(u'c', {}))
-        return old
-
-
-# the differs, instantiated globally for ease of use
-SHALLOW_DIFFER = ShallowDiffer()
-DICT_DIFFER_DIFFER = DictDifferDiffer()
-
-# a dict of all the differs, instantiated and keyed by their ids
-differs = {differ.differ_id: differ for differ in [SHALLOW_DIFFER, DICT_DIFFER_DIFFER]}
+    return base
