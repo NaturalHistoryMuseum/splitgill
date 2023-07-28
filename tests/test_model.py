@@ -4,7 +4,7 @@ from uuid import uuid4
 from bson import ObjectId
 
 from splitgill.diffing import diff, prepare
-from splitgill.model import MongoRecord, VersionedData
+from splitgill.model import MongoRecord, VersionedData, Status
 
 
 def create_mongo_record(version: int, data: dict, *historical_data: VersionedData):
@@ -53,8 +53,31 @@ class TestMongoRecord:
         data = {"x": 5, "y": [1, 2, 3]}
         prepare_spy = Mock(wraps=prepare)
 
-        with patch('splitgill.model.prepare', prepare_spy):
+        with patch("splitgill.model.prepare", prepare_spy):
             record = MongoRecord(ObjectId(), str(uuid4()), 10, data)
 
         assert record.data == {"x": "5", "y": ("1", "2", "3")}
         prepare_spy.assert_called_once_with(data)
+
+
+class TestStatus:
+    def test_to_doc_no_mongo_id(self):
+        status = Status("test", 100)
+        doc = status.to_doc()
+        assert doc == {
+            "name": status.name,
+            "m_version": status.m_version,
+            "e_version": status.e_version,
+        }
+        assert "_id" not in doc
+
+    def test_to_doc_with_mongo_id(self):
+        mongo_id = ObjectId()
+        status = Status("test", 100, _id=mongo_id)
+        doc = status.to_doc()
+        assert doc == {
+            "name": status.name,
+            "m_version": status.m_version,
+            "e_version": status.e_version,
+            "_id": mongo_id,
+        }

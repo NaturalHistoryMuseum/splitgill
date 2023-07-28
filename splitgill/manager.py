@@ -95,15 +95,30 @@ class SplitgillDatabase:
         return status.m_version if status else None
 
     def get_status(self) -> Optional[Status]:
+        """
+        Return the current status for this database.
+
+        :return: a Status object or None if no status is set currently
+        """
         doc = self.status_collection.find_one({"name": self.name})
         return Status(**doc) if doc else None
 
     def set_status(self, status: Status):
+        """
+        Updates the current status by replacing the current status with the given status
+        object.
+
+        :param status: the new Status object
+        """
+        assert self.name == status.name, "Database name doesn't match name in status"
         self.status_collection.replace_one(
-            {"name": self.name}, asdict(status), upsert=True
+            {"name": self.name}, status.to_doc(), upsert=True
         )
 
     def clear_status(self):
+        """
+        Clears the status for this database by deleting the doc.
+        """
         self.status_collection.delete_one({"name": self.name})
 
     def commit(self):

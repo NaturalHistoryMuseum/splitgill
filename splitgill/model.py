@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from typing import Dict, Iterable, NamedTuple, List, Optional
 from uuid import uuid4
 
@@ -17,7 +17,7 @@ class Record:
     data: dict
 
     @staticmethod
-    def new(data: dict) -> 'Record':
+    def new(data: dict) -> "Record":
         return Record(str(uuid4()), data)
 
 
@@ -89,3 +89,19 @@ class Status:
     m_version: int
     e_version: Optional[int] = None
     _id: Optional[ObjectId] = None
+
+    def to_doc(self) -> dict:
+        """
+        Converts this object to a dict ready for storage in MongoDB. If this object
+        hasn't been stored in the MongoDB yet, then the _id field is not included, if it
+        has, then the _id is included.
+
+        :return: a dict
+        """
+        doc = asdict(self)
+        # if the _id is None then this status object hasn't been saved, remove it from
+        # the dict to avoid attempting to write a doc with _id=None which MongoDB will
+        # allow
+        if self._id is None:
+            del doc["_id"]
+        return doc

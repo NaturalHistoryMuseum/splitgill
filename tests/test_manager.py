@@ -1,3 +1,5 @@
+import pytest
+from bson import ObjectId
 from freezegun import freeze_time
 
 from splitgill.manager import (
@@ -6,7 +8,7 @@ from splitgill.manager import (
     STATUS_COLLECTION_NAME,
     SplitgillDatabase,
 )
-from splitgill.model import Record
+from splitgill.model import Record, Status
 
 
 class TestSplitgillClient:
@@ -70,3 +72,65 @@ class TestSplitgillDatabaseDataVersion:
         # data version shouldn't have changed, even though the version in the data
         # collection will be newer
         assert database.data_version == 1326542401000
+
+
+class TestSplitgillDatabaseStatusCrud:
+    def test_no_status(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        assert database.get_status() is None
+
+    def test_set_status_first_time(self, splitgill: SplitgillClient):
+        name = "test"
+        database = SplitgillDatabase(name, splitgill)
+        status = Status(name, 1000)
+
+        database.set_status(status)
+
+        status_in_db = database.get_status()
+        assert status_in_db.name == status.name
+        assert status_in_db.m_version == status.m_version
+        assert status_in_db.e_version == status.e_version
+        assert status_in_db._id is not None
+
+    def test_set_status_twice(self, splitgill: SplitgillClient):
+        name = "test"
+        database = SplitgillDatabase(name, splitgill)
+
+        status = Status(name, 1000)
+        database.set_status(status)
+        status_in_db = database.get_status()
+        assert status_in_db.name == status.name
+        assert status_in_db.m_version == status.m_version
+        assert status_in_db.e_version == status.e_version
+        assert status_in_db._id is not None
+
+        status = Status(name, 1001)
+        database.set_status(status)
+        status_in_db = database.get_status()
+        assert status_in_db.name == status.name
+        assert status_in_db.m_version == status.m_version
+        assert status_in_db.e_version == status.e_version
+        assert status_in_db._id is not None
+
+    def test_set_status_incorrect_name(self, splitgill: SplitgillClient):
+        name = "test"
+        other_name = "not_test"
+        database = SplitgillDatabase(name, splitgill)
+
+        status = Status(other_name, 100)
+        with pytest.raises(AssertionError):
+            database.set_status(status)
+
+    def test_delete_status_no_status(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        database.clear_status()
+        assert database.get_status() is None
+
+    def test_delete_status(self, splitgill: SplitgillClient):
+        name = "test"
+        database = SplitgillDatabase(name, splitgill)
+        database.set_status(Status(name, 100))
+
+        assert database.get_status() is not None
+        database.clear_status()
+        assert database.get_status() is None
