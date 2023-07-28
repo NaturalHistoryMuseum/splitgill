@@ -12,4 +12,4 @@ RUN pip install -r ./docs/requirements.txt
 
 COPY . .
 
-CMD [ "pytest", "--cov=splitgill" ]
+CMD [ "bash", "docker/run-tests.sh" ]
