@@ -27,6 +27,7 @@ dependencies = [
     "elasticsearch-dsl>=7.0.0,<8.0.0",
     "pymongo>=4.4.1",
     "cytoolz>=0.12.2",
+    "python-dateutil>=2.8.2",
 ]
 
 [project.optional-dependencies]
