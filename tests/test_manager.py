@@ -1,12 +1,15 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, Mock
 
+import pytest
 from freezegun import freeze_time
 
+from splitgill.ingest import get_version
 from splitgill.manager import (
     SplitgillClient,
     MONGO_DATABASE_NAME,
     STATUS_COLLECTION_NAME,
     SplitgillDatabase,
+    OPS_SIZE,
 )
 from splitgill.model import Record, Status
 
@@ -171,3 +174,63 @@ class TestDetermineNextStatus:
 
         with freeze_time("2012-01-14 12:00:01"):
             assert database.determine_next_version() == 1326542401000
+
+
+class TestAdd:
+    def test_no_records(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        database.add([])
+        assert database.data_version is None
+
+    @freeze_time("2012-01-14 12:00:01")
+    def test_with_records(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        count = 100
+        record_iter = (Record.new({"x": i}) for i in range(count))
+
+        database.add(record_iter)
+
+        assert database.data_collection.count_documents({}) == count
+        assert database.data_version == 1326542401000
+        assert database.get_status().m_version == 1326542401000
+
+    def test_is_batched(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        batches_goal = 5
+        count = OPS_SIZE * batches_goal
+        record_iter = (Record.new({"x": i}) for i in range(count))
+
+        bulk_write_spy = Mock(wraps=database.data_collection.bulk_write)
+        database.data_collection.bulk_write = bulk_write_spy
+
+        database.add(record_iter)
+
+        assert database.data_collection.count_documents({}) == count
+        assert bulk_write_spy.call_count == batches_goal
+
+    def test_commit_and_is_default(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+
+        database.add([Record.new({"x": 10})])
+
+        data_version = get_version(database.data_collection)
+        assert data_version is not None
+        assert get_version(database.data_collection) == database.data_version
+
+    def test_no_commit(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+
+        database.add([Record.new({"x": 10})], commit=False)
+
+        assert get_version(database.data_collection) is not None
+        assert database.data_version is None
+
+    def test_no_commit_when_error(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        # force bulk write to error when called
+        database.data_collection.bulk_write = MagicMock(side_effect=Exception('oh no!'))
+
+        with pytest.raises(Exception, match='oh no!'):
+            database.add([Record.new({"x": 10})], commit=True)
+
+        assert database.data_version is None

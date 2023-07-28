@@ -175,6 +175,25 @@ class SplitgillDatabase:
                 return now()
 
     def add(self, records: Iterable[Record], commit=True):
+        """
+        Adds the given records to the database. This only adds the records to the
+        MongoDB data collection, it doesn't trigger the indexing of this new data into
+        the Elasticsearch cluster.
+
+        Use the commit keyword argument to either close the transaction after writing
+        these records or leave it open. By default, the transaction is committed before
+        the method returns.
+
+        If an error occurs, the transaction will not be committed, but the changes will
+        not be rolled back.
+
+        :param records: the records to add. These will be added in batches, so it is
+                        safe to pass a very large stream of records
+        :param commit: whether to commit the new version to the status after writing the
+                       records. Default: True.
+        """
+        # TODO: return some stats about the add
+        # TODO: locking?
         version = self.determine_next_version()
 
         # this does nothing if the indexes already exist
