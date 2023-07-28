@@ -82,6 +82,15 @@ class SplitgillDatabase:
 
     @property
     def data_version(self) -> Optional[int]:
+        """
+        Returns the currently committed data version, if there is one available. This
+        version is the number stored in the main database status object, not
+        (necessarily) the latest version in the actual data collection for this
+        database. It therefore will always represent the latest complete version of the
+        data.
+
+        :return: a version timestamp or None
+        """
         status = self.get_status()
         return status.m_version if status else None
 
