@@ -43,3 +43,38 @@ def splitgill(
     mongo_client: MongoClient, elasticsearch_client: Elasticsearch
 ) -> SplitgillClient:
     return SplitgillClient(mongo_client, elasticsearch_client)
+
+
+# these are all nabbed from wikipedia: https://en.wikipedia.org/wiki/GeoJSON#Geometries
+@pytest.fixture
+def geojson_point() -> dict:
+    return {"type": "Point", "coordinates": (30.0, 10.0)}
+
+
+@pytest.fixture
+def geojson_linestring() -> dict:
+    return {
+        "type": "LineString",
+        "coordinates": [(30.0, 10.0), (10.0, 30.0), (40.0, 40.0)],
+    }
+
+
+@pytest.fixture
+def geojson_polygon() -> dict:
+    return {
+        "type": "Polygon",
+        "coordinates": [
+            [(30.0, 10.0), (40.0, 40.0), (20.0, 40.0), (10.0, 20.0), (30.0, 10.0)]
+        ],
+    }
+
+
+@pytest.fixture
+def geojson_holed_polygon() -> dict:
+    return {
+        "type": "Polygon",
+        "coordinates": [
+            [(35.0, 10.0), (45.0, 45.0), (15.0, 40.0), (10.0, 20.0), (35.0, 10.0)],
+            [(20.0, 30.0), (35.0, 35.0), (30.0, 20.0), (20.0, 30.0)],
+        ],
+    }
