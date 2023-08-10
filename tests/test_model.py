@@ -35,7 +35,7 @@ class TestMongoRecord:
 
         record = create_mongo_record(data[0].version, data[0].data, *data[1:])
 
-        for actual, expected in zip(record.__iter__(), data):
+        for actual, expected in zip(record.iter(), data):
             assert expected == actual
 
     def test_versions(self):

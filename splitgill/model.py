@@ -62,7 +62,7 @@ class MongoRecord:
         versions.insert(0, self.version)
         return versions
 
-    def __iter__(self) -> Iterable[VersionedData]:
+    def iter(self) -> Iterable[VersionedData]:
         """
         Yields the versions and data of this record. These are yielded as (int, dict)
         VersionedData named tuples. The tuples are yielded in reverse order, starting
