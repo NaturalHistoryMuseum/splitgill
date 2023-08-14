@@ -36,6 +36,11 @@ def data_collection(mongo_database: Database) -> Collection:
 def elasticsearch_client() -> Elasticsearch:
     with Elasticsearch("http://es:9200") as es:
         yield es
+        es.indices.delete(index="*")
+        index_templates = es.indices.get_index_template(name="*")
+        for index_template in index_templates['index_templates']:
+            with suppress(Exception):
+                es.indices.delete_index_template(name=index_template["name"])
 
 
 @pytest.fixture
