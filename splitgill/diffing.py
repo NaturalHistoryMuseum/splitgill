@@ -1,5 +1,5 @@
 import numbers
-from collections import deque, namedtuple
+from collections import deque
 from datetime import datetime
 from itertools import chain, zip_longest
 from typing import Iterable, Tuple, Any, Union, NamedTuple, Dict
