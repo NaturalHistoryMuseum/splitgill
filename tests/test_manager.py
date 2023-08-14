@@ -1,8 +1,10 @@
+from datetime import datetime
 from unittest.mock import patch, MagicMock, Mock
 
 import pytest
 from freezegun import freeze_time
 
+from splitgill.indexing.index import get_data_index_id
 from splitgill.ingest import get_version
 from splitgill.manager import (
     SplitgillClient,
@@ -12,6 +14,7 @@ from splitgill.manager import (
     OPS_SIZE,
 )
 from splitgill.model import Record, Status
+from splitgill.utils import to_timestamp
 
 
 class TestSplitgillClient:
@@ -228,9 +231,139 @@ class TestAdd:
     def test_no_commit_when_error(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
         # force bulk write to error when called
-        database.data_collection.bulk_write = MagicMock(side_effect=Exception('oh no!'))
+        database.data_collection.bulk_write = MagicMock(side_effect=Exception("oh no!"))
 
-        with pytest.raises(Exception, match='oh no!'):
+        with pytest.raises(Exception, match="oh no!"):
             database.add([Record.new({"x": 10})], commit=True)
 
         assert database.data_version is None
+
+
+class TestSync:
+    def test_nothing_to_sync(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        database.sync()
+
+        assert not splitgill.elasticsearch.indices.exists(
+            index=database.latest_index_name
+        )
+
+    def test_everything_to_sync(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+
+        version_time = datetime(2020, 7, 2)
+
+        with freeze_time(version_time):
+            database.add(
+                [
+                    Record.new({"x": 5}),
+                    Record.new({"x": 10}),
+                    Record.new({"x": 15}),
+                    Record.new({"x": -1}),
+                ],
+                commit=True,
+            )
+
+        database.sync()
+        splitgill.elasticsearch.indices.refresh(index=database.latest_index_name)
+
+        assert splitgill.elasticsearch.indices.exists(index=database.latest_index_name)
+        assert not splitgill.elasticsearch.indices.exists(
+            index=get_data_index_id(database.name, to_timestamp(version_time))
+        )
+        assert (
+            splitgill.elasticsearch.count(index=database.latest_index_name)["count"]
+            == 4
+        )
+
+    def test_one_sync_then_another(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+
+        version_1_time = datetime(2020, 7, 2)
+        version_1_records = [
+            Record.new({"x": 5}),
+            Record.new({"x": 10}),
+            Record.new({"x": 15}),
+            Record.new({"x": -1}),
+        ]
+        latest_index = database.latest_index_name
+        old_2020_index = get_data_index_id(database.name, to_timestamp(version_1_time))
+
+        # add some records at a specific version
+        with freeze_time(version_1_time):
+            database.add(version_1_records, commit=True)
+
+        database.sync()
+        splitgill.elasticsearch.indices.refresh(index=latest_index)
+        assert splitgill.elasticsearch.count(index=latest_index)["count"] == 4
+        assert not splitgill.elasticsearch.indices.exists(index=old_2020_index)
+
+        # the next day...
+        version_2_time = datetime(2020, 7, 3)
+        version_2_records = [
+            # a new record
+            Record.new({"x": 7}),
+            # an update to the first record in the version 1 set of records
+            Record(version_1_records[0].id, {"x": 6}),
+        ]
+
+        # update the records
+        with freeze_time(version_2_time):
+            database.add(version_2_records, commit=True)
+
+        database.sync()
+        splitgill.elasticsearch.indices.refresh(index=[latest_index, old_2020_index])
+
+        assert splitgill.elasticsearch.count(index=latest_index)["count"] == 5
+        assert splitgill.elasticsearch.count(index=old_2020_index)["count"] == 1
+
+    def test_sync_with_delete(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+
+        version_1_time = datetime(2020, 7, 2)
+        version_1_records = [
+            Record.new({"x": 5}),
+            Record.new({"x": 10}),
+            Record.new({"x": 15}),
+            Record.new({"x": -1}),
+        ]
+        latest_index = database.latest_index_name
+        old_2020_index = get_data_index_id(database.name, to_timestamp(version_1_time))
+
+        # add some records at a specific version
+        with freeze_time(version_1_time):
+            database.add(version_1_records, commit=True)
+
+        database.sync()
+        splitgill.elasticsearch.indices.refresh(index=latest_index)
+        assert splitgill.elasticsearch.count(index=latest_index)["count"] == 4
+        assert not splitgill.elasticsearch.indices.exists(index=old_2020_index)
+
+        # the next day...
+        version_2_time = datetime(2020, 7, 3)
+        version_2_records = [
+            # a new record
+            Record.new({"x": 7}),
+            # delete a record!
+            Record(version_1_records[2].id, {}),
+        ]
+
+        # update the records
+        with freeze_time(version_2_time):
+            database.add(version_2_records, commit=True)
+
+        database.sync()
+        splitgill.elasticsearch.indices.refresh(index=[latest_index, old_2020_index])
+
+        assert splitgill.elasticsearch.count(index=latest_index)["count"] == 4
+        assert splitgill.elasticsearch.count(index=old_2020_index)["count"] == 1
+
+        # the second record shouldn't be in the latest index
+        assert not splitgill.elasticsearch.exists(
+            id=version_2_records[1].id, index=latest_index
+        )
+        # but it should be in the old index
+        assert splitgill.elasticsearch.exists(
+            id=f"{version_2_records[1].id}:{to_timestamp(version_1_time)}",
+            index=old_2020_index,
+        )

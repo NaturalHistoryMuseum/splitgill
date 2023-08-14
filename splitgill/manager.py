@@ -1,13 +1,17 @@
+from collections import deque
 from dataclasses import dataclass
 from typing import Optional, Iterable
 
 from elasticsearch import Elasticsearch
+from elasticsearch.helpers import parallel_bulk
 from pymongo import MongoClient, IndexModel, ASCENDING, DESCENDING
 from pymongo.collection import Collection
 from pymongo.database import Database
 
+from splitgill.indexing.index import generate_index_ops, get_latest_index_id
+from splitgill.indexing.templates import DATA_TEMPLATE
 from splitgill.ingest import generate_ops, get_version
-from splitgill.model import Record, Status
+from splitgill.model import Record, Status, MongoRecord
 from splitgill.utils import now, partition
 
 MONGO_DATABASE_NAME = "sg"
@@ -79,6 +83,7 @@ class SplitgillDatabase:
         self._client = client
         self.data_collection = self._client.get_data_collection(self.name)
         self.status_collection = self._client.get_status_collection()
+        self.latest_index_name = get_latest_index_id(self.name)
 
     @property
     def data_version(self) -> Optional[int]:
@@ -208,3 +213,34 @@ class SplitgillDatabase:
 
         if commit:
             self.commit()
+
+    def sync(self):
+        """
+        Synchronise the data in MongoDB with the data in Elasticsearch by updating the
+        latest and old data indices as required.
+
+        To find the data that needs to be updated, the current version of the data in
+        MongoDB is compared to the current version of the data in Elasticsearch, and the
+        two are synced (assuming MongoDB's version is <= Elasticsearch).
+        """
+        # ensure the template exists
+        self._client.elasticsearch.indices.put_index_template(
+            name="data-template", body=DATA_TEMPLATE
+        )
+
+        since = self.data_version
+        # set up a stream of all the all records with a version newer than since
+        docs = (
+            MongoRecord(**doc)
+            for doc in self.data_collection.find({"version": {"$gte": since}})
+        )
+
+        # we don't care about the results so just throw them away into a 0-sized deque
+        deque(
+            parallel_bulk(
+                self._client.elasticsearch,
+                generate_index_ops(self.name, docs, since),
+                raise_on_error=True,
+            ),
+            maxlen=0,
+        )
