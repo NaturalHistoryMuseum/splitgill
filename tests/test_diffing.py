@@ -60,6 +60,13 @@ class TestPrepare:
         assert prepare((1, 2, 3)) == ("1", "2", "3")
         assert prepare((1, True, 3)) == ("1", "true", "3")
 
+    def test_fallback(self):
+        class A:
+            def __str__(self):
+                return "beans"
+
+        assert prepare(A()) == "beans"
+
     def test_mix(self):
         now = datetime.now()
         prepared = prepare(
