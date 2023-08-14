@@ -2,7 +2,6 @@ from splitgill.indexing.fields import TypeField, MetaField, RootField, parsed_pa
 
 # template for the data-* indices
 DATA_TEMPLATE = {
-    "name": "data_template",
     # matches the data-* indexes (e.g. data-<year>-<id> and data-latest-<id>)
     "index_patterns": ["data-*"],
     "template": {
@@ -27,48 +26,48 @@ DATA_TEMPLATE = {
                 # these fields are stored and will be returned in search results. The
                 # id and the meta fields are also indexed, but the data fields are not
                 "includes": [
-                    RootField.ID,
-                    RootField.DATA,
-                    RootField.META,
+                    RootField.ID.value,
+                    RootField.DATA.value,
+                    RootField.META.value,
                 ],
                 # these fields are not stored, only indexed
                 "excludes": [
-                    RootField.PARSED,
-                    RootField.GEO,
-                    RootField.ARRAYS,
+                    RootField.PARSED.value,
+                    RootField.GEO.value,
+                    RootField.ARRAYS.value,
                 ],
             },
             "properties": {
-                RootField.ID: {
-                    "type": "long",
+                RootField.ID.value: {
+                    "type": "keyword",
                 },
-                RootField.DATA: {
+                RootField.DATA.value: {
                     "type": "object",
                     # enabled set to false means don't index this object
                     "enabled": False,
                 },
-                MetaField.VERSIONS: {
+                MetaField.VERSIONS.value: {
                     "type": "date_range",
                     "format": "epoch_millis",
                 },
-                MetaField.VERSION: {
+                MetaField.VERSION.value: {
                     "type": "date",
                     "format": "epoch_millis",
                 },
-                MetaField.NEXT_VERSION: {
+                MetaField.NEXT_VERSION.value: {
                     "type": "date",
                     "format": "epoch_millis",
                 },
                 # the values of each field will be copied into this field for easy
                 # querying (see the dynamic keyword_field below)
-                MetaField.ALL: {
+                MetaField.ALL.value: {
                     "type": "text",
                 },
             },
             "dynamic_templates": [
                 {
                     "geo_field": {
-                        "path_match": f"{RootField.GEO}.*",
+                        "path_match": f"{RootField.GEO.value}.*",
                         "mapping": {
                             "type": "geo_shape",
                         },
@@ -76,7 +75,7 @@ DATA_TEMPLATE = {
                 },
                 {
                     "arrays_field": {
-                        "path_match": f"{RootField.ARRAYS}.*",
+                        "path_match": f"{RootField.ARRAYS.value}.*",
                         "mapping": {
                             "type": "short",
                         },
@@ -88,18 +87,18 @@ DATA_TEMPLATE = {
                 # work
                 {
                     "keyword_field": {
-                        "path_match": parsed_path("*", TypeField.KEYWORD),
+                        "path_match": parsed_path("*", TypeField.KEYWORD.value),
                         "mapping": {
                             "type": "keyword",
                             "normalizer": "lowercase_normalizer",
                             "ignore_above": 256,
-                            "copy_to": MetaField.ALL,
+                            "copy_to": MetaField.ALL.value,
                         },
                     },
                 },
                 {
                     "text_field": {
-                        "path_match": parsed_path("*", TypeField.TEXT),
+                        "path_match": parsed_path("*", TypeField.TEXT.value),
                         "mapping": {
                             "type": "text",
                         },
@@ -107,7 +106,7 @@ DATA_TEMPLATE = {
                 },
                 {
                     "number_field": {
-                        "path_match": parsed_path("*", TypeField.NUMBER),
+                        "path_match": parsed_path("*", TypeField.NUMBER.value),
                         "mapping": {
                             "type": "float",
                         },
@@ -115,7 +114,7 @@ DATA_TEMPLATE = {
                 },
                 {
                     "date_field": {
-                        "path_match": parsed_path("*", TypeField.DATE),
+                        "path_match": parsed_path("*", TypeField.DATE.value),
                         "mapping": {
                             "type": "date",
                             "format": "strict_date_optional_time",
@@ -124,7 +123,7 @@ DATA_TEMPLATE = {
                 },
                 {
                     "boolean_field": {
-                        "path_match": parsed_path("*", TypeField.BOOLEAN),
+                        "path_match": parsed_path("*", TypeField.BOOLEAN.value),
                         "mapping": {
                             "type": "boolean",
                         },
