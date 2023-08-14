@@ -35,7 +35,7 @@ class MongoRecord:
     version: int
     data: dict
     # you'd expect the keys to be ints but MongoDB doesn't allow non-string keys
-    diffs: Dict[str, List[DiffOp]] = field(default_factory=list)
+    diffs: Dict[str, List[DiffOp]] = field(default_factory=dict)
 
     def __post_init__(self):
         # to be safe, we need to prepare the data we have stored in MongoDB so that any
