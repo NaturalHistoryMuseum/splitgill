@@ -1,4 +1,13 @@
-from splitgill.indexing.fields import TypeField, MetaField, RootField, parsed_path
+from splitgill.indexing.fields import (
+    MetaField,
+    RootField,
+    boolean_path,
+    date_path,
+    number_path,
+    text_path,
+    keyword_path,
+    arrays_path,
+)
 
 # template for the data-* indices
 DATA_TEMPLATE = {
@@ -75,7 +84,7 @@ DATA_TEMPLATE = {
                 },
                 {
                     "arrays_field": {
-                        "path_match": f"{RootField.ARRAYS}.*",
+                        "path_match": arrays_path("*"),
                         "mapping": {
                             "type": "short",
                         },
@@ -87,7 +96,7 @@ DATA_TEMPLATE = {
                 # work
                 {
                     "keyword_field": {
-                        "path_match": parsed_path("*", TypeField.KEYWORD),
+                        "path_match": keyword_path("*"),
                         "mapping": {
                             "type": "keyword",
                             "normalizer": "lowercase_normalizer",
@@ -98,7 +107,7 @@ DATA_TEMPLATE = {
                 },
                 {
                     "text_field": {
-                        "path_match": parsed_path("*", TypeField.TEXT),
+                        "path_match": text_path("*"),
                         "mapping": {
                             "type": "text",
                         },
@@ -106,7 +115,7 @@ DATA_TEMPLATE = {
                 },
                 {
                     "number_field": {
-                        "path_match": parsed_path("*", TypeField.NUMBER),
+                        "path_match": number_path("*"),
                         "mapping": {
                             "type": "float",
                         },
@@ -114,7 +123,7 @@ DATA_TEMPLATE = {
                 },
                 {
                     "date_field": {
-                        "path_match": parsed_path("*", TypeField.DATE),
+                        "path_match": date_path("*"),
                         "mapping": {
                             "type": "date",
                             "format": "strict_date_optional_time",
@@ -123,7 +132,7 @@ DATA_TEMPLATE = {
                 },
                 {
                     "boolean_field": {
-                        "path_match": parsed_path("*", TypeField.BOOLEAN),
+                        "path_match": boolean_path("*"),
                         "mapping": {
                             "type": "boolean",
                         },
