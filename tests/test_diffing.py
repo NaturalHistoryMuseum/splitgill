@@ -184,6 +184,14 @@ patching_scenarios = [
     ({"x": "4"}, {"x": "6", "y": "10"}),
     # dd
     ({"x": "4", "y": "10"}, {"x": "4"}),
+    # tuple becomes str
+    ({"x": ("1", "2", "3")}, {"x": "543"}),
+    # dict becomes str
+    ({"x": {"y": "4"}}, {"x": "543"}),
+    # str becomes tuple
+    ({"x": "543"}, {"x": ("1", "2", "3")}),
+    # str becomes dict
+    ({"x": "543"}, {"x": {"y": "4"}}),
     # tuple becomes dict
     ({"x": ("1", "2", "3")}, {"x": {"y": "1"}}),
     # dict becomes tuple
