@@ -249,6 +249,19 @@ class TestAsGeoJSON:
     def test_valid_linear_and_hole_winding_polygon(self, geojson_holed_polygon: dict):
         assert as_geojson(geojson_holed_polygon) == geojson_holed_polygon
 
+    def test_invalid_not_closed_polygon_in_linear_ring(self, geojson_polygon: dict):
+        polygon = geojson_polygon.copy()
+        # remove the last coordinate
+        del polygon["coordinates"][0][-1]
+        assert as_geojson(polygon) is None
+
+    def test_invalid_not_closed_polygon_in_hole(self, geojson_holed_polygon: dict):
+        # in the linear ring
+        polygon = geojson_holed_polygon.copy()
+        # remove the last coordinate
+        del polygon["coordinates"][1][-1]
+        assert as_geojson(polygon) is None
+
     def test_invalid_linear_but_valid_hole_winding_polygon(
         self, geojson_holed_polygon: dict
     ):
