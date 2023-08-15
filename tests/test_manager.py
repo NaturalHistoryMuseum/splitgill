@@ -97,6 +97,58 @@ class TestGetMongoVersion:
         assert database.get_mongo_version() == 10000
 
 
+class TestGetElasticsearchVersion:
+    def test_no_docs(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        assert database.get_elasticsearch_version() is None
+
+    def test_with_docs(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        versions = [
+            # latest
+            1692119228000,
+            1681578428000,
+            1673802428000,
+            1579108028000,
+        ]
+        for version in versions:
+            # make some bare-bones docs
+            doc = {
+                "meta": {"version": version},
+            }
+            splitgill.elasticsearch.index(
+                index=database.latest_index_name,
+                document=doc,
+                refresh=True,
+            )
+        assert database.get_elasticsearch_version() == versions[0]
+
+    def test_with_deleted_docs(self, splitgill: SplitgillClient):
+        # this imitates the scenario where all the records in the database have been
+        # deleted and therefore there is no data in the latest index but there is in the
+        # old data indices
+        database = SplitgillDatabase("test", splitgill)
+        versions = [
+            # latest
+            1692119228000,
+            1681578428000,
+            1673802428000,
+            1579108028000,
+        ]
+        for version in versions:
+            # make some bare-bones docs
+            doc = {
+                "meta": {"version": version},
+            }
+            splitgill.elasticsearch.index(
+                # put these in not the latest index
+                index=get_data_index_id(database.name, version),
+                document=doc,
+                refresh=True,
+            )
+        assert database.get_elasticsearch_version() == versions[0]
+
+
 class TestSplitgillDatabaseGetStatus:
     def test_no_status(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)

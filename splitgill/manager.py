@@ -2,12 +2,14 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Optional, Iterable
 
+from cytoolz.dicttoolz import get_in
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import parallel_bulk
 from pymongo import MongoClient, IndexModel, ASCENDING, DESCENDING
 from pymongo.collection import Collection
 from pymongo.database import Database
 
+from splitgill.indexing.fields import MetaField
 from splitgill.indexing.index import generate_index_ops, get_latest_index_id
 from splitgill.indexing.templates import DATA_TEMPLATE
 from splitgill.ingest import generate_ops
@@ -111,6 +113,28 @@ class SplitgillDatabase:
         if last is None:
             return None
         return last["version"]
+
+    def get_elasticsearch_version(self) -> Optional[int]:
+        """
+        Returns the latest version found in the Elasticsearch indices for this database.
+        If no records exist in any index, None is returned.
+
+        :return: the max version or None
+        """
+        result = self._client.elasticsearch.search(
+            aggs={"max_version": {"max": {"field": MetaField.VERSION}}},
+            size=0,
+            # search all data indices for this database
+            index=f"data-*-{self.name}",
+        )
+
+        version = get_in(("aggregations", "max_version", "value"), result, None)
+        if version is None:
+            return None
+
+        # elasticsearch does max aggs using the double type apparently, so we need to
+        # convert it back to an int to avoid returning a float and causing confusion
+        return int(version)
 
     def get_status(self) -> Optional[Status]:
         """
