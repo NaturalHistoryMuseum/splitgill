@@ -46,14 +46,14 @@ class TestCreateIndexOp:
         assert op["_op_type"] == "index"
         assert op["_index"] == index_name
         assert op["_id"] == record_id
-        assert op[RootField.ID.value] == record_id
-        assert op[RootField.DATA.value] == data
-        assert op[RootField.PARSED.value] == parsed_data.parsed
-        assert op[RootField.GEO.value] == parsed_data.geo
-        assert op[RootField.ARRAYS.value] == parsed_data.arrays
-        assert op[RootField.META.value] == {
-            MetaField.VERSION.value: version,
-            MetaField.VERSIONS.value: {
+        assert op[RootField.ID] == record_id
+        assert op[RootField.DATA] == data
+        assert op[RootField.PARSED] == parsed_data.parsed
+        assert op[RootField.GEO] == parsed_data.geo
+        assert op[RootField.ARRAYS] == parsed_data.arrays
+        assert op[RootField.META] == {
+            MetaField.VERSION: version,
+            MetaField.VERSIONS: {
                 "gte": version,
                 # no lt
             },
@@ -74,15 +74,15 @@ class TestCreateIndexOp:
         assert op["_op_type"] == "index"
         assert op["_index"] == index_name
         assert op["_id"] == f"{record_id}:{version}"
-        assert op[RootField.ID.value] == record_id
-        assert op[RootField.DATA.value] == data
-        assert op[RootField.PARSED.value] == parsed_data.parsed
-        assert op[RootField.GEO.value] == parsed_data.geo
-        assert op[RootField.ARRAYS.value] == parsed_data.arrays
-        assert op[RootField.META.value] == {
-            MetaField.VERSION.value: version,
-            MetaField.VERSIONS.value: {"gte": version, "lt": next_version},
-            MetaField.NEXT_VERSION.value: next_version,
+        assert op[RootField.ID] == record_id
+        assert op[RootField.DATA] == data
+        assert op[RootField.PARSED] == parsed_data.parsed
+        assert op[RootField.GEO] == parsed_data.geo
+        assert op[RootField.ARRAYS] == parsed_data.arrays
+        assert op[RootField.META] == {
+            MetaField.VERSION: version,
+            MetaField.VERSIONS: {"gte": version, "lt": next_version},
+            MetaField.NEXT_VERSION: next_version,
         }
 
 

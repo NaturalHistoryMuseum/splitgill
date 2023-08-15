@@ -1,24 +1,27 @@
-from enum import Enum
+from strenum import LowercaseStrEnum, StrEnum
 from typing import Optional
+from enum import auto
 
 
-class RootField(Enum):
+# TODO: Python3.11 has a StrEnum in the stdlib but we need to support <= 3.11 atm so we
+#       can't use it. When we do go up to >=3.11 we should be able to remove strenum as
+#       a dependency
+
+
+class RootField(LowercaseStrEnum):
     """
     Fields at the root of the Elasticsearch doc.
     """
 
-    ID = "id"
-    DATA = "data"
-    META = "meta"
-    PARSED = "parsed"
-    GEO = "geo"
-    ARRAYS = "arrays"
-
-    def __str__(self) -> str:
-        return self.value
+    ID = auto()
+    DATA = auto()
+    META = auto()
+    PARSED = auto()
+    GEO = auto()
+    ARRAYS = auto()
 
 
-class MetaField(Enum):
+class MetaField(StrEnum):
     """
     Paths to the fields in the meta object.
     """
@@ -28,11 +31,8 @@ class MetaField(Enum):
     VERSION = f"{RootField.META}.version"
     NEXT_VERSION = f"{RootField.META}.next_version"
 
-    def __str__(self) -> str:
-        return self.value
 
-
-class TypeField(Enum):
+class TypeField(StrEnum):
     """
     Parsed field short names, these are the leaf fields of the parsed field object, e.g.
     if we have a field called height, then we're likely to have:
@@ -49,9 +49,6 @@ class TypeField(Enum):
     NUMBER = "n"
     DATE = "d"
     BOOLEAN = "b"
-
-    def __str__(self) -> str:
-        return self.value
 
 
 def parsed_path(field_name: str, type_field: TypeField) -> str:

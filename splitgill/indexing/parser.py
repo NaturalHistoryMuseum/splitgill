@@ -173,19 +173,19 @@ def parse_str(value: str) -> dict:
     :return: a dict of parsed values
     """
     parsed = {
-        TypeField.TEXT.value: value,
-        TypeField.KEYWORD.value: value,
+        TypeField.TEXT: value,
+        TypeField.KEYWORD: value,
     }
 
     # attempt to parse booleans
     if value.lower() in BOOLS:
-        parsed[TypeField.BOOLEAN.value] = BOOLS[value.lower()]
+        parsed[TypeField.BOOLEAN] = BOOLS[value.lower()]
         return parsed
 
     # attempt parsing the value as a number
     as_number = try_float(value, inf=None, nan=None, on_fail=None)
     if as_number is not None:
-        parsed[TypeField.NUMBER.value] = as_number
+        parsed[TypeField.NUMBER] = as_number
         return parsed
 
     try:
@@ -202,7 +202,7 @@ def parse_str(value: str) -> dict:
                 date_value = datetime(date_value.year, date_value.month, date_value.day)
 
             # TODO: should this be in UTC? should it be an epoch?
-            parsed[TypeField.DATE.value] = date_value.isoformat()
+            parsed[TypeField.DATE] = date_value.isoformat()
             return parsed
     except ValueError:
         pass

@@ -63,14 +63,14 @@ def create_index_op(
     op = {
         "_op_type": "index",
         "_index": index_name,
-        RootField.ID.value: record_id,
-        RootField.DATA.value: data,
-        RootField.PARSED.value: parsed_data.parsed,
-        RootField.GEO.value: parsed_data.geo,
-        RootField.ARRAYS.value: parsed_data.arrays,
-        RootField.META.value: {
-            MetaField.VERSION.value: version,
-            MetaField.VERSIONS.value: {
+        RootField.ID: record_id,
+        RootField.DATA: data,
+        RootField.PARSED: parsed_data.parsed,
+        RootField.GEO: parsed_data.geo,
+        RootField.ARRAYS: parsed_data.arrays,
+        RootField.META: {
+            MetaField.VERSION: version,
+            MetaField.VERSIONS: {
                 "gte": version,
             },
         },
@@ -79,8 +79,8 @@ def create_index_op(
         op["_id"] = record_id
     else:
         op["_id"] = f"{record_id}:{version}"
-        op[RootField.META.value][MetaField.NEXT_VERSION.value] = next_version
-        op[RootField.META.value][MetaField.VERSIONS.value]["lt"] = next_version
+        op[RootField.META][MetaField.NEXT_VERSION] = next_version
+        op[RootField.META][MetaField.VERSIONS]["lt"] = next_version
 
     return op
 

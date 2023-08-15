@@ -132,67 +132,67 @@ class TestParseForIndex:
 class TestParseStr:
     def test_normal_text(self):
         assert parse_str("banana") == {
-            TypeField.TEXT.value: "banana",
-            TypeField.KEYWORD.value: "banana",
+            TypeField.TEXT: "banana",
+            TypeField.KEYWORD: "banana",
         }
 
     def test_bools_trues(self):
         options = ["true", "yes", "y"]
         for option in chain(options, [o.upper() for o in options]):
             assert parse_str(option) == {
-                TypeField.TEXT.value: option,
-                TypeField.KEYWORD.value: option,
-                TypeField.BOOLEAN.value: True,
+                TypeField.TEXT: option,
+                TypeField.KEYWORD: option,
+                TypeField.BOOLEAN: True,
             }
 
     def test_bools_falses(self):
         options = ["false", "no", "n"]
         for option in chain(options, [o.upper() for o in options]):
             assert parse_str(option) == {
-                TypeField.TEXT.value: option,
-                TypeField.KEYWORD.value: option,
-                TypeField.BOOLEAN.value: False,
+                TypeField.TEXT: option,
+                TypeField.KEYWORD: option,
+                TypeField.BOOLEAN: False,
             }
 
     def test_number(self):
         assert parse_str("5.3") == {
-            TypeField.TEXT.value: "5.3",
-            TypeField.KEYWORD.value: "5.3",
-            TypeField.NUMBER.value: 5.3,
+            TypeField.TEXT: "5.3",
+            TypeField.KEYWORD: "5.3",
+            TypeField.NUMBER: 5.3,
         }
         assert parse_str("70") == {
-            TypeField.TEXT.value: "70",
-            TypeField.KEYWORD.value: "70",
-            TypeField.NUMBER.value: 70.0,
+            TypeField.TEXT: "70",
+            TypeField.KEYWORD: "70",
+            TypeField.NUMBER: 70.0,
         }
         assert parse_str("70.0") == {
-            TypeField.TEXT.value: "70.0",
-            TypeField.KEYWORD.value: "70.0",
-            TypeField.NUMBER.value: 70.0,
+            TypeField.TEXT: "70.0",
+            TypeField.KEYWORD: "70.0",
+            TypeField.NUMBER: 70.0,
         }
 
     def test_invalid_numbers(self):
-        assert TypeField.NUMBER.value not in parse_str("5.3.4")
-        assert TypeField.NUMBER.value not in parse_str("NaN")
-        assert TypeField.NUMBER.value not in parse_str("inf")
+        assert TypeField.NUMBER not in parse_str("5.3.4")
+        assert TypeField.NUMBER not in parse_str("NaN")
+        assert TypeField.NUMBER not in parse_str("inf")
 
     def test_date_date_and_time(self):
         assert parse_str("2005-07-02 20:16:47.458301") == {
-            TypeField.TEXT.value: "2005-07-02 20:16:47.458301",
-            TypeField.KEYWORD.value: "2005-07-02 20:16:47.458301",
-            TypeField.DATE.value: "2005-07-02T20:16:47.458301",
+            TypeField.TEXT: "2005-07-02 20:16:47.458301",
+            TypeField.KEYWORD: "2005-07-02 20:16:47.458301",
+            TypeField.DATE: "2005-07-02T20:16:47.458301",
         }
 
     def test_date_date_and_time_and_tz(self):
         assert parse_str("2005-07-02 20:16:47.103+05:00") == {
-            TypeField.TEXT.value: "2005-07-02 20:16:47.103+05:00",
-            TypeField.KEYWORD.value: "2005-07-02 20:16:47.103+05:00",
-            TypeField.DATE.value: "2005-07-02T20:16:47.103000+05:00",
+            TypeField.TEXT: "2005-07-02 20:16:47.103+05:00",
+            TypeField.KEYWORD: "2005-07-02 20:16:47.103+05:00",
+            TypeField.DATE: "2005-07-02T20:16:47.103000+05:00",
         }
 
     def test_date_just_a_date(self):
         assert parse_str("2005-07-02") == {
-            TypeField.TEXT.value: "2005-07-02",
-            TypeField.KEYWORD.value: "2005-07-02",
-            TypeField.DATE.value: "2005-07-02T00:00:00",
+            TypeField.TEXT: "2005-07-02",
+            TypeField.KEYWORD: "2005-07-02",
+            TypeField.DATE: "2005-07-02T00:00:00",
         }
