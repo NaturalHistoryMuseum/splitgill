@@ -2,7 +2,7 @@ import numbers
 from collections import deque
 from datetime import datetime
 from itertools import chain, zip_longest
-from typing import Iterable, Tuple, Any, Union, NamedTuple, Dict
+from typing import Iterable, Tuple, Any, Union, NamedTuple, Dict, Deque
 
 from cytoolz import get_in
 
@@ -78,7 +78,9 @@ def diff(base: dict, new: dict) -> Iterable[DiffOp]:
     # TODO: we could write a shortcut when one of the dicts is empty
 
     missing = object()
-    queue = deque(((tuple(), base, new),))
+    queue: Deque[
+        Tuple[Tuple[Union[str, int], ...], Union[dict, tuple], Union[dict, tuple]]
+    ] = deque(((tuple(), base, new),))
 
     while queue:
         path, left, right = queue.popleft()
