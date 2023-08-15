@@ -102,8 +102,8 @@ def diff(base: dict, new: dict) -> Iterable[DiffOp]:
                 if right_value is missing or left_value == right_value:
                     continue
 
-                if isinstance(left_value, (dict, tuple)) and isinstance(
-                    right_value, (dict, tuple)
+                if (isinstance(left_value, dict) and isinstance(right_value, dict)) or (
+                    isinstance(left_value, tuple) and isinstance(right_value, tuple)
                 ):
                     queue.append(((*path, key), left_value, right_value))
                 else:
@@ -111,8 +111,8 @@ def diff(base: dict, new: dict) -> Iterable[DiffOp]:
 
             if changes:
                 ops["dc"] = changes
-
-        elif isinstance(left, tuple) and isinstance(right, tuple):
+        else:
+            # otherwise, they're both tuples
             changes = []
             for index, (left_value, right_value) in enumerate(
                 zip_longest(left, right, fillvalue=missing)
@@ -139,9 +139,6 @@ def diff(base: dict, new: dict) -> Iterable[DiffOp]:
 
             if changes:
                 ops["tc"] = changes
-
-        else:
-            raise DiffingTypeComparisonException(f"Cannot diff {left} and {right}")
 
         if ops:
             yield DiffOp(path, ops)
