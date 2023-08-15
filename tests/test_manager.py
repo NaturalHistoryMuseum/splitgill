@@ -4,7 +4,7 @@ from unittest.mock import patch, MagicMock, Mock
 import pytest
 from freezegun import freeze_time
 
-from indexing.fields import RootField, MetaField
+from splitgill.indexing.fields import RootField, MetaField
 from splitgill.indexing.index import get_data_index_id
 from splitgill.manager import (
     SplitgillClient,
