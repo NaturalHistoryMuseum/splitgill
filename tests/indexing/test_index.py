@@ -87,6 +87,16 @@ class TestCreateIndexOp:
 
 
 class TestGenerateIndexOps:
+    def test_old_version(self, splitgill: SplitgillClient):
+        # this shouldn't really happen because the records passed to the generate
+        # function should come from the database and should have been found using the
+        # current value compared to the record version, but just to be safe, the check
+        # is included in the code, so we should test it works at least!
+        records = [
+            MongoRecord(_id=ObjectId(), id="record-1", version=10, data={"x": "5"})
+        ]
+        assert not list(generate_index_ops("test", records, 11))
+
     def test_updates(self, splitgill: SplitgillClient):
         # make a bunch of data at different versions
         data = [
