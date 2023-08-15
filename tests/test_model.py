@@ -66,8 +66,7 @@ class TestStatus:
         doc = status.to_doc()
         assert doc == {
             "name": status.name,
-            "m_version": status.m_version,
-            "e_version": status.e_version,
+            "version": status.version,
         }
         assert "_id" not in doc
 
@@ -77,7 +76,6 @@ class TestStatus:
         doc = status.to_doc()
         assert doc == {
             "name": status.name,
-            "m_version": status.m_version,
-            "e_version": status.e_version,
+            "version": status.version,
             "_id": mongo_id,
         }

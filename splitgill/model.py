@@ -86,8 +86,7 @@ class MongoRecord:
 @dataclass
 class Status:
     name: str
-    m_version: int
-    e_version: Optional[int] = None
+    version: int
     _id: Optional[ObjectId] = None
 
     def to_doc(self) -> dict:

@@ -86,18 +86,17 @@ class SplitgillDatabase:
         self.latest_index_name = get_latest_index_id(self.name)
 
     @property
-    def data_version(self) -> Optional[int]:
+    def committed_version(self) -> Optional[int]:
         """
         Returns the currently committed data version, if there is one available. This
         version is the number stored in the main database status object, not
         (necessarily) the latest version in the actual data collection for this
-        database. It therefore will always represent the latest complete version of the
-        data.
+        database.
 
         :return: a version timestamp or None
         """
         status = self.get_status()
-        return status.m_version if status else None
+        return status.version if status else None
 
     def get_status(self) -> Optional[Status]:
         """
@@ -131,10 +130,10 @@ class SplitgillDatabase:
         status = self.get_status()
         if status is None:
             # make a new status object
-            status = Status(name=self.name, m_version=version)
+            status = Status(name=self.name, version=version)
         else:
             # update the existing status object
-            status.m_version = version
+            status.version = version
 
         # replace (or insert) the current status
         self.status_collection.replace_one(
@@ -151,26 +150,26 @@ class SplitgillDatabase:
 
         :return: a version timestamp to use for adding
         """
-        status_version = self.data_version
+        committed_version = self.committed_version
         data_version = get_version(self.data_collection)
 
         # no data or status so generate a new version
-        if status_version is None and data_version is None:
+        if committed_version is None and data_version is None:
             return now()
 
         # no status version, but there is data so use the latest data version
-        elif status_version is None and data_version is not None:
+        elif committed_version is None and data_version is not None:
             return data_version
 
         # have a status version but no data version which is a weird state to be in,
         # clean it up and return a new version
-        elif status_version is not None and data_version is None:
+        elif committed_version is not None and data_version is None:
             self.clear_status()
             return now()
 
         # have a status version and a data version
         else:
-            if data_version > status_version:
+            if data_version > committed_version:
                 # data version is newer, so data has been added without a commit. In
                 # this case allow a continuation of adding data to this version by
                 # returning the data version
@@ -228,7 +227,7 @@ class SplitgillDatabase:
             name="data-template", body=DATA_TEMPLATE
         )
 
-        since = self.data_version
+        since = self.committed_version
         # set up a stream of all the all records with a version newer than since
         docs = (
             MongoRecord(**doc)

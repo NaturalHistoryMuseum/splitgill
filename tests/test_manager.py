@@ -36,7 +36,7 @@ class TestSplitgillClient:
 class TestSplitgillDatabaseDataVersion:
     def test_no_data(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
-        assert database.data_version is None
+        assert database.committed_version is None
 
     def test_data_no_status(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
@@ -46,7 +46,7 @@ class TestSplitgillDatabaseDataVersion:
             Record.new({"x": 5}),
         ]
         database.add(records, commit=False)
-        assert database.data_version is None
+        assert database.committed_version is None
 
     @freeze_time("2012-01-14 12:00:01")
     def test_data_with_status(self, splitgill: SplitgillClient):
@@ -58,7 +58,7 @@ class TestSplitgillDatabaseDataVersion:
             Record.new({"x": 5}),
         ]
         database.add(records, commit=True)
-        assert database.data_version == version
+        assert database.committed_version == version
 
     def test_data_with_status_different_to_data(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
@@ -70,14 +70,14 @@ class TestSplitgillDatabaseDataVersion:
 
         with freeze_time("2012-01-14 12:00:01"):
             database.add(records, commit=True)
-        assert database.data_version == 1326542401000
+        assert database.committed_version == 1326542401000
 
         another_record = Record.new({"x": 199})
         with freeze_time("2016-02-15 12:00:01"):
             database.add([another_record], commit=False)
         # data version shouldn't have changed, even though the version in the data
         # collection will be newer
-        assert database.data_version == 1326542401000
+        assert database.committed_version == 1326542401000
 
 
 class TestSplitgillDatabaseGetStatus:
@@ -92,7 +92,7 @@ class TestSplitgillDatabaseGetStatus:
         status = database.get_status()
         assert status is not None
         assert status.name == database.name
-        assert status.m_version == 1326542401000
+        assert status.version == 1326542401000
 
     def test_delete_status_no_status(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
@@ -121,7 +121,7 @@ class TestCommit:
         database.add([Record.new({"x": 5})], commit=False)
 
         assert database.commit()
-        assert database.get_status().m_version == 1326542401000
+        assert database.get_status().version == 1326542401000
 
     def test_update_status(self, splitgill: SplitgillClient):
         name = "test"
@@ -136,7 +136,7 @@ class TestCommit:
         database.commit()
 
         second_status = database.get_status()
-        assert second_status.m_version > first_status.m_version
+        assert second_status.version > first_status.version
 
 
 class TestDetermineNextStatus:
@@ -183,7 +183,7 @@ class TestAdd:
     def test_no_records(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
         database.add([])
-        assert database.data_version is None
+        assert database.committed_version is None
 
     @freeze_time("2012-01-14 12:00:01")
     def test_with_records(self, splitgill: SplitgillClient):
@@ -194,8 +194,8 @@ class TestAdd:
         database.add(record_iter)
 
         assert database.data_collection.count_documents({}) == count
-        assert database.data_version == 1326542401000
-        assert database.get_status().m_version == 1326542401000
+        assert database.committed_version == 1326542401000
+        assert database.get_status().version == 1326542401000
 
     def test_is_batched(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
@@ -218,7 +218,7 @@ class TestAdd:
 
         data_version = get_version(database.data_collection)
         assert data_version is not None
-        assert get_version(database.data_collection) == database.data_version
+        assert get_version(database.data_collection) == database.committed_version
 
     def test_no_commit(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
@@ -226,7 +226,7 @@ class TestAdd:
         database.add([Record.new({"x": 10})], commit=False)
 
         assert get_version(database.data_collection) is not None
-        assert database.data_version is None
+        assert database.committed_version is None
 
     def test_no_commit_when_error(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
@@ -236,7 +236,7 @@ class TestAdd:
         with pytest.raises(Exception, match="oh no!"):
             database.add([Record.new({"x": 10})], commit=True)
 
-        assert database.data_version is None
+        assert database.committed_version is None
 
 
 class TestSync:
