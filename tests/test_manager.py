@@ -33,7 +33,7 @@ class TestSplitgillClient:
         assert splitgill.get_config_collection(name).name == f"config-{name}"
 
 
-class TestSplitgillDatabaseDataVersion:
+class TestSplitgillDatabaseCommittedVersion:
     def test_no_data(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
         assert database.committed_version is None
