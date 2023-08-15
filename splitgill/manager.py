@@ -10,7 +10,7 @@ from pymongo.database import Database
 
 from splitgill.indexing.index import generate_index_ops, get_latest_index_id
 from splitgill.indexing.templates import DATA_TEMPLATE
-from splitgill.ingest import generate_ops, get_version
+from splitgill.ingest import generate_ops
 from splitgill.model import Record, Status, MongoRecord
 from splitgill.utils import now, partition
 
@@ -98,6 +98,20 @@ class SplitgillDatabase:
         status = self.get_status()
         return status.version if status else None
 
+    def get_mongo_version(self) -> Optional[int]:
+        """
+        Returns the latest version found in the data collection. If no records exist in
+        the collection, None is returned.
+
+        :return: the max version or None
+        """
+        last = next(
+            self.data_collection.find().sort("version", DESCENDING).limit(1), None
+        )
+        if last is None:
+            return None
+        return last["version"]
+
     def get_status(self) -> Optional[Status]:
         """
         Return the current status for this database.
@@ -122,7 +136,7 @@ class SplitgillDatabase:
         :return: True if the status was updated, False if not
         """
         # get the latest version in the data collection
-        version = get_version(self.data_collection)
+        version = self.get_mongo_version()
         if version is None:
             # nothing to commit
             return False
@@ -151,7 +165,7 @@ class SplitgillDatabase:
         :return: a version timestamp to use for adding
         """
         committed_version = self.committed_version
-        data_version = get_version(self.data_collection)
+        data_version = self.get_mongo_version()
 
         # no data or status so generate a new version
         if committed_version is None and data_version is None:

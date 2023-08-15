@@ -1,6 +1,6 @@
-from typing import Iterable, Union, Optional
+from typing import Iterable, Union
 
-from pymongo import InsertOne, UpdateOne, DESCENDING
+from pymongo import InsertOne, UpdateOne
 from pymongo.collection import Collection
 
 from splitgill.diffing import prepare, diff
@@ -10,20 +10,6 @@ from splitgill.utils import partition
 MongoBulkOp = Union[InsertOne, UpdateOne]
 
 FIND_SIZE = 100
-
-
-def get_version(collection: Collection) -> Optional[int]:
-    """
-    Returns the latest version found in the data collection. If no records exist in the
-    collection, None is returned.
-
-    :param collection: a data collection
-    :return: the max version or None
-    """
-    last = next(collection.find().sort("version", DESCENDING).limit(1), None)
-    if last is None:
-        return None
-    return last["version"]
 
 
 def generate_ops(

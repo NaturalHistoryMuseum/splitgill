@@ -5,25 +5,8 @@ from pymongo import InsertOne, UpdateOne
 from pymongo.collection import Collection
 
 from splitgill.diffing import prepare, diff
-from splitgill.ingest import get_version, generate_ops
+from splitgill.ingest import generate_ops
 from splitgill.model import Record
-
-
-class TestGetVersion:
-    def test_no_docs(self, data_collection: Collection):
-        assert get_version(data_collection) is None
-
-    def test_with_docs(self, data_collection: Collection):
-        collection = data_collection
-        collection.insert_many(
-            [
-                {"version": 4},
-                {"version": 10000},
-                {"version": 4892},
-                {"version": 100},
-            ]
-        )
-        assert get_version(collection) == 10000
 
 
 def create_random_record() -> Record:

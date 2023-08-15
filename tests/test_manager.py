@@ -5,7 +5,6 @@ import pytest
 from freezegun import freeze_time
 
 from splitgill.indexing.index import get_data_index_id
-from splitgill.ingest import get_version
 from splitgill.manager import (
     SplitgillClient,
     MONGO_DATABASE_NAME,
@@ -78,6 +77,24 @@ class TestSplitgillDatabaseCommittedVersion:
         # data version shouldn't have changed, even though the version in the data
         # collection will be newer
         assert database.committed_version == 1326542401000
+
+
+class TestGetMongoVersion:
+    def test_no_docs(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        assert database.get_mongo_version() is None
+
+    def test_with_docs(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        database.data_collection.insert_many(
+            [
+                {"version": 4},
+                {"version": 10000},
+                {"version": 4892},
+                {"version": 100},
+            ]
+        )
+        assert database.get_mongo_version() == 10000
 
 
 class TestSplitgillDatabaseGetStatus:
@@ -216,16 +233,16 @@ class TestAdd:
 
         database.add([Record.new({"x": 10})])
 
-        data_version = get_version(database.data_collection)
+        data_version = database.get_mongo_version()
         assert data_version is not None
-        assert get_version(database.data_collection) == database.committed_version
+        assert data_version == database.committed_version
 
     def test_no_commit(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
 
         database.add([Record.new({"x": 10})], commit=False)
 
-        assert get_version(database.data_collection) is not None
+        assert database.get_mongo_version() is not None
         assert database.committed_version is None
 
     def test_no_commit_when_error(self, splitgill: SplitgillClient):
