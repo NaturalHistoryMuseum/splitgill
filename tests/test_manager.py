@@ -4,6 +4,7 @@ from unittest.mock import patch, MagicMock, Mock
 import pytest
 from freezegun import freeze_time
 
+from indexing.fields import RootField, MetaField
 from splitgill.indexing.index import get_data_index_id
 from splitgill.manager import (
     SplitgillClient,
@@ -114,7 +115,7 @@ class TestGetElasticsearchVersion:
         for version in versions:
             # make some bare-bones docs
             doc = {
-                "meta": {"version": version},
+                RootField.META: {MetaField.VERSION: version},
             }
             splitgill.elasticsearch.index(
                 index=database.latest_index_name,
@@ -138,7 +139,7 @@ class TestGetElasticsearchVersion:
         for version in versions:
             # make some bare-bones docs
             doc = {
-                "meta": {"version": version},
+                RootField.META: {MetaField.VERSION: version},
             }
             splitgill.elasticsearch.index(
                 # put these in not the latest index

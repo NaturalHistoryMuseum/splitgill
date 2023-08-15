@@ -122,7 +122,7 @@ class SplitgillDatabase:
         :return: the max version or None
         """
         result = self._client.elasticsearch.search(
-            aggs={"max_version": {"max": {"field": MetaField.VERSION}}},
+            aggs={"max_version": {"max": {"field": MetaField.VERSION.path()}}},
             size=0,
             # search all data indices for this database
             index=f"data-*-{self.name}",

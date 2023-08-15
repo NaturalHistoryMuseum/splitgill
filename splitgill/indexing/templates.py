@@ -55,21 +55,21 @@ DATA_TEMPLATE = {
                     # enabled set to false means don't index this object
                     "enabled": False,
                 },
-                MetaField.VERSIONS: {
+                MetaField.VERSIONS.path(): {
                     "type": "date_range",
                     "format": "epoch_millis",
                 },
-                MetaField.VERSION: {
+                MetaField.VERSION.path(): {
                     "type": "date",
                     "format": "epoch_millis",
                 },
-                MetaField.NEXT_VERSION: {
+                MetaField.NEXT_VERSION.path(): {
                     "type": "date",
                     "format": "epoch_millis",
                 },
                 # the values of each field will be copied into this field for easy
                 # querying (see the dynamic keyword_field below)
-                MetaField.ALL: {
+                MetaField.ALL.path(): {
                     "type": "text",
                 },
             },
@@ -101,7 +101,7 @@ DATA_TEMPLATE = {
                             "type": "keyword",
                             "normalizer": "lowercase_normalizer",
                             "ignore_above": 256,
-                            "copy_to": MetaField.ALL,
+                            "copy_to": MetaField.ALL.path(),
                         },
                     },
                 },

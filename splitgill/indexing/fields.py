@@ -21,15 +21,23 @@ class RootField(LowercaseStrEnum):
     ARRAYS = auto()
 
 
-class MetaField(StrEnum):
+class MetaField(LowercaseStrEnum):
     """
-    Paths to the fields in the meta object.
+    Fields at the root of the meta object.
     """
 
-    ALL = f"{RootField.META}.all"
-    VERSIONS = f"{RootField.META}.versions"
-    VERSION = f"{RootField.META}.version"
-    NEXT_VERSION = f"{RootField.META}.next_version"
+    ALL = auto()
+    VERSIONS = auto()
+    VERSION = auto()
+    NEXT_VERSION = auto()
+
+    def path(self) -> str:
+        """
+        Returns the full path to the meta field including the "meta." part.
+
+        :return: the full, dotted path to the field
+        """
+        return f"{RootField.META}.{self}"
 
 
 class TypeField(StrEnum):
