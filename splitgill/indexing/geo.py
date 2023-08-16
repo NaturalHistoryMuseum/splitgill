@@ -1,8 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from itertools import chain, repeat
 from numbers import Number
-from typing import Union, Optional
+from typing import Union, Optional, Tuple, Iterable
 
 from cytoolz.itertoolz import sliding_window
 from fastnumbers import try_float, RAISE
@@ -18,48 +18,53 @@ class GeoFieldHint:
     lat_field: str
     lon_field: str
     radius_field: Optional[str] = None
+    path: str = field(init=False)
 
-    @property
-    def geo_path(self):
+    def __post_init__(self):
+        # this path should be used for any values matched by this hint
+        self.path = geo_path(self.lat_field, self.lon_field, self.radius_field)
+
+
+class GeoFieldHints:
+    def __init__(self, *hints: GeoFieldHint):
         """
-        Return the geo path that should be used for any values matched by this hint.
-
-        :return: the path
+        :param hints: the GeoFieldHint object to match against
         """
-        return geo_path(self.lat_field, self.lon_field, self.radius_field)
+        self._hints: Tuple[GeoFieldHint] = hints
 
-    def match(self, data: dict) -> Optional[dict]:
+    def match(self, data: dict) -> Iterable[Tuple[str, dict]]:
         """
-        Check to see if the data has the fields contained in this hint and those fields
-        are valid for use as geo fields. If the hint matches then a GeoJSON dict is
-        returned (Point if only a lat and lon is provided, Polygon if a radius is
-        included).
-
-        If no match is made, None is returned.
+        Check to see if the data has the fields contained in the hints and those fields
+        are valid for use as geo fields. If any hints match then GeoJSON dicts are
+        yielded along with the path that should be used in the geo dict. The GeoJSON
+        yielded will be a dict, either a Point if only a lat and lon is provided or
+        Polygon if a radius is included.
 
         :param data: the data dict to check
-        :return: GeoJSON or None
+        :return: yields path and GeoJSON tuples
         """
-        try:
-            if self.radius_field:
-                return create_polygon_circle(
-                    parse_latitude(data.get(self.lat_field, "")),
-                    parse_longitude(data.get(self.lon_field, "")),
-                    parse_uncertainty(data.get(self.radius_field, "")),
-                )
-            else:
-                return {
-                    "type": "Point",
-                    "coordinates": (
-                        parse_longitude(data.get(self.lon_field, "")),
-                        parse_latitude(data.get(self.lat_field, "")),
-                    ),
-                }
-        except (ValueError, TypeError):
-            return None
+        for hint in self._hints:
+            try:
+                if hint.radius_field:
+                    geojson = create_polygon_circle(
+                        parse_latitude(data.get(hint.lat_field, "")),
+                        parse_longitude(data.get(hint.lon_field, "")),
+                        parse_uncertainty(data.get(hint.radius_field, "")),
+                    )
+                else:
+                    geojson = {
+                        "type": "Point",
+                        "coordinates": (
+                            parse_longitude(data.get(hint.lon_field, "")),
+                            parse_latitude(data.get(hint.lat_field, "")),
+                        ),
+                    }
+                yield hint.path, geojson
+            except (ValueError, TypeError):
+                pass
 
 
-DEFAULT_HINTS = (
+DEFAULT_HINTS = GeoFieldHints(
     GeoFieldHint("lat", "lon"),
     GeoFieldHint("latitude", "longitude"),
     GeoFieldHint("latitude", "longitude", "radius"),

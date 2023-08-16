@@ -9,7 +9,12 @@ from fastnumbers import try_float
 from pendulum.parsing import parse_iso8601
 
 from splitgill.indexing.fields import TypeField
-from splitgill.indexing.geo import GeoFieldHint, DEFAULT_HINTS, as_geojson
+from splitgill.indexing.geo import (
+    GeoFieldHint,
+    DEFAULT_HINTS,
+    as_geojson,
+    GeoFieldHints,
+)
 
 
 @dataclass
@@ -35,9 +40,7 @@ class QualifiedValue(NamedTuple):
     value: Union[str, dict, tuple]
 
 
-def parse_for_index(
-    data: dict, geo_hints: Tuple[GeoFieldHint] = DEFAULT_HINTS
-) -> ParsedData:
+def parse_for_index(data: dict, geo_hints: GeoFieldHints = DEFAULT_HINTS) -> ParsedData:
     """
     Given a record's data, create the parsed data to be indexed into Elasticsearch. The
     returned ParsedData object contains the arrays, geo, parsed, and data root field
@@ -64,7 +67,7 @@ def parse_for_index(
     reasons.
 
     :param data: a record's prepared data
-    :param geo_hints: a tuple of GeoFieldHint objects (defaults to DEFAULT_HINTS)
+    :param geo_hints: a GeoFieldHints object (defaults to DEFAULT_HINTS)
     :return: a ParsedData object
     """
     queue: Deque[QualifiedValue] = deque()
@@ -84,11 +87,7 @@ def parse_for_index(
     # geojson is only matched on containers and this only happens in the queue loop
     # below. This means that top-level fields that have GeoJSON values will be missed.
     # So to avoid missing them, check them here
-    geo = {
-        geo_hint.geo_path: geojson
-        for geo_hint in geo_hints
-        if (geojson := geo_hint.match(data)) is not None
-    }
+    geo = dict(geo_hints.match(data))
 
     # parse the top-level data dict straight away. There are two reasons to do this,
     # firstly, most data dicts that come through here are just flat with no nested
@@ -115,11 +114,8 @@ def parse_for_index(
                 geo[dot_path] = geojson
             # check if the container contains any fields that match the geo hints
             geo.update(
-                {
-                    f"{dot_path}.{geo_hint.geo_path}": geojson
-                    for geo_hint in geo_hints
-                    if (geojson := geo_hint.match(container)) is not None
-                }
+                (f"{dot_path}.{path}", geojson)
+                for path, geojson in geo_hints.match(container)
             )
             # set the parsed container in the parsed dict
             get_in(parent_path, parsed)[path_leaf] = {
