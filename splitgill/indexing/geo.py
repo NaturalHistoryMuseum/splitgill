@@ -4,7 +4,7 @@ from itertools import chain, repeat
 from numbers import Number
 from typing import Union, Optional, Tuple, Iterable
 
-from cytoolz.itertoolz import sliding_window
+from cytoolz.itertoolz import sliding_window, unique
 from fastnumbers import try_float, RAISE
 from pyproj import CRS, Transformer
 from shapely import Point
@@ -24,6 +24,9 @@ class GeoFieldHint:
         # this path should be used for any values matched by this hint
         self.path = geo_path(self.lat_field, self.lon_field, self.radius_field)
 
+    def __hash__(self) -> int:
+        return hash(self.path)
+
 
 class GeoFieldHints:
     def __init__(self, *hints: GeoFieldHint):
@@ -31,6 +34,17 @@ class GeoFieldHints:
         :param hints: the GeoFieldHint object to match against
         """
         self._hints: Tuple[GeoFieldHint] = hints
+
+    def add(self, *hints: GeoFieldHint) -> "GeoFieldHints":
+        """
+        Add the given hints to the list of hints in this object by returning a new one
+        (GeoFieldHints objects are immutable).
+
+        :param hints: new GeoFieldHint objects
+        :return: a new GeoFieldHints object containing the hints in this object and the
+                 new hints
+        """
+        return GeoFieldHints(*unique(chain(self._hints, hints)))
 
     def match(self, data: dict) -> Iterable[Tuple[str, dict]]:
         """

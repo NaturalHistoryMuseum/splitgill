@@ -27,6 +27,21 @@ class TestGeoFieldHintGeoPath:
         )
 
 
+def test_geo_field_hints_add():
+    old_hints = (
+        GeoFieldHint("lat", "lon"),
+        GeoFieldHint("iweofno92", "oibfewsef", "efe"),
+    )
+    new_hint = GeoFieldHint("x", "y")
+    a = GeoFieldHints(*old_hints)
+
+    b = a.add(new_hint)
+
+    assert a._hints == old_hints
+    # check that the order is maintained
+    assert b._hints == (*old_hints, new_hint)
+
+
 class TestGeoFieldHintsMatch:
     def test_invalid_latitude(self):
         hint = GeoFieldHints(GeoFieldHint("lat", "lon"))
