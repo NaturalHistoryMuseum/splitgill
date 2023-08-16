@@ -17,7 +17,7 @@ def get_data_index_id(name: str, version: int) -> str:
     :param version: the version
     :return: the name of the index to use for data at this version
     """
-    return f"data-{datetime.fromtimestamp(version / 1000).year}-{name}"
+    return f"data-{name}-{datetime.fromtimestamp(version / 1000).year}"
 
 
 def get_latest_index_id(name: str) -> str:
@@ -27,7 +27,7 @@ def get_latest_index_id(name: str) -> str:
     :param name: the Splitgill database name
     :return: the name of the latest data index for this database
     """
-    return f"data-latest-{name}"
+    return f"data-{name}-latest"
 
 
 def create_index_op(

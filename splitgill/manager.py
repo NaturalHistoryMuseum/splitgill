@@ -116,7 +116,7 @@ class SplitgillDatabase:
             aggs={"max_version": {"max": {"field": MetaField.VERSION.path()}}},
             size=0,
             # search all data indices for this database
-            index=f"data-*-{self.name}",
+            index=f"data-{self.name}-*",
         )
 
         version = get_in(("aggregations", "max_version", "value"), result, None)

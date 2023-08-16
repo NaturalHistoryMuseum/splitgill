@@ -18,14 +18,14 @@ from splitgill.utils import to_timestamp
 
 
 def test_get_data_index_id():
-    assert get_data_index_id("test", 1691340859000) == "data-2023-test"
-    assert get_data_index_id("test", 1659804859000) == "data-2022-test"
-    assert get_data_index_id("test", 1617692059000) == "data-2021-test"
-    assert get_data_index_id("test", 1577840461000) == "data-2020-test"
+    assert get_data_index_id("test", 1691340859000) == "data-test-2023"
+    assert get_data_index_id("test", 1659804859000) == "data-test-2022"
+    assert get_data_index_id("test", 1617692059000) == "data-test-2021"
+    assert get_data_index_id("test", 1577840461000) == "data-test-2020"
 
 
 def test_get_latest_index_id():
-    assert get_latest_index_id("test") == "data-latest-test"
+    assert get_latest_index_id("test") == "data-test-latest"
 
 
 class TestCreateIndexOp:
