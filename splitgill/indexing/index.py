@@ -20,16 +20,6 @@ def get_data_index_id(name: str, version: int) -> str:
     return f"data-{datetime.fromtimestamp(version / 1000).year}-{name}"
 
 
-def get_config_index_id(name: str) -> str:
-    """
-    Given a name, return the name of the index for config data for this database.
-
-    :param name: the Splitgill database name
-    :return: the name of the config index for this database
-    """
-    return f"config-{name}"
-
-
 def get_latest_index_id(name: str) -> str:
     """
     Given a name, return the name of the latest data index for this database.

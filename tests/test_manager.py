@@ -28,10 +28,6 @@ class TestSplitgillClient:
         name = "test"
         assert splitgill.get_data_collection(name).name == f"data-{name}"
 
-    def test_get_config_collection(self, splitgill: SplitgillClient):
-        name = "test"
-        assert splitgill.get_config_collection(name).name == f"config-{name}"
-
 
 class TestSplitgillDatabaseCommittedVersion:
     def test_no_data(self, splitgill: SplitgillClient):

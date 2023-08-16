@@ -56,15 +56,6 @@ class SplitgillClient:
         """
         return self.get_database().get_collection(f"data-{name}")
 
-    def get_config_collection(self, name: str) -> Collection:
-        """
-        Returns the config collection for the given Splitgill database.
-
-        :param name: the name of the Splitgill database
-        :return: a pymongo Collection object
-        """
-        return self.get_database().get_collection(f"config-{name}")
-
 
 class SplitgillDatabase:
     """

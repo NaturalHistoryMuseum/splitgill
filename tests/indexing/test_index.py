@@ -7,7 +7,6 @@ from splitgill.diffing import diff
 from splitgill.indexing.fields import RootField, MetaField
 from splitgill.indexing.index import (
     get_data_index_id,
-    get_config_index_id,
     get_latest_index_id,
     create_index_op,
     generate_index_ops,
@@ -23,10 +22,6 @@ def test_get_data_index_id():
     assert get_data_index_id("test", 1659804859000) == "data-2022-test"
     assert get_data_index_id("test", 1617692059000) == "data-2021-test"
     assert get_data_index_id("test", 1577840461000) == "data-2020-test"
-
-
-def test_get_config_index_id():
-    assert get_config_index_id("test") == "config-test"
 
 
 def test_get_latest_index_id():
