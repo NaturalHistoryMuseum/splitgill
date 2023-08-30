@@ -12,7 +12,7 @@ done
 
 # run the tests
 echo "Running pytest with coverage"
-pytest --cov="splitgill" tests
+pytest --cov="splitgill" --cov-report term-missing tests
 # store the exit code from the pytest run
 test_exit_code=$?
 
