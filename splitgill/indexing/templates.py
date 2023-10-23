@@ -1,12 +1,11 @@
 from splitgill.indexing.fields import (
     MetaField,
     RootField,
-    boolean_path,
-    date_path,
-    number_path,
-    text_path,
     keyword_path,
-    arrays_path,
+    text_path,
+    number_path,
+    date_path,
+    boolean_path,
 )
 
 # template for the data-* indices
@@ -84,7 +83,7 @@ DATA_TEMPLATE = {
                 },
                 {
                     "arrays_field": {
-                        "path_match": arrays_path("*"),
+                        "path_match": f"{RootField.ARRAYS}.*",
                         "mapping": {
                             "type": "short",
                         },
@@ -96,7 +95,7 @@ DATA_TEMPLATE = {
                 # work
                 {
                     "keyword_field": {
-                        "path_match": keyword_path("*"),
+                        "path_match": f"{RootField.PARSED}.{keyword_path('*')}",
                         "mapping": {
                             "type": "keyword",
                             "normalizer": "lowercase_normalizer",
@@ -107,7 +106,7 @@ DATA_TEMPLATE = {
                 },
                 {
                     "text_field": {
-                        "path_match": text_path("*"),
+                        "path_match": f"{RootField.PARSED}.{text_path('*')}",
                         "mapping": {
                             "type": "text",
                         },
@@ -115,7 +114,7 @@ DATA_TEMPLATE = {
                 },
                 {
                     "number_field": {
-                        "path_match": number_path("*"),
+                        "path_match": f"{RootField.PARSED}.{number_path('*')}",
                         "mapping": {
                             "type": "float",
                         },
@@ -123,7 +122,7 @@ DATA_TEMPLATE = {
                 },
                 {
                     "date_field": {
-                        "path_match": date_path("*"),
+                        "path_match": f"{RootField.PARSED}.{date_path('*')}",
                         "mapping": {
                             "type": "date",
                             "format": "strict_date_optional_time",
@@ -132,7 +131,7 @@ DATA_TEMPLATE = {
                 },
                 {
                     "boolean_field": {
-                        "path_match": boolean_path("*"),
+                        "path_match": f"{RootField.PARSED}.{boolean_path('*')}",
                         "mapping": {
                             "type": "boolean",
                         },

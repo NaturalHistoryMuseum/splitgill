@@ -66,6 +66,31 @@ class TestParseForIndex:
             },
         )
 
+    def test_geojson_two_fields(self):
+        data = {
+            "x": "something",
+            "y": "somewhere",
+            "decimalLatitude": "14.897",
+            "decimalLongitude": "-87.956",
+        }
+        parsed = parse_for_index(data)
+        assert parsed == ParsedData(
+            data,
+            {
+                "x": parse_str("something"),
+                "y": parse_str("somewhere"),
+                "decimalLatitude": parse_str("14.897"),
+                "decimalLongitude": parse_str("-87.956"),
+            },
+            {
+                "decimalLatitude/decimalLongitude": {
+                    "type": "Point",
+                    "coordinates": (-87.956, 14.897),
+                }
+            },
+            {},
+        )
+
     def test_geojson_field(self, geojson_point: dict):
         data = {
             "x": prepare(geojson_point),

@@ -61,18 +61,20 @@ class TypeField(StrEnum):
 
 def parsed_path(field_name: str, type_field: TypeField) -> str:
     """
-    Creates the path to a parsed type field given the field name and the type.
+    Creates the path to a parsed type field given the field name and the type. This path
+    excludes the "parsed." root.
 
     :param field_name: the field name
     :param type_field: the type of the parsed field
     :return: the path to the field when cast to this type
     """
-    return f"{RootField.PARSED}.{field_name}.{type_field}"
+    return f"{field_name}.{type_field}"
 
 
 def text_path(field_name: str) -> str:
     """
-    Creates the path to the text typed version of this field.
+    Creates the path to the text typed version of this field. This path excludes the
+    "parsed." root.
 
     :param field_name: the name of the field
     :return: the path to the field as text
@@ -82,7 +84,8 @@ def text_path(field_name: str) -> str:
 
 def keyword_path(field_name: str) -> str:
     """
-    Creates the path to the keyword typed version of this field.
+    Creates the path to the keyword typed version of this field. This path excludes the
+    "parsed." root.
 
     :param field_name: the name of the field
     :return: the path to the field as keyword
@@ -92,7 +95,8 @@ def keyword_path(field_name: str) -> str:
 
 def date_path(field_name: str) -> str:
     """
-    Creates the path to the date typed version of this field.
+    Creates the path to the date typed version of this field. This path excludes the
+    "parsed." root.
 
     :param field_name: the name of the field
     :return: the path to the field as date
@@ -102,7 +106,8 @@ def date_path(field_name: str) -> str:
 
 def number_path(field_name: str) -> str:
     """
-    Creates the path to the number typed version of this field.
+    Creates the path to the number typed version of this field. This path excludes the
+    "parsed." root.
 
     :param field_name: the name of the field
     :return: the path to the field as number
@@ -112,7 +117,8 @@ def number_path(field_name: str) -> str:
 
 def boolean_path(field_name: str) -> str:
     """
-    Creates the path to the boolean typed version of this field.
+    Creates the path to the boolean typed version of this field. This path excludes the
+    "parsed." root.
 
     :param field_name: the name of the field
     :return: the path to the field as boolean
@@ -123,14 +129,15 @@ def boolean_path(field_name: str) -> str:
 def geo_path(latitude: str, longitude: str, radius: Optional[str] = None) -> str:
     """
     Creates the path to a geo field. This is created using the latitude/longitude pair
-    and if there's a radius as well, this is added with another /.
+    and if there's a radius as well, this is added with another /. This path excludes
+    the "geo." root.
 
     :param latitude: the latitude field name
     :param longitude: the longitude field name
     :param radius: the radius field name (optional)
     :return: the field name for this combination of geo fields
     """
-    base = f"{RootField.GEO}.{latitude}/{longitude}"
+    base = f"{latitude}/{longitude}"
     if radius is None:
         return base
     else:
@@ -139,9 +146,9 @@ def geo_path(latitude: str, longitude: str, radius: Optional[str] = None) -> str
 
 def arrays_path(field_name: str) -> str:
     """
-    Creates the arrays path for this field.
+    Creates the arrays path for this field. This path excludes the "arrays." root.
 
     :param field_name: the field name
     :return: the field under the arrays path
     """
-    return f"{RootField.ARRAYS}.{field_name}"
+    return field_name
