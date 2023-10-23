@@ -314,6 +314,34 @@ class TestSync:
             index=database.latest_index_name
         )
 
+    def test_everything_to_sync_single_threaded(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+
+        version_time = datetime(2020, 7, 2)
+
+        with freeze_time(version_time):
+            database.add(
+                [
+                    Record.new({"x": 5}),
+                    Record.new({"x": 10}),
+                    Record.new({"x": 15}),
+                    Record.new({"x": -1}),
+                ],
+                commit=True,
+            )
+
+        database.sync(parallel=False)
+        splitgill.elasticsearch.indices.refresh(index=database.latest_index_name)
+
+        assert splitgill.elasticsearch.indices.exists(index=database.latest_index_name)
+        assert not splitgill.elasticsearch.indices.exists(
+            index=get_data_index_id(database.name, to_timestamp(version_time))
+        )
+        assert (
+            splitgill.elasticsearch.count(index=database.latest_index_name)["count"]
+            == 4
+        )
+
     def test_everything_to_sync(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
 

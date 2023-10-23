@@ -4,7 +4,7 @@ from typing import Optional, Iterable
 
 from cytoolz.dicttoolz import get_in
 from elasticsearch import Elasticsearch
-from elasticsearch.helpers import parallel_bulk
+from elasticsearch.helpers import parallel_bulk, bulk
 from pymongo import MongoClient, IndexModel, ASCENDING, DESCENDING
 from pymongo.collection import Collection
 from pymongo.database import Database
@@ -242,7 +242,7 @@ class SplitgillDatabase:
         if commit:
             self.commit()
 
-    def sync(self):
+    def sync(self, parallel: bool = True):
         """
         Synchronise the data in MongoDB with the data in Elasticsearch by updating the
         latest and old data indices as required.
@@ -250,6 +250,9 @@ class SplitgillDatabase:
         To find the data that needs to be updated, the current version of the data in
         MongoDB is compared to the current version of the data in Elasticsearch, and the
         two are synced (assuming MongoDB's version is <= Elasticsearch).
+
+        :param parallel: send the data to Elasticsearch using multiple threads if True,
+                         otherwise use a single thread if False
         """
         # ensure the template exists
         self._client.elasticsearch.indices.put_index_template(
@@ -263,9 +266,11 @@ class SplitgillDatabase:
             for doc in self.data_collection.find({"version": {"$gte": since}})
         )
 
+        bulk_function = parallel_bulk if parallel else bulk
+
         # we don't care about the results so just throw them away into a 0-sized deque
         deque(
-            parallel_bulk(
+            bulk_function(
                 self._client.elasticsearch,
                 generate_index_ops(self.name, docs, since),
                 raise_on_error=True,
