@@ -34,6 +34,10 @@ def generate_ops(
         existing = {doc.id: doc for doc in docs}
 
         for record_id, record in records_by_id.items():
+            # this is a delete of a non-existent record, do nothing
+            if not record.data and record_id not in existing:
+                continue
+
             new_data = prepare(record.data)
 
             if record_id not in existing:

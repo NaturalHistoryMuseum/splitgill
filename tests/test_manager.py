@@ -492,6 +492,27 @@ class TestSync:
             index=old_2020_index,
         )
 
+    def test_sync_delete_non_existent(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+
+        database.add(
+            [
+                Record.new({"x": 5}),
+                Record.new({"x": 10}),
+                Record.new({"x": 15}),
+                # a delete
+                Record.new({}),
+            ],
+            commit=True,
+        )
+
+        database.sync()
+
+        assert (
+            splitgill.elasticsearch.count(index=database.latest_index_name)["count"]
+            == 3
+        )
+
     def test_incomplete_is_not_searchable(self, splitgill: SplitgillClient):
         called = 0
 

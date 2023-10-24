@@ -123,3 +123,8 @@ class TestGenerateOps:
             assert op._doc["id"] == record.id
             assert op._doc["version"] == version
             assert op._doc["data"] == prepare(record.data)
+
+    def test_delete_of_non_existent_record(self, data_collection: Collection):
+        records = [Record.new({})]
+        ops = list(generate_ops(data_collection, records, 1))
+        assert len(ops) == 0
