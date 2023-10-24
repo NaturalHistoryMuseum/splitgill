@@ -1,16 +1,20 @@
 from collections import deque
 from dataclasses import dataclass
-from typing import Optional, Iterable
+from typing import Optional, Iterable, List
 
 from cytoolz.dicttoolz import get_in
 from elasticsearch import Elasticsearch
-from elasticsearch.helpers import parallel_bulk, bulk
+from elasticsearch.helpers import parallel_bulk, streaming_bulk
 from pymongo import MongoClient, IndexModel, ASCENDING, DESCENDING
 from pymongo.collection import Collection
 from pymongo.database import Database
 
 from splitgill.indexing.fields import MetaField
-from splitgill.indexing.index import generate_index_ops, get_latest_index_id
+from splitgill.indexing.index import (
+    generate_index_ops,
+    get_latest_index_id,
+    get_data_index_id,
+)
 from splitgill.indexing.templates import DATA_TEMPLATE
 from splitgill.ingest import generate_ops
 from splitgill.model import Record, Status, MongoRecord
@@ -242,7 +246,29 @@ class SplitgillDatabase:
         if commit:
             self.commit()
 
-    def sync(self, parallel: bool = True):
+    def get_all_indices(self) -> List[str]:
+        """
+        Returns a list of all index possible index names for the data in this database.
+        Some of these indices may not actually be in use in Elasticsearch depending on
+        the sync state, but this list contains all the possible names given the range of
+        versions in the current data in MongoDB.
+
+        :return: a list of index names, in age order (latest, then decreasing years)
+        """
+        indices = [self.latest_index_name]
+        indices.extend(
+            # sort in descending order
+            sorted(
+                {
+                    get_data_index_id(self.name, version)
+                    for version in self.data_collection.distinct("version")
+                },
+                reverse=True,
+            )
+        )
+        return indices
+
+    def sync(self, parallel: bool = True, chunk_size: int = 500):
         """
         Synchronise the data in MongoDB with the data in Elasticsearch by updating the
         latest and old data indices as required.
@@ -251,29 +277,72 @@ class SplitgillDatabase:
         MongoDB is compared to the current version of the data in Elasticsearch, and the
         two are synced (assuming MongoDB's version is <= Elasticsearch).
 
+        While the data is being indexed, refreshing is paused on this database's indexes
+        and only resumed once all the data has been indexed. If an error occurs during
+        indexing then the refresh interval is not reset meaning the updates that have
+        made it to Elasticsearch will not impact searches until a refresh is triggered,
+        or the refresh interval is reset. This kinda makes this function transactional.
+        If no errors occur, the refresh interval is reset (along with the replica count)
+        and a refresh is called. This means that if this function returns successfully,
+        the data updated by it will be immediately available for searches.
+
         :param parallel: send the data to Elasticsearch using multiple threads if True,
                          otherwise use a single thread if False
+        :param chunk_size: the number of docs to send to Elasticsearch in each bulk
+                           request
         """
-        # ensure the template exists
-        self._client.elasticsearch.indices.put_index_template(
-            name="data-template", body=DATA_TEMPLATE
-        )
+        # we're gonna use this all over the place so cache it into a variable
+        client = self._client.elasticsearch
+        # choose which bulk function we're using based on the parallel parameter
+        bulk_function = parallel_bulk if parallel else streaming_bulk
 
+        # ensure the data template exists
+        client.indices.put_index_template(name="data-template", body=DATA_TEMPLATE)
+
+        # grab a list of all the indices we may update during this operation
+        indices = self.get_all_indices()
+
+        # create all the indices so we can apply optimal indexing settings to them and
+        # refresh them at the end to make the new data visible
+        for index in indices:
+            if not client.indices.exists(index=index):
+                client.indices.create(index=index)
+
+        # set up a generator of all the records with a version newer than since
         since = self.committed_version
-        # set up a stream of all the all records with a version newer than since
         docs = (
             MongoRecord(**doc)
             for doc in self.data_collection.find({"version": {"$gte": since}})
         )
 
-        bulk_function = parallel_bulk if parallel else bulk
+        # apply optimal indexing settings to all the indices we may update
+        client.indices.put_settings(
+            body={"index": {"refresh_interval": -1, "number_of_replicas": 0}},
+            index=indices,
+        )
 
-        # we don't care about the results so just throw them away into a 0-sized deque
+        # we don't care about the results so just throw them away into a 0-sized
+        # deque (errors will be raised directly)
         deque(
             bulk_function(
-                self._client.elasticsearch,
+                client,
                 generate_index_ops(self.name, docs, since),
                 raise_on_error=True,
+                chunk_size=chunk_size,
             ),
             maxlen=0,
         )
+
+        # refresh all indices to make the changes visible all at once
+        client.indices.refresh(index=indices)
+
+        # reset the settings we changed (None forces them to revert to defaults)
+        client.indices.put_settings(
+            body={"index": {"refresh_interval": None, "number_of_replicas": None}},
+            index=indices,
+        )
+
+        # do a bit of a tidy up by deleting any indexes without docs
+        for index in indices:
+            if not any(client.search(index=index, size=1)["hits"]["hits"]):
+                client.indices.delete(index=index)

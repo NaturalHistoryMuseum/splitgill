@@ -5,7 +5,7 @@ import pytest
 from freezegun import freeze_time
 
 from splitgill.indexing.fields import RootField, MetaField
-from splitgill.indexing.index import get_data_index_id
+from splitgill.indexing.index import get_data_index_id, create_index_op
 from splitgill.manager import (
     SplitgillClient,
     MONGO_DATABASE_NAME,
@@ -305,6 +305,42 @@ class TestAdd:
         assert database.committed_version is None
 
 
+class TestGetAllIndices:
+    def test_no_data(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        assert database.get_all_indices() == [database.latest_index_name]
+
+    def test_some_data(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+
+        date_2015 = datetime(2015, 5, 20, 6, 3, 10)
+        date_2021 = datetime(2021, 10, 9, 19, 54, 0)
+
+        # add a record from 2015
+        with freeze_time(date_2015):
+            database.add(
+                [
+                    Record.new({"x": 6}),
+                ],
+                commit=True,
+            )
+
+        # add a record from 2021
+        with freeze_time(date_2021):
+            database.add(
+                [
+                    Record.new({"x": 5}),
+                ],
+                commit=True,
+            )
+
+        assert database.get_all_indices() == [
+            database.latest_index_name,
+            get_data_index_id("test", to_timestamp(date_2021)),
+            get_data_index_id("test", to_timestamp(date_2015)),
+        ]
+
+
 class TestSync:
     def test_nothing_to_sync(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
@@ -331,7 +367,6 @@ class TestSync:
             )
 
         database.sync(parallel=False)
-        splitgill.elasticsearch.indices.refresh(index=database.latest_index_name)
 
         assert splitgill.elasticsearch.indices.exists(index=database.latest_index_name)
         assert not splitgill.elasticsearch.indices.exists(
@@ -359,7 +394,6 @@ class TestSync:
             )
 
         database.sync()
-        splitgill.elasticsearch.indices.refresh(index=database.latest_index_name)
 
         assert splitgill.elasticsearch.indices.exists(index=database.latest_index_name)
         assert not splitgill.elasticsearch.indices.exists(
@@ -388,7 +422,6 @@ class TestSync:
             database.add(version_1_records, commit=True)
 
         database.sync()
-        splitgill.elasticsearch.indices.refresh(index=latest_index)
         assert splitgill.elasticsearch.count(index=latest_index)["count"] == 4
         assert not splitgill.elasticsearch.indices.exists(index=old_2020_index)
 
@@ -406,7 +439,6 @@ class TestSync:
             database.add(version_2_records, commit=True)
 
         database.sync()
-        splitgill.elasticsearch.indices.refresh(index=[latest_index, old_2020_index])
 
         assert splitgill.elasticsearch.count(index=latest_index)["count"] == 5
         assert splitgill.elasticsearch.count(index=old_2020_index)["count"] == 1
@@ -429,7 +461,6 @@ class TestSync:
             database.add(version_1_records, commit=True)
 
         database.sync()
-        splitgill.elasticsearch.indices.refresh(index=latest_index)
         assert splitgill.elasticsearch.count(index=latest_index)["count"] == 4
         assert not splitgill.elasticsearch.indices.exists(index=old_2020_index)
 
@@ -447,7 +478,6 @@ class TestSync:
             database.add(version_2_records, commit=True)
 
         database.sync()
-        splitgill.elasticsearch.indices.refresh(index=[latest_index, old_2020_index])
 
         assert splitgill.elasticsearch.count(index=latest_index)["count"] == 4
         assert splitgill.elasticsearch.count(index=old_2020_index)["count"] == 1
@@ -461,3 +491,109 @@ class TestSync:
             id=f"{version_2_records[1].id}:{to_timestamp(version_1_time)}",
             index=old_2020_index,
         )
+
+    def test_incomplete_is_not_searchable(self, splitgill: SplitgillClient):
+        called = 0
+
+        def mock_create_index_op(*args, **kwargs):
+            # call the actual create_index_op function 3 times and then on the 4th go
+            # around, raise an exception
+            nonlocal called
+            called += 1
+            if called < 4:
+                return create_index_op(*args, **kwargs)
+            else:
+                raise Exception("Something went wrong... on purpose!")
+
+        with patch(
+            "splitgill.indexing.index.create_index_op", side_effect=mock_create_index_op
+        ):
+            database = SplitgillDatabase("test", splitgill)
+            records = [
+                Record.new({"x": 5}),
+                Record.new({"x": 10}),
+                Record.new({"x": 15}),
+                Record.new({"x": 8}),
+            ]
+            database.add(records)
+
+            with pytest.raises(Exception, match="Something went wrong... on purpose!"):
+                # add them one at a time so that some docs actually get to elasticsearch
+                database.sync(chunk_size=1)
+
+        # an error occurred which should have prevented a refresh from being triggered
+        # so the doc count should still be 0
+        assert (
+            splitgill.elasticsearch.count(index=database.latest_index_name)["count"]
+            == 0
+        )
+        # check that the refresh interval has been left as -1
+        assert (
+            splitgill.elasticsearch.indices.get_settings(
+                index=database.latest_index_name
+            )[database.latest_index_name]["settings"]["index"]["refresh_interval"]
+            == "-1"
+        )
+
+        # run another sync which doesn't error (we're outside of the patch context)
+        database.sync()
+
+        # now a refresh should have been triggered and the doc count should be 4
+        assert (
+            splitgill.elasticsearch.count(index=database.latest_index_name)["count"]
+            == 4
+        )
+        # and the refresh should have been reset (it either won't be in the settings or
+        # it will be set to something other than -1, hence the get usage)
+        assert (
+            splitgill.elasticsearch.indices.get_settings(
+                index=database.latest_index_name
+            )[database.latest_index_name]["settings"]["index"].get("refresh_interval")
+            != "-1"
+        )
+
+    def test_incomplete_is_not_searchable_until_refresh(
+        self, splitgill: SplitgillClient
+    ):
+        called = 0
+
+        def mock_create_index_op(*args, **kwargs):
+            # call the actual create_index_op function 3 times and then on the 4th go
+            # around, raise an exception
+            nonlocal called
+            called += 1
+            if called < 4:
+                return create_index_op(*args, **kwargs)
+            else:
+                raise Exception("Something went wrong... on purpose!")
+
+        with patch(
+            "splitgill.indexing.index.create_index_op", side_effect=mock_create_index_op
+        ):
+            database = SplitgillDatabase("test", splitgill)
+            records = [
+                Record.new({"x": 5}),
+                Record.new({"x": 10}),
+                Record.new({"x": 15}),
+                Record.new({"x": 8}),
+            ]
+            database.add(records)
+
+            with pytest.raises(Exception, match="Something went wrong... on purpose!"):
+                # add them one at a time so that some docs actually get to elasticsearch
+                database.sync(chunk_size=1, parallel=False)
+
+        splitgill.elasticsearch.indices.refresh(index=database.latest_index_name)
+        doc_count = splitgill.elasticsearch.count(index=database.latest_index_name)
+        # check that the number of docs available for search is more than 0 but fewer
+        # than 4. Ideally this would be 3 because we allow 3 create_index_op calls to
+        # complete and then raise an exception, however, the way that chunks are sent to
+        # elasticsearch means that it's not 3, it's actually 2. The _ActionChunker class
+        # in the elasticsearch library doesn't send the first op immediately even though
+        # the chunk size is 1 and only sends it after creating the next op so it ends up
+        # only sending 2 ops even though it's generate 4. As you can see from that
+        # explanation this is an elasticsearch library internal and therefore relying on
+        # it always being this way is foolish, therefore we just check that more than 1
+        # doc has made it and fewer than 4 (even this is a bit dubious but it's pretty
+        # solid).
+        assert 0 < doc_count["count"] < 4
