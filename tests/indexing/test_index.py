@@ -10,6 +10,7 @@ from splitgill.indexing.index import (
     get_latest_index_id,
     create_index_op,
     generate_index_ops,
+    get_index_wildcard,
 )
 from splitgill.indexing.parser import parse_for_index
 from splitgill.manager import SplitgillClient
@@ -26,6 +27,10 @@ def test_get_data_index_id():
 
 def test_get_latest_index_id():
     assert get_latest_index_id("test") == "data-test-latest"
+
+
+def test_get_wildcard_index():
+    assert get_index_wildcard("test") == "data-test-*"
 
 
 class TestCreateIndexOp:

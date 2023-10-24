@@ -30,6 +30,16 @@ def get_latest_index_id(name: str) -> str:
     return f"data-{name}-latest"
 
 
+def get_index_wildcard(name: str) -> str:
+    """
+    Given a database name, return a wildcard that covers all indices for the database.
+
+    :param name: the Splitgill database name
+    :return: the wildcard name
+    """
+    return f"data-{name}-*"
+
+
 def create_index_op(
     index_name: str,
     record_id: str,
