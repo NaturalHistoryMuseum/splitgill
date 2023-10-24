@@ -26,14 +26,14 @@ def generate_ops(
     :return: yields InsertOne or UpdateOne ops
     """
     for chunk in partition(records, FIND_SIZE):
-        records = {record.id: record for record in chunk}
+        records_by_id = {record.id: record for record in chunk}
         docs = (
             MongoRecord(**doc)
-            for doc in collection.find({"id": {"$in": list(records.keys())}})
+            for doc in collection.find({"id": {"$in": list(records_by_id.keys())}})
         )
         existing = {doc.id: doc for doc in docs}
 
-        for record_id, record in records.items():
+        for record_id, record in records_by_id.items():
             new_data = prepare(record.data)
 
             if record_id not in existing:
