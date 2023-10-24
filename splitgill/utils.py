@@ -1,10 +1,8 @@
-from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime
 from itertools import islice
-from typing import Optional, Iterable
+from typing import Iterable
 
 from dateutil.tz import UTC
-from elasticsearch import Elasticsearch
 
 
 def to_timestamp(moment: datetime) -> int:
@@ -66,42 +64,3 @@ def partition(iterable: Iterable, size: int) -> Iterable[list]:
     it = iter(iterable)
     while chunk := list(islice(it, size)):
         yield chunk
-
-
-# @contextmanager
-# def optimal_index_settings(client: Elasticsearch, index_name: str):
-#     client.indices.put_settings(
-#         settings={
-#             "index": {
-#                 "refresh_interval": -1,
-#             }
-#         },
-#         index=index_name,
-#     )
-#     client.indices.put_settings(
-#         settings={
-#             "index": {
-#                 "number_of_replicas": 0,
-#             }
-#         },
-#         index=index_name,
-#     )
-#
-#     yield
-#
-#     client.indices.put_settings(
-#         settings={
-#             "index": {
-#                 "refresh_interval": None,
-#             }
-#         },
-#         index=index_name,
-#     )
-#     client.indices.put_settings(
-#         settings={
-#             "index": {
-#                 "number_of_replicas": None,
-#             }
-#         },
-#         index=index_name,
-#     )
