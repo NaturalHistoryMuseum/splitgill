@@ -35,28 +35,32 @@ class TestPrepare:
 
     def test_dict(self):
         assert prepare({}) == {}
+        assert prepare({"x": None}) == {"x": None}
         assert prepare({"x": "beans"}) == {"x": "beans"}
         assert prepare({"x": "4"}) == {"x": prepare(4)}
-        assert prepare({3: True}) == {prepare(3): prepare(True)}
-        assert prepare({4: {6: 1}}) == {prepare(4): {prepare(6): prepare(1)}}
+        assert prepare({3: True}) == {"3": prepare(True)}
+        assert prepare({4: {6: 1}}) == {"4": {"6": prepare(1)}}
 
     def test_list(self):
         assert prepare([]) == tuple()
+        assert prepare([3, None, 5]) == ("3", None, "5")
         assert prepare([1, 2, 3]) == ("1", "2", "3")
         assert prepare([1, True, 3]) == ("1", "true", "3")
 
     def test_set(self):
         assert prepare(set()) == tuple()
 
-        prepared = prepare({1, 2, 3, "beans"})
+        prepared = prepare({1, 2, 3, "beans", None})
         assert isinstance(prepared, tuple)
         assert "1" in prepared
         assert "2" in prepared
         assert "3" in prepared
         assert "beans" in prepared
+        assert None in prepared
 
     def test_tuple(self):
         assert prepare(tuple()) == tuple()
+        assert prepare((3, None, 5)) == ("3", None, "5")
         assert prepare((1, 2, 3)) == ("1", "2", "3")
         assert prepare((1, True, 3)) == ("1", "true", "3")
 
