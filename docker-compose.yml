@@ -28,7 +28,7 @@ services:
       - "./docs:/usr/src/app/docs"
 
   es:
-    image: elasticsearch:7.17.10
+    image: elasticsearch:8.10.1
     environment:
       - "discovery.type=single-node"
       - "ES_JAVA_OPTS=-Xms2g -Xmx2g"

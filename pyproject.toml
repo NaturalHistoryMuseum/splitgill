@@ -20,11 +20,8 @@ classifiers = [
 ]
 
 dependencies = [
-    "elasticsearch>=7.0.0,<8.0.0",
-    # this package is preventing us from using elasticsearch 8 (status is iffy, but hopefully it's
-    # going to get some support: https://github.com/elastic/elasticsearch-dsl-py/issues/1652). We
-    # could not use it but it is a really nice library...
-    "elasticsearch-dsl>=7.0.0,<8.0.0",
+    "elasticsearch>=8.10.1",
+    "elasticsearch-dsl>=8.9.0",
     "pymongo>=4.4.1",
     "cytoolz>=0.12.2",
     "python-dateutil>=2.8.2",
