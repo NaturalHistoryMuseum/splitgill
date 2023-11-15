@@ -101,8 +101,8 @@ The subfields are:
   type field, used for full-text searches
 - `k` - [keyword](https://www.elastic.co/guide/en/elasticsearch/reference/7.17/keyword.html#keyword-field-type)
   type field, use for sorting, aggregations, and term level queries
-- `n` - [float](https://www.elastic.co/guide/en/elasticsearch/reference/7.17/number.html)
-  type field, used for number searches (we use float to save disk space over `double`)
+- `n` - [double](https://www.elastic.co/guide/en/elasticsearch/reference/7.17/number.html)
+  type field, used for number searches
 - `d` - [date](https://www.elastic.co/guide/en/elasticsearch/reference/7.17/date.html)
   type field, used for date searches. Format: `strict_date_optional_time` (iso8601)
 - `b` - [boolean](https://www.elastic.co/guide/en/elasticsearch/reference/7.17/boolean.html)
