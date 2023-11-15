@@ -116,7 +116,7 @@ DATA_TEMPLATE = {
                     "number_field": {
                         "path_match": f"{RootField.PARSED}.{number_path('*')}",
                         "mapping": {
-                            "type": "float",
+                            "type": "double",
                         },
                     },
                 },
