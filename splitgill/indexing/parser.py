@@ -10,7 +10,6 @@ from pendulum.parsing import parse_iso8601
 
 from splitgill.indexing.fields import TypeField
 from splitgill.indexing.geo import (
-    GeoFieldHint,
     DEFAULT_HINTS,
     as_geojson,
     GeoFieldHints,
