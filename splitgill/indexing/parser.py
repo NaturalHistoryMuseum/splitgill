@@ -170,7 +170,9 @@ def parse_str(value: str) -> dict:
     """
     parsed = {
         TypeField.TEXT: value,
-        TypeField.KEYWORD: value,
+        # this value gets handled by Elasticsearch (basically it just lowercases it)
+        TypeField.KEYWORD_CASE_INSENSITIVE: value,
+        TypeField.KEYWORD_CASE_SENSITIVE: value,
     }
 
     # attempt to parse booleans

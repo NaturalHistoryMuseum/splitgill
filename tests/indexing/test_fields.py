@@ -2,7 +2,10 @@ from splitgill.indexing.fields import (
     geo_path,
     text_path,
     TypeField,
-    keyword_path,
+    keyword_case_insensitive_path,
+    keyword_case_sensitive_path,
+    keyword_ci_path,
+    keyword_cs_path,
     date_path,
     parsed_path,
     number_path,
@@ -20,7 +23,8 @@ class TestGeoPath:
 
 
 def test_parsed_path():
-    assert parsed_path("beans", TypeField.KEYWORD) == "beans.k"
+    # just try a couple
+    assert parsed_path("beans", TypeField.KEYWORD_CASE_INSENSITIVE) == "beans.ki"
     assert parsed_path("beans", TypeField.DATE) == "beans.d"
 
 
@@ -28,8 +32,16 @@ def test_text_path():
     assert text_path("beans") == "beans.t"
 
 
-def test_keyword_path():
-    assert keyword_path("beans") == "beans.k"
+def test_keyword_case_insensitive_path():
+    assert keyword_case_insensitive_path("beans") == "beans.ki"
+    assert keyword_ci_path("beans") == "beans.ki"
+    assert keyword_case_insensitive_path is keyword_ci_path
+
+
+def test_keyword_sensitive_path():
+    assert keyword_case_sensitive_path("beans") == "beans.ks"
+    assert keyword_cs_path("beans") == "beans.ks"
+    assert keyword_case_sensitive_path is keyword_cs_path
 
 
 def test_date_path():

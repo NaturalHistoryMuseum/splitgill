@@ -43,16 +43,18 @@ class MetaField(LowercaseStrEnum):
 class TypeField(StrEnum):
     """
     Parsed field short names, these are the leaf fields of the parsed field object, e.g.
-    if we have a field called height, then we're likely to have:
+    if we have a field called "height", then we're likely to have:
 
-        - parsed.height.k
+        - parsed.height.ki
+        - parsed.height.ks
         - parsed.height.t
         - parsed.height.n
 
     under the parsed root level object.
     """
 
-    KEYWORD = "k"
+    KEYWORD_CASE_INSENSITIVE = "ki"
+    KEYWORD_CASE_SENSITIVE = "ks"
     TEXT = "t"
     NUMBER = "n"
     DATE = "d"
@@ -82,15 +84,31 @@ def text_path(field_name: str) -> str:
     return parsed_path(field_name, TypeField.TEXT)
 
 
-def keyword_path(field_name: str) -> str:
+def keyword_case_insensitive_path(field_name: str) -> str:
     """
-    Creates the path to the keyword typed version of this field. This path excludes the
-    "parsed." root.
+    Creates the path to the case-insensitive keyword typed version of this field. This
+    path excludes the "parsed." root.
 
     :param field_name: the name of the field
-    :return: the path to the field as keyword
+    :return: the path to the field as a case-insensitive keyword
     """
-    return parsed_path(field_name, TypeField.KEYWORD)
+    return parsed_path(field_name, TypeField.KEYWORD_CASE_INSENSITIVE)
+
+
+def keyword_case_sensitive_path(field_name: str) -> str:
+    """
+    Creates the path to the keyword natural typed version of this field. This path
+    excludes the "parsed." root.
+
+    :param field_name: the name of the field
+    :return: the path to the field as keyword natural
+    """
+    return parsed_path(field_name, TypeField.KEYWORD_CASE_SENSITIVE)
+
+
+# the names of these path functions are really long so make some aliases for convenience
+keyword_ci_path = keyword_case_insensitive_path
+keyword_cs_path = keyword_case_sensitive_path
 
 
 def date_path(field_name: str) -> str:

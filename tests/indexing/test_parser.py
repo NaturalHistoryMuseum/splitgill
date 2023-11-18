@@ -158,7 +158,8 @@ class TestParseStr:
     def test_normal_text(self):
         assert parse_str("banana") == {
             TypeField.TEXT: "banana",
-            TypeField.KEYWORD: "banana",
+            TypeField.KEYWORD_CASE_INSENSITIVE: "banana",
+            TypeField.KEYWORD_CASE_SENSITIVE: "banana",
         }
 
     def test_bools_trues(self):
@@ -166,7 +167,8 @@ class TestParseStr:
         for option in chain(options, [o.upper() for o in options]):
             assert parse_str(option) == {
                 TypeField.TEXT: option,
-                TypeField.KEYWORD: option,
+                TypeField.KEYWORD_CASE_INSENSITIVE: option,
+                TypeField.KEYWORD_CASE_SENSITIVE: option,
                 TypeField.BOOLEAN: True,
             }
 
@@ -175,24 +177,28 @@ class TestParseStr:
         for option in chain(options, [o.upper() for o in options]):
             assert parse_str(option) == {
                 TypeField.TEXT: option,
-                TypeField.KEYWORD: option,
+                TypeField.KEYWORD_CASE_INSENSITIVE: option,
+                TypeField.KEYWORD_CASE_SENSITIVE: option,
                 TypeField.BOOLEAN: False,
             }
 
     def test_number(self):
         assert parse_str("5.3") == {
             TypeField.TEXT: "5.3",
-            TypeField.KEYWORD: "5.3",
+            TypeField.KEYWORD_CASE_INSENSITIVE: "5.3",
+            TypeField.KEYWORD_CASE_SENSITIVE: "5.3",
             TypeField.NUMBER: 5.3,
         }
         assert parse_str("70") == {
             TypeField.TEXT: "70",
-            TypeField.KEYWORD: "70",
+            TypeField.KEYWORD_CASE_INSENSITIVE: "70",
+            TypeField.KEYWORD_CASE_SENSITIVE: "70",
             TypeField.NUMBER: 70.0,
         }
         assert parse_str("70.0") == {
             TypeField.TEXT: "70.0",
-            TypeField.KEYWORD: "70.0",
+            TypeField.KEYWORD_CASE_INSENSITIVE: "70.0",
+            TypeField.KEYWORD_CASE_SENSITIVE: "70.0",
             TypeField.NUMBER: 70.0,
         }
 
@@ -204,20 +210,23 @@ class TestParseStr:
     def test_date_date_and_time(self):
         assert parse_str("2005-07-02 20:16:47.458301") == {
             TypeField.TEXT: "2005-07-02 20:16:47.458301",
-            TypeField.KEYWORD: "2005-07-02 20:16:47.458301",
+            TypeField.KEYWORD_CASE_INSENSITIVE: "2005-07-02 20:16:47.458301",
+            TypeField.KEYWORD_CASE_SENSITIVE: "2005-07-02 20:16:47.458301",
             TypeField.DATE: "2005-07-02T20:16:47.458301",
         }
 
     def test_date_date_and_time_and_tz(self):
         assert parse_str("2005-07-02 20:16:47.103+05:00") == {
             TypeField.TEXT: "2005-07-02 20:16:47.103+05:00",
-            TypeField.KEYWORD: "2005-07-02 20:16:47.103+05:00",
+            TypeField.KEYWORD_CASE_INSENSITIVE: "2005-07-02 20:16:47.103+05:00",
+            TypeField.KEYWORD_CASE_SENSITIVE: "2005-07-02 20:16:47.103+05:00",
             TypeField.DATE: "2005-07-02T20:16:47.103000+05:00",
         }
 
     def test_date_just_a_date(self):
         assert parse_str("2005-07-02") == {
             TypeField.TEXT: "2005-07-02",
-            TypeField.KEYWORD: "2005-07-02",
+            TypeField.KEYWORD_CASE_INSENSITIVE: "2005-07-02",
+            TypeField.KEYWORD_CASE_SENSITIVE: "2005-07-02",
             TypeField.DATE: "2005-07-02T00:00:00",
         }

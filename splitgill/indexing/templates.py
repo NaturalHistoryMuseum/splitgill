@@ -1,7 +1,8 @@
 from splitgill.indexing.fields import (
     MetaField,
     RootField,
-    keyword_path,
+    keyword_ci_path,
+    keyword_cs_path,
     text_path,
     number_path,
     date_path,
@@ -89,26 +90,38 @@ DATA_TEMPLATE = {
                         },
                     },
                 },
-                # use lowercase for easier searching, 256 to limit the data we store
-                # (this is the default, but might as well specify it), and copy all the
-                # fields to the meta.all field to allow the full search everything to
-                # work
-                {
-                    "keyword_field": {
-                        "path_match": f"{RootField.PARSED}.{keyword_path('*')}",
-                        "mapping": {
-                            "type": "keyword",
-                            "normalizer": "lowercase_normalizer",
-                            "ignore_above": 256,
-                            "copy_to": MetaField.ALL.path(),
-                        },
-                    },
-                },
                 {
                     "text_field": {
                         "path_match": f"{RootField.PARSED}.{text_path('*')}",
                         "mapping": {
                             "type": "text",
+                            # copy the text value of this field into the meta.all field
+                            "copy_to": MetaField.ALL.path(),
+                        },
+                    },
+                },
+                {
+                    "keyword_case_insensitive_field": {
+                        "path_match": f"{RootField.PARSED}.{keyword_ci_path('*')}",
+                        "mapping": {
+                            "type": "keyword",
+                            # lowercase the text when storing it, this allows
+                            # case-insensitive usage
+                            "normalizer": "lowercase_normalizer",
+                            # 256 to limit the data we store (this is the default, but
+                            # might as well specify it)
+                            "ignore_above": 256,
+                        },
+                    },
+                },
+                {
+                    "keyword_case_sensitive_field": {
+                        "path_match": f"{RootField.PARSED}.{keyword_cs_path('*')}",
+                        "mapping": {
+                            "type": "keyword",
+                            # 256 to limit the data we store (this is the default, but
+                            # might as well specify it)
+                            "ignore_above": 256,
                         },
                     },
                 },
