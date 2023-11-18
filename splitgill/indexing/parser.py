@@ -6,7 +6,8 @@ from typing import Union, Deque, Tuple, Optional, NamedTuple
 
 from cytoolz.dicttoolz import get_in
 from fastnumbers import try_float
-from pendulum.parsing import parse_iso8601
+from parser import ParserError
+from pendulum.parsing import parse
 
 from splitgill.indexing.fields import TypeField
 from splitgill.indexing.geo import (
@@ -184,15 +185,19 @@ def parse_str(value: str) -> dict:
     as_number = try_float(value, inf=None, nan=None, on_fail=None)
     if as_number is not None:
         parsed[TypeField.NUMBER] = as_number
-        return parsed
 
     try:
-        # TODO: open this up to more datetime formats?
-        # the response from parse_iso8601 can be a time, date, or datetime object. We
-        # will ignore the time type
-        date_value = parse_iso8601(value)
+        # passing exact forces parse to return the object it parsed the string to,
+        # rather than convert that object into a datetime. This means this call can
+        # return datetime, date, time, and period objects (and maybe others too, at
+        # least we're future proofed!) and then we can sort out which ones of those we
+        # care about (only date and datetime). Passing strict stops pendulum falling
+        # back on dateutil's parser. We could do this, but it'll have a performance hit,
+        # and we're more likely to parse some absolute garbage.
+        date_value = parse(value, exact=True, strict=True)
 
-        # date and datetime objects are both date objects, time is not, so this works
+        # date and datetime objects are both date objects, time and periods are not, so
+        # this works to separate out those options
         if isinstance(date_value, date):
             if type(date_value) is date:
                 # this defaults the time to 00:00:00 on the day of the date and converts
@@ -203,7 +208,7 @@ def parse_str(value: str) -> dict:
             # epoch_millis format so convert the datetime object to that here
             parsed[TypeField.DATE] = to_timestamp(date_value)
             return parsed
-    except ValueError:
+    except ValueError or ParserError:
         pass
 
     return parsed

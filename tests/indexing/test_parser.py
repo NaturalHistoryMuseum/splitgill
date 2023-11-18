@@ -1,6 +1,8 @@
 from datetime import datetime
 from itertools import chain
 
+import pytest
+
 from splitgill.diffing import prepare
 from splitgill.indexing.fields import TypeField
 from splitgill.indexing.parser import parse_for_index, ParsedData, parse_str
@@ -236,3 +238,38 @@ class TestParseStr:
             TypeField.KEYWORD_CASE_SENSITIVE: "2005-07-02",
             TypeField.DATE: to_timestamp(datetime.fromisoformat("2005-07-02T00:00:00")),
         }
+
+    # these scenarios come from the docs: https://pendulum.eustace.io/docs/#parsing
+    @pytest.mark.parametrize(
+        "value,epoch",
+        [
+            # RFC 3339
+            ("1996-12-19T16:39:57-08:00", 851042397000),
+            ("1990-12-31T23:59:59Z", 662687999000),
+            # ISO 8601
+            ("20161001T143028+0530", 1475312428000),
+            ("20161001T14", 1475330400000),
+            # dates
+            ("2012", 1325376000000),
+            ("2012-05-03", 1336003200000),
+            ("20120503", 1336003200000),
+            ("2012-05", 1335830400000),
+            # ordinal day
+            ("2012-007", 1325894400000),
+            ("2012007", 1325894400000),
+            # week number
+            ("2012-W05", 1327881600000),
+            ("2012W05", 1327881600000),
+            ("2012-W05-5", 1328227200000),
+            ("2012W055", 1328227200000),
+        ],
+    )
+    def test_date_formats(self, value: str, epoch: int):
+        parsed = parse_str(value)
+        assert parsed[TypeField.DATE] == epoch
+
+    def test_date_formats_that_we_want_ignore(self):
+        assert TypeField.DATE not in parse_str("12:04:23")
+        assert TypeField.DATE not in parse_str(
+            "2007-03-01T13:00:00Z/2008-05-11T15:30:00Z"
+        )
