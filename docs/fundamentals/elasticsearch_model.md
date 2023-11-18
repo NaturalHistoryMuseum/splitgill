@@ -35,10 +35,6 @@ These indices are named like so:
 - `sg-data-latest-{name}`
 - `sg-data-{year}-{name}`
 
-### Config Indices
-
-_**TODO**_
-
 ## Data Fields
 
 The top-level fields in each document are described below.
