@@ -138,7 +138,7 @@ DATA_TEMPLATE = {
                         "path_match": f"{RootField.PARSED}.{date_path('*')}",
                         "mapping": {
                             "type": "date",
-                            "format": "strict_date_optional_time",
+                            "format": "epoch_millis",
                         },
                     },
                 },

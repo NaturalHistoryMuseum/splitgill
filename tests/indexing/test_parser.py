@@ -1,8 +1,10 @@
+from datetime import datetime
 from itertools import chain
 
 from splitgill.diffing import prepare
 from splitgill.indexing.fields import TypeField
 from splitgill.indexing.parser import parse_for_index, ParsedData, parse_str
+from splitgill.utils import to_timestamp
 
 
 class TestParseForIndex:
@@ -212,7 +214,9 @@ class TestParseStr:
             TypeField.TEXT: "2005-07-02 20:16:47.458301",
             TypeField.KEYWORD_CASE_INSENSITIVE: "2005-07-02 20:16:47.458301",
             TypeField.KEYWORD_CASE_SENSITIVE: "2005-07-02 20:16:47.458301",
-            TypeField.DATE: "2005-07-02T20:16:47.458301",
+            TypeField.DATE: to_timestamp(
+                datetime.fromisoformat("2005-07-02T20:16:47.458301")
+            ),
         }
 
     def test_date_date_and_time_and_tz(self):
@@ -220,7 +224,9 @@ class TestParseStr:
             TypeField.TEXT: "2005-07-02 20:16:47.103+05:00",
             TypeField.KEYWORD_CASE_INSENSITIVE: "2005-07-02 20:16:47.103+05:00",
             TypeField.KEYWORD_CASE_SENSITIVE: "2005-07-02 20:16:47.103+05:00",
-            TypeField.DATE: "2005-07-02T20:16:47.103000+05:00",
+            TypeField.DATE: to_timestamp(
+                datetime.fromisoformat("2005-07-02T20:16:47.103000+05:00")
+            ),
         }
 
     def test_date_just_a_date(self):
@@ -228,5 +234,5 @@ class TestParseStr:
             TypeField.TEXT: "2005-07-02",
             TypeField.KEYWORD_CASE_INSENSITIVE: "2005-07-02",
             TypeField.KEYWORD_CASE_SENSITIVE: "2005-07-02",
-            TypeField.DATE: "2005-07-02T00:00:00",
+            TypeField.DATE: to_timestamp(datetime.fromisoformat("2005-07-02T00:00:00")),
         }

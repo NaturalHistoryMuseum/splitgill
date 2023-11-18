@@ -15,6 +15,7 @@ from splitgill.indexing.geo import (
     as_geojson,
     GeoFieldHints,
 )
+from splitgill.utils import to_timestamp
 
 
 @dataclass
@@ -199,8 +200,9 @@ def parse_str(value: str) -> dict:
                 # the data into a datetime object
                 date_value = datetime(date_value.year, date_value.month, date_value.day)
 
-            # TODO: should this be in UTC? should it be an epoch?
-            parsed[TypeField.DATE] = date_value.isoformat()
+            # the date field we've configured in the Elasticsearch model uses the
+            # epoch_millis format so convert the datetime object to that here
+            parsed[TypeField.DATE] = to_timestamp(date_value)
             return parsed
     except ValueError:
         pass
