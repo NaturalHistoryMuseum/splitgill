@@ -77,38 +77,55 @@ will retrieve the data for each record in the search scope as they looked at tim
 
 This object contains the actual data of the record at the version this document
 represents.
-Nested objects and lists are allowed, but all leaf values must be converted into an
+All values in this object will be of type string, list or object due to the way the
+record data is stored MongoDB.
+Nested structures of any depth are allowed (objects containing objects, lists of objects
+etc).
+The data stored under this object is not indexed but is stored and therefore can't be
+used in queries (use `parsed`, see the next section) but will be returned in the
+results.
+
+### parsed
+
+This object contains a parsed version of the record's data.
+This object is not stored but is indexed.
+It is the primary way a record's data should be queried.
+
+Nested objects and lists are allowed, but all leaf values are be converted into an
 object containing several fields based on the type of the value.
 These fields allow type changes between data versions and facilitate advanced
 searching on the data.
 For example, in version 1 a field has a value of 10 but in version 2 this is changed to
 "banana".
-If the field had a type in Elasticsearch of "integer" in version 1 then the version 2
-value of "banana" would break when an attempt to index it into the same index was made.
-Every version could get an index of its own but this could create a lot of small indices
-and the way Splitgill handles this with the multiple fields defined next allows complex
-searches without upfront type hinting.
+If the field had a type in Elasticsearch of "integer" in version 1 but then in version 2
+a value of "banana", this would break the mapping as the field can't be indexed as both
+an integer and a string type at the same time.
+The way Splitgill handles this is with multiple fields defined, allowing complex
+searches without upfront type hinting and maximum flexibility.
 
 The subfields all have short names to reduce storage requirements and because they are
 only for internal use, so they have no need to be particularly readable.
 The subfields are:
 
-- `t` - [text](https://www.elastic.co/guide/en/elasticsearch/reference/7.17/text.html#text-field-type)
+- `t` - [text](https://www.elastic.co/guide/en/elasticsearch/reference/8.11/text.html#text-field-type)
   type field, used for full-text searches
-- `k` - [keyword](https://www.elastic.co/guide/en/elasticsearch/reference/7.17/keyword.html#keyword-field-type)
-  type field, use for sorting, aggregations, and term level queries
-- `n` - [double](https://www.elastic.co/guide/en/elasticsearch/reference/7.17/number.html)
+- `ki` - [keyword](https://www.elastic.co/guide/en/elasticsearch/reference/8.11/keyword.html#keyword-field-type)
+  type field, use for sorting, aggregations, and term level queries.
+  This field's data is indexed lowercase to allow case-insensitive queries on it.
+  Only the first 256 characters are stored in this field to reduce storage requirements.
+- `ks` - [keyword](https://www.elastic.co/guide/en/elasticsearch/reference/8.11/keyword.html#keyword-field-type)
+  type field, use for sorting, aggregations, and term level queries.
+  This field's data is indexed without any changes to allow case-sensitive queries on
+  it.
+  Only the first 256 characters are stored in this field to reduce storage requirements.
+- `n` - [double](https://www.elastic.co/guide/en/elasticsearch/reference/8.11/number.html)
   type field, used for number searches
-- `d` - [date](https://www.elastic.co/guide/en/elasticsearch/reference/7.17/date.html)
-  type field, used for date searches. Format: `strict_date_optional_time` (iso8601)
-- `b` - [boolean](https://www.elastic.co/guide/en/elasticsearch/reference/7.17/boolean.html)
+- `d` - [date](https://www.elastic.co/guide/en/elasticsearch/reference/8.11/date.html)
+  type field, used for date searches.
+  This field's format is `epoch_millis` which means any queries on this field will use
+  this by default, however, you can set a `format` to alter this when querying.
+- `b` - [boolean](https://www.elastic.co/guide/en/elasticsearch/reference/8.11/boolean.html)
   type field, used for boolean searches
-
-_**TODO:**_
-We may also want to support a `completion` field to support autocomplete searches.
-We can do this with prefix queries, so it may not be worth adding to the storage
-requirements by adding this additional field.
-We would probably do this with a field `c` using the `completion` type.
 
 #### Parsing
 
@@ -117,7 +134,7 @@ indexing in Elasticsearch.
 
 The following Python data types are parsed directly into the the fields as follows:
 
-- `str` -> `t`, `k`, (and `c` if we use it)
+- `str` -> `t`, `ki`, `ks`
 - `float` | `int` -> `n`
 - `datetime` -> `d`
 - `bool` -> `b`
@@ -126,12 +143,37 @@ Additionally, `str` values are checked against the following rules to determine 
 can be parsed into any of the fields:
 
 - if the `str` can be parsed successfully
-  by [`fast_float`](https://fastnumbers.readthedocs.io/en/master/api.html#fastnumbers.fast_float) -> `n`
+  by [`try_float`](https://fastnumbers.readthedocs.io/en/stable/api.html#fastnumbers.try_float) -> `n`
 - if the `str` can be parsed successfully
-  by [`parse_iso8601`](https://pendulum.eustace.io/) -> `d`
-- if the lowercase `str` is `"true"`, `"y"`, `"yes"`, `"false"`, `"n"` or `"no"` -> `b`
+  by Pendulum's [`parse`](https://pendulum.eustace.io/docs/#parsing) function -> `d`
 
-In the future, we could add additional datetime formats beyond just iso8601.
+  The following standards and formats can be parsed by this function.
+  These are taken from the Pendulum docs as are the examples.
+
+    - RFC 3339, examples:
+        - `"1996-12-19T16:39:57-08:00"`
+        - `"1990-12-31T23:59:59Z"`
+    - ISO 8601
+        - `"20161001T143028+0530"`
+        - `"20161001T14"`
+    - Simple dates
+        - `"2012"`
+        - `"2012-05-03"`
+        - `"20120503"`
+        - `"2012-05"`
+    - Ordinal days
+        - `"2012-007"`
+        - `"2012007"`
+    - Week numbers
+        - `"2012-W05"`
+        - `"2012W05"`
+        - `"2012-W05-5"`
+        - `"2012W055"`
+
+  The Pendulum `parse` function can also parse times on their own and intervals, but
+  these are not accepted by Splitgill and ignored.
+
+- if the lowercase `str` is `"true"`, `"y"`, `"yes"`, `"false"`, `"n"` or `"no"` -> `b`
 
 #### geo
 
