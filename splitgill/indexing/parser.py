@@ -1,4 +1,5 @@
 from collections import deque
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import date, datetime
 from functools import lru_cache
@@ -186,7 +187,7 @@ def parse_str(value: str) -> dict:
     if as_number is not None:
         parsed[TypeField.NUMBER] = as_number
 
-    try:
+    with suppress(Exception):
         # passing exact forces parse to return the object it parsed the string to,
         # rather than convert that object into a datetime. This means this call can
         # return datetime, date, time, and period objects (and maybe others too, at
@@ -208,7 +209,5 @@ def parse_str(value: str) -> dict:
             # epoch_millis format so convert the datetime object to that here
             parsed[TypeField.DATE] = to_timestamp(date_value)
             return parsed
-    except ValueError or ParserError:
-        pass
 
     return parsed
