@@ -4,10 +4,16 @@ from datetime import datetime
 from itertools import chain, zip_longest
 from typing import Iterable, Tuple, Any, Union, NamedTuple, Dict, Deque
 
+import regex as rx
 from cytoolz import get_in
 
+# this regex matches invalid characters which we would like to remove from all string
+# values as they are ingested into the system. It matches unicode control characters
+# (i.e. category C*) but not \n, \r, or \t.
+invalid_char_regex = rx.compile(r"[^\P{C}\n\r\t]")
 
-def prepare(value: Any) -> Union[str, dict, tuple]:
+
+def prepare(value: Any) -> Union[str, dict, tuple, None]:
     """
     Prepares the given value for storage in MongoDB. Conversions are completed like so:
 
@@ -21,11 +27,14 @@ def prepare(value: Any) -> Union[str, dict, tuple]:
           prepared by this function.
 
     :param value: the value to store in MongoDB
-    :return: a str, dict or tuple depending on the value passed
+    :return: None, a str, dict or tuple depending on the value passed
     """
-    if value is None or isinstance(value, str):
-        return value
-    if isinstance(value, bool):
+    if value is None:
+        return None
+    elif isinstance(value, str):
+        # replace any invalid characters in the string with the empty string
+        return invalid_char_regex.sub("", value)
+    elif isinstance(value, bool):
         return "true" if value else "false"
     # TODO: using str(value) when the value is a float is a bit meh as str(value) will
     #  chop the precision of the float represented in the value inconsistently. Might be

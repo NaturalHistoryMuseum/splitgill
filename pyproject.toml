@@ -31,6 +31,7 @@ dependencies = [
     "pyproj>=3.5.0",
     "shapely>=2.0.1",
     "StrEnum>=0.4.15",
+    "regex>=2023.10.3",
 ]
 
 [project.optional-dependencies]
