@@ -17,6 +17,9 @@ class TestPrepare:
 
     def test_str(self):
         assert prepare("beans") == "beans"
+        assert prepare("beans\tand\rlemons\neh?") == "beans\tand\rlemons\neh?"
+        assert prepare("beans\x07andabell") == "beansandabell"
+        assert prepare("bea\x07ns\tand\rlem\x00ons\neh?") == "beans\tand\rlemons\neh?"
 
     def test_numbers(self):
         assert prepare(23) == "23"
