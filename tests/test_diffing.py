@@ -8,6 +8,8 @@ from splitgill.diffing import (
     DiffOp,
     DiffingTypeComparisonException,
     patch,
+    BOOL_TRUE,
+    BOOL_FALSE,
 )
 
 
@@ -29,8 +31,8 @@ class TestPrepare:
         assert prepare(0) == "0"
 
     def test_bool(self):
-        assert prepare(True) == "true"
-        assert prepare(False) == "false"
+        assert prepare(True) == BOOL_TRUE
+        assert prepare(False) == BOOL_FALSE
 
     def test_datetime(self):
         now = datetime.now()

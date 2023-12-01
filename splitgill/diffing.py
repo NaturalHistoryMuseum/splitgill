@@ -12,6 +12,10 @@ from cytoolz import get_in
 # (i.e. category C*) but not \n, \r, or \t.
 invalid_char_regex = rx.compile(r"[^\P{C}\n\r\t]")
 
+# these are the constant values the prepare function swaps bools with
+BOOL_TRUE = "true"
+BOOL_FALSE = "false"
+
 
 def prepare(value: Any) -> Union[str, dict, tuple, None]:
     """
@@ -35,7 +39,7 @@ def prepare(value: Any) -> Union[str, dict, tuple, None]:
         # replace any invalid characters in the string with the empty string
         return invalid_char_regex.sub("", value)
     elif isinstance(value, bool):
-        return "true" if value else "false"
+        return BOOL_TRUE if value else BOOL_FALSE
     # TODO: using str(value) when the value is a float is a bit meh as str(value) will
     #  chop the precision of the float represented in the value inconsistently. Might be
     #  worth using a more predictable method so that we can tell users something like
