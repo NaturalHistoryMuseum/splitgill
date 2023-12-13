@@ -3,8 +3,9 @@ from functools import lru_cache
 from typing import Optional, Iterable
 
 from splitgill.indexing.fields import RootField, MetaField
+from splitgill.indexing.options import ParsingOptionsRange
 from splitgill.indexing.parser import parse_for_index
-from splitgill.model import MongoRecord
+from splitgill.model import MongoRecord, ParsingOptions
 
 
 @lru_cache
@@ -45,6 +46,7 @@ def create_index_op(
     record_id: str,
     data: dict,
     version: int,
+    options: ParsingOptions,
     next_version: Optional[int] = None,
 ) -> dict:
     """
@@ -54,12 +56,13 @@ def create_index_op(
     :param record_id: the record's id
     :param data: the record's data
     :param version: the record's version
+    :param options: the options for creating the indexed view of the data
     :param next_version: the next version of this record's data (i.e. when this version
                          expires). Defaults to None which means that the version passed
                          is the latest version.
     :return: an Elasticsearch index op as a dict
     """
-    parsed_data = parse_for_index(data)
+    parsed_data = parse_for_index(data, options)
     op = {
         "_op_type": "index",
         "_index": index_name,
@@ -86,7 +89,10 @@ def create_index_op(
 
 
 def generate_index_ops(
-    name: str, records: Iterable[MongoRecord], current: int
+    name: str,
+    records: Iterable[MongoRecord],
+    current: int,
+    options: ParsingOptionsRange,
 ) -> Iterable[dict]:
     """
     Yields operations to run against Elasticsearch in order to update the indices in the
@@ -98,6 +104,8 @@ def generate_index_ops(
     :param name: the name of the database
     :param records: the records to update from
     :param current: the latest version in Elasticsearch
+    :param options: ParsingOptionsRange object so that we can get the right parsing
+                    options for indexing
     :return: yields ops as dicts
     """
     latest_index = get_latest_index_id(name)
@@ -126,7 +134,9 @@ def generate_index_ops(
                     }
             else:
                 index = latest_index if is_latest else get_data_index_id(name, version)
-                yield create_index_op(index, record.id, data, version, next_version)
+                yield create_index_op(
+                    index, record.id, data, version, options.get(version), next_version
+                )
 
             # if the version is below the current version in Elasticsearch, we're done
             if version < current:

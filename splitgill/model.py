@@ -1,10 +1,12 @@
-from dataclasses import dataclass, field, asdict
-from typing import Dict, Iterable, NamedTuple, List, Optional
+from dataclasses import dataclass, field, asdict, astuple
+from functools import cached_property
+from typing import Dict, Iterable, NamedTuple, List, Optional, FrozenSet
 from uuid import uuid4
 
 from bson import ObjectId
 
 from splitgill.diffing import patch, DiffOp, prepare
+from splitgill.indexing.fields import geo_path
 
 
 @dataclass
@@ -104,3 +106,56 @@ class Status:
         if self._id is None:
             del doc["_id"]
         return doc
+
+
+@dataclass
+class GeoFieldHint:
+    lat_field: str
+    lon_field: str
+    radius_field: Optional[str] = None
+
+    @cached_property
+    def path(self) -> str:
+        return geo_path(self.lat_field, self.lon_field, self.radius_field)
+
+    def __hash__(self) -> int:
+        return hash(self.path)
+
+
+# set frozen=True to make the objects immutable and provide hashing (which we need for
+# parser.parse_str's lru_cache)
+@dataclass(frozen=True)
+class ParsingOptions:
+    """
+    Holds options for parsing.
+
+    The objects created using this class are immutable. You can instantiate them
+    directly, but it's better to use The ParsingOptionBuilder defined below.
+    """
+
+    # lowercase string values which should be parsed as True
+    true_values: FrozenSet[str]
+    # lowercase string values which should be parsed as False
+    false_values: FrozenSet[str]
+    # date format strings to test candidates against using datetime.strptime
+    date_formats: FrozenSet[str]
+    # GeoFieldHint objects which can be used to test if a record contains any geographic
+    # coordinate data
+    geo_hints: FrozenSet[GeoFieldHint]
+
+    def to_doc(self) -> dict:
+        return {
+            "true_values": list(self.true_values),
+            "false_values": list(self.false_values),
+            "date_formats": list(self.date_formats),
+            "geo_hints": [astuple(hint) for hint in self.geo_hints],
+        }
+
+    @classmethod
+    def from_doc(cls, doc: dict) -> "ParsingOptions":
+        return ParsingOptions(
+            frozenset(doc["true_values"]),
+            frozenset(doc["false_values"]),
+            frozenset(doc["date_formats"]),
+            frozenset(GeoFieldHint(*params) for params in doc["geo_hints"]),
+        )

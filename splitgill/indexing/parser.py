@@ -1,20 +1,15 @@
 from collections import deque
-from contextlib import suppress
 from dataclasses import dataclass
-from datetime import datetime, date
+from datetime import datetime
 from functools import lru_cache
 from typing import Union, Deque, Tuple, Optional, NamedTuple
 
 from cytoolz.dicttoolz import get_in
 from fastnumbers import try_float
-from pendulum.parsing import parse as parse_datetime
 
+from splitgill.model import ParsingOptions
 from splitgill.indexing.fields import TypeField
-from splitgill.indexing.geo import (
-    DEFAULT_HINTS,
-    as_geojson,
-    GeoFieldHints,
-)
+from splitgill.indexing.geo import as_geojson, match_hints
 from splitgill.utils import to_timestamp
 
 
@@ -38,21 +33,18 @@ class QualifiedValue(NamedTuple):
     """
 
     path: Tuple[Union[str, int], ...]
-    value: Union[str, dict, tuple]
+    value: Union[str, dict, tuple, int, float, bool, None]
 
 
-def parse_for_index(data: dict, geo_hints: GeoFieldHints = DEFAULT_HINTS) -> ParsedData:
+def parse_for_index(data: dict, options: ParsingOptions) -> ParsedData:
     """
     Given a record's data, create the parsed data to be indexed into Elasticsearch. The
     returned ParsedData object contains the arrays, geo, parsed, and data root field
-    values.
+    values. The passed options object is used to control how the values in the data are
+    parsed.
 
-    The geo part of the parsed response is formed using the geo_hints parameter, as well
-    as some simple GeoJSON matching. Caveats/details:
-
-        - The geo_hints parameter is defaulted to the DEFAULT_HINTS defined in the
-          splitgill.indexing.geo module. This includes basic hints for common field
-          combinations.
+    The geo part of the parsed response is formed using the geo related options in the
+    options parameter, as well as some simple GeoJSON matching. Caveats/details:
 
         - The GeoJSON matcher only matches Point, LineString, and Polygon (the geometry
           primitives).
@@ -61,34 +53,35 @@ def parse_for_index(data: dict, geo_hints: GeoFieldHints = DEFAULT_HINTS) -> Par
           record's data. So data = {"type": "Point", "coordinates": [102.0, 0.5]} won't
           match, but {"point": {"type": "Point", "coordinates": [102.0, 0.5]}} will.
 
-    This function only works on data that has been "prepared" using the
+    This function is only intended to work on data that has been "prepared" using the
     splitgill.diffing.prepare function.
 
-    This function is written using an internal queue to avoid recursion for performance
-    reasons.
+    This function is written using an internal queue to avoid recursion for performance.
 
     :param data: a record's prepared data
-    :param geo_hints: a GeoFieldHints object (defaults to DEFAULT_HINTS)
+    :param options: the parsing options
     :return: a ParsedData object
     """
     queue: Deque[QualifiedValue] = deque()
 
     def parse_value(qvalue: QualifiedValue) -> Optional[dict]:
-        # this is the most likely condition to be true by far so check it first
-        if isinstance(qvalue.value, (str, None, int, bool, float)):
-            return parse(qvalue.value)
-        else:
+        if isinstance(qvalue.value, (dict, tuple)):
             queue.append(qvalue)
             # return a placeholder (in this case None) which will be replaced when the
             # queued container is processed
             return None
+        else:
+            # otherwise, parse the value and return the result
+            return parse(qvalue.value, options)
 
     arrays = {}
 
-    # geojson is only matched on containers and this only happens in the queue loop
-    # below. This means that top-level fields that have GeoJSON values will be missed.
-    # So to avoid missing them, check them here
-    geo = dict(geo_hints.match(data))
+    # find any top-level fields which match our geo hints and create the geo dict in the
+    # process. Note that we don't match any GeoJSON at the top-level, this is to avoid
+    # having a record which is just completely GeoJSON as this would add an awkwardness
+    # to downstream processing based on the parsed geo data (e.g. maps). We check for
+    # GeoJSON in the container queue loop below only.
+    geo = dict(match_hints(data, options.geo_hints))
 
     # parse the top-level data dict straight away. There are two reasons to do this,
     # firstly, most data dicts that come through here are just flat with no nested
@@ -116,7 +109,7 @@ def parse_for_index(data: dict, geo_hints: GeoFieldHints = DEFAULT_HINTS) -> Par
             # check if the container contains any fields that match the geo hints
             geo.update(
                 (f"{dot_path}.{path}", geojson)
-                for path, geojson in geo_hints.match(container)
+                for path, geojson in match_hints(container, options.geo_hints)
             )
             # set the parsed container in the parsed dict
             get_in(parent_path, parsed)[path_leaf] = {
@@ -134,21 +127,8 @@ def parse_for_index(data: dict, geo_hints: GeoFieldHints = DEFAULT_HINTS) -> Par
     return ParsedData(data, parsed, geo, arrays)
 
 
-# string values in this dict will be parsed as bools (using exact lowercase matching)
-BOOLS = {
-    # true values
-    "true": True,
-    "yes": True,
-    "y": True,
-    # false values
-    "false": False,
-    "no": False,
-    "n": False,
-}
-
-
 @lru_cache(maxsize=1_000_000)
-def parse(value: Union[None, int, str, bool, float]) -> dict:
+def parse(value: Union[None, int, str, bool, float], options: ParsingOptions) -> dict:
     """
     Given a str, int, bool, float, or None, returns a dict of parsed values based on the
     input. This dict will always will include keyword and text values, but could also
@@ -173,6 +153,7 @@ def parse(value: Union[None, int, str, bool, float]) -> dict:
     Date values are found using pendulum's parse function.
 
     :param value: the string value
+    :param options: the parsing options to use
     :return: a dict of parsed values
     """
     # create a string version of the value, we only need to do something special for
@@ -199,8 +180,13 @@ def parse(value: Union[None, int, str, bool, float]) -> dict:
     # check for boolean values
     if isinstance(value, bool):
         parsed[TypeField.BOOLEAN] = value
-    elif str_value.lower() in BOOLS:
-        parsed[TypeField.BOOLEAN] = BOOLS[str_value.lower()]
+    else:
+        # attempt to parse true boolean values
+        if str_value.lower() in options.true_values:
+            parsed[TypeField.BOOLEAN] = True
+        # attempt to parse false boolean values
+        if str_value.lower() in options.false_values:
+            parsed[TypeField.BOOLEAN] = False
 
     # check for number values
     if isinstance(value, (int, float)):
@@ -211,27 +197,16 @@ def parse(value: Union[None, int, str, bool, float]) -> dict:
         if as_number is not None:
             parsed[TypeField.NUMBER] = as_number
 
-    # check for dates
-    with suppress(Exception):
-        # passing exact forces parse to return the object it parsed the string to,
-        # rather than convert that object into a datetime. This means this call can
-        # return datetime, date, time, and period objects (and maybe others too, at
-        # least we're future proofed!) and then we can sort out which ones of those we
-        # care about (only date and datetime). Passing strict stops pendulum falling
-        # back on dateutil's parser. We could do this, but it'll have a performance hit,
-        # and we're more likely to parse some absolute garbage.
-        date_value = parse_datetime(str_value, exact=True, strict=True)
-
-        # date and datetime objects are both date objects, time and periods are not, so
-        # this works to separate out those options
-        if isinstance(date_value, date):
-            if not isinstance(date_value, datetime):
-                # this defaults the time to 00:00:00 on the day of the date and converts
-                # the data into a datetime object
-                date_value = datetime(date_value.year, date_value.month, date_value.day)
-
+    # attempt to parse dates using the formats listed in the options
+    for date_format in options.date_formats:
+        try:
+            date_value = datetime.strptime(str_value, date_format)
             # the date field we've configured in the Elasticsearch model uses the
             # epoch_millis format so convert the datetime object to that here
             parsed[TypeField.DATE] = to_timestamp(date_value)
+            # if we have a match, break out and don't try the other formats
+            break
+        except ValueError:
+            pass
 
     return parsed

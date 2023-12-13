@@ -1,93 +1,50 @@
-from dataclasses import dataclass, field
 from functools import lru_cache
 from itertools import chain, repeat
 from numbers import Number
 from typing import Union, Optional, Tuple, Iterable
 
-from cytoolz.itertoolz import sliding_window, unique
+from cytoolz.itertoolz import sliding_window
 from fastnumbers import try_float, RAISE
 from pyproj import CRS, Transformer
 from shapely import Point
 from shapely.ops import transform
 
-from splitgill.indexing.fields import geo_path
+from splitgill.model import GeoFieldHint
 
 
-@dataclass
-class GeoFieldHint:
-    lat_field: str
-    lon_field: str
-    radius_field: Optional[str] = None
-    path: str = field(init=False)
+def match_hints(
+    data: dict, hints: Iterable[GeoFieldHint]
+) -> Iterable[Tuple[str, dict]]:
+    """
+    Check to see if the data has the fields contained in the hints and those fields are
+    valid for use as geo fields. If any hints match then GeoJSON dicts are yielded along
+    with the path that should be used in the geo dict. The GeoJSON yielded will be a
+    dict, either a Point if only a lat and lon is provided or Polygon if a radius is
+    included.
 
-    def __post_init__(self):
-        # this path should be used for any values matched by this hint
-        self.path = geo_path(self.lat_field, self.lon_field, self.radius_field)
-
-    def __hash__(self) -> int:
-        return hash(self.path)
-
-
-class GeoFieldHints:
-    def __init__(self, *hints: GeoFieldHint):
-        """
-        :param hints: the GeoFieldHint object to match against
-        """
-        self._hints: Tuple[GeoFieldHint] = hints
-
-    def add(self, *hints: GeoFieldHint) -> "GeoFieldHints":
-        """
-        Add the given hints to the list of hints in this object by returning a new one
-        (GeoFieldHints objects are immutable).
-
-        :param hints: new GeoFieldHint objects
-        :return: a new GeoFieldHints object containing the hints in this object and the
-                 new hints
-        """
-        return GeoFieldHints(*unique(chain(self._hints, hints)))
-
-    def match(self, data: dict) -> Iterable[Tuple[str, dict]]:
-        """
-        Check to see if the data has the fields contained in the hints and those fields
-        are valid for use as geo fields. If any hints match then GeoJSON dicts are
-        yielded along with the path that should be used in the geo dict. The GeoJSON
-        yielded will be a dict, either a Point if only a lat and lon is provided or
-        Polygon if a radius is included.
-
-        :param data: the data dict to check
-        :return: yields path and GeoJSON tuples
-        """
-        for hint in self._hints:
-            try:
-                if hint.radius_field:
-                    geojson = create_polygon_circle(
-                        parse_latitude(data.get(hint.lat_field, "")),
+    :param data: the data dict to check
+    :param hints: the hints to match on
+    :return: yields path and GeoJSON tuples
+    """
+    for hint in hints:
+        try:
+            if hint.radius_field:
+                geojson = create_polygon_circle(
+                    parse_latitude(data.get(hint.lat_field, "")),
+                    parse_longitude(data.get(hint.lon_field, "")),
+                    parse_uncertainty(data.get(hint.radius_field, "")),
+                )
+            else:
+                geojson = {
+                    "type": "Point",
+                    "coordinates": (
                         parse_longitude(data.get(hint.lon_field, "")),
-                        parse_uncertainty(data.get(hint.radius_field, "")),
-                    )
-                else:
-                    geojson = {
-                        "type": "Point",
-                        "coordinates": (
-                            parse_longitude(data.get(hint.lon_field, "")),
-                            parse_latitude(data.get(hint.lat_field, "")),
-                        ),
-                    }
-                yield hint.path, geojson
-            except (ValueError, TypeError):
-                pass
-
-
-DEFAULT_HINTS = GeoFieldHints(
-    GeoFieldHint("lat", "lon"),
-    GeoFieldHint("latitude", "longitude"),
-    GeoFieldHint("latitude", "longitude", "radius"),
-    # dwc
-    GeoFieldHint("decimalLatitude", "decimalLongitude"),
-    GeoFieldHint(
-        "decimalLatitude", "decimalLongitude", "coordinateUncertaintyInMeters"
-    ),
-)
+                        parse_latitude(data.get(hint.lat_field, "")),
+                    ),
+                }
+            yield hint.path, geojson
+        except (ValueError, TypeError):
+            pass
 
 
 def parse_longitude(candidate: Union[str, Number]) -> float:

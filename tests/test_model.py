@@ -4,7 +4,14 @@ from uuid import uuid4
 from bson import ObjectId
 
 from splitgill.diffing import diff, prepare
-from splitgill.model import MongoRecord, VersionedData, Status
+from splitgill.indexing.fields import geo_path
+from splitgill.model import (
+    MongoRecord,
+    VersionedData,
+    Status,
+    GeoFieldHint,
+    ParsingOptions,
+)
 
 
 def create_mongo_record(version: int, data: dict, *historical_data: VersionedData):
@@ -79,3 +86,21 @@ class TestStatus:
             "version": status.version,
             "_id": mongo_id,
         }
+
+
+class TestGeoFieldHintGeoPath:
+    def test_geo_path_with_radius(self):
+        assert GeoFieldHint("latitude", "longitude", "radius").path == geo_path(
+            "latitude", "longitude", "radius"
+        )
+
+    def test_geo_path_without_radius(self):
+        assert GeoFieldHint("latitude", "longitude").path == geo_path(
+            "latitude", "longitude"
+        )
+
+
+class TestParsingOptions:
+    def test_from_to_doc_empty(self):
+        options = ParsingOptions(frozenset(), frozenset(), frozenset(), frozenset())
+        assert options == ParsingOptions.from_doc(options.to_doc())

@@ -12,6 +12,7 @@ from splitgill.indexing.index import (
     generate_index_ops,
     get_index_wildcard,
 )
+from splitgill.indexing.options import ParsingOptionsBuilder, ParsingOptionsRange
 from splitgill.indexing.parser import parse_for_index
 from splitgill.manager import SplitgillClient
 from splitgill.model import MongoRecord, VersionedData
@@ -39,9 +40,12 @@ class TestCreateIndexOp:
         data = {"x": "beans"}
         record_id = "xyz"
         version = 1691359001000
-        parsed_data = parse_for_index(data)
+        options = ParsingOptionsBuilder().build()
+        parsed_data = parse_for_index(data, options)
 
-        op = create_index_op(index_name, record_id, data, version, next_version=None)
+        op = create_index_op(
+            index_name, record_id, data, version, options, next_version=None
+        )
 
         assert op["_op_type"] == "index"
         assert op["_index"] == index_name
@@ -65,10 +69,11 @@ class TestCreateIndexOp:
         version = 1691359001000
         next_version = 1692568619000
         index_name = get_data_index_id("test", version)
-        parsed_data = parse_for_index(data)
+        options = ParsingOptionsBuilder().build()
+        parsed_data = parse_for_index(data, options)
 
         op = create_index_op(
-            index_name, record_id, data, version, next_version=next_version
+            index_name, record_id, data, version, options, next_version=next_version
         )
 
         assert op["_op_type"] == "index"
@@ -95,7 +100,8 @@ class TestGenerateIndexOps:
         records = [
             MongoRecord(_id=ObjectId(), id="record-1", version=10, data={"x": "5"})
         ]
-        assert not list(generate_index_ops("test", records, 11))
+        options = ParsingOptionsRange({0: ParsingOptionsBuilder().build()})
+        assert not list(generate_index_ops("test", records, 11, options))
 
     def test_updates(self, splitgill: SplitgillClient):
         # make a bunch of data at different versions
@@ -114,13 +120,18 @@ class TestGenerateIndexOps:
                 for old, new in sliding_window(2, data)
             },
         )
+        options = ParsingOptionsRange({0: ParsingOptionsBuilder().build()})
 
         # test all data
-        ops = list(generate_index_ops("test", [record], 0))
+        ops = list(generate_index_ops("test", [record], 0, options))
         assert len(ops) == len(data)
         # check the first op, this will always be the op to update the latest index
         assert ops[0] == create_index_op(
-            get_latest_index_id("test"), record.id, data[-1].data, data[-1].version
+            get_latest_index_id("test"),
+            record.id,
+            data[-1].data,
+            data[-1].version,
+            options.latest,
         )
         # check the other ops which update the old indices
         for i, op in enumerate(reversed(ops[1:])):
@@ -129,15 +140,20 @@ class TestGenerateIndexOps:
                 record.id,
                 data[i].data,
                 data[i].version,
+                options.latest,
                 data[i + 1].version,
             )
 
         # now test not all the data
-        ops = list(generate_index_ops("test", [record], data[4].version + 1))
+        ops = list(generate_index_ops("test", [record], data[4].version + 1, options))
         assert len(ops) == len(data) - 4
         # first op out should still be the latest index replace op
         assert ops[0] == create_index_op(
-            get_latest_index_id("test"), record.id, data[-1].data, data[-1].version
+            get_latest_index_id("test"),
+            record.id,
+            data[-1].data,
+            data[-1].version,
+            options.latest,
         )
         # the last op out should be one adding the previous latest version to the old
         # indices. To explain a bit more, because we've passed data[4].version as the
@@ -150,6 +166,7 @@ class TestGenerateIndexOps:
             record.id,
             data[4].data,
             data[4].version,
+            options.latest,
             data[5].version,
         )
 
@@ -174,8 +191,9 @@ class TestGenerateIndexOps:
                 for old, new in sliding_window(2, data)
             },
         )
+        options = ParsingOptionsRange({0: ParsingOptionsBuilder().build()})
 
-        ops = list(generate_index_ops("test", [record], 0))
+        ops = list(generate_index_ops("test", [record], 0, options))
 
         assert len(ops) == 4
         # first op should be the delete from the latest index
@@ -190,6 +208,7 @@ class TestGenerateIndexOps:
             record.id,
             data[-2].data,
             data[-2].version,
+            options.latest,
             data[-1].version,
         )
         # third op should the 2016 record as the 2017 is a delete
@@ -198,6 +217,7 @@ class TestGenerateIndexOps:
             record.id,
             data[1].data,
             data[1].version,
+            options.latest,
             data[2].version,
         )
         # fourth op should the 2015 record
@@ -206,5 +226,6 @@ class TestGenerateIndexOps:
             record.id,
             data[0].data,
             data[0].version,
+            options.latest,
             data[1].version,
         )

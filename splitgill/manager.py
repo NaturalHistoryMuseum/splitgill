@@ -15,13 +15,15 @@ from splitgill.indexing.index import (
     get_latest_index_id,
     get_data_index_id,
 )
+from splitgill.indexing.options import ParsingOptionsRange
 from splitgill.indexing.templates import DATA_TEMPLATE
 from splitgill.ingest import generate_ops
-from splitgill.model import Record, Status, MongoRecord
+from splitgill.model import Record, Status, MongoRecord, ParsingOptions
 from splitgill.utils import now, partition
 
 MONGO_DATABASE_NAME = "sg"
 STATUS_COLLECTION_NAME = "status"
+CONFIG_COLLECTION_NAME = "config"
 OPS_SIZE = 500
 
 
@@ -51,6 +53,14 @@ class SplitgillClient:
         """
         return self.get_database().get_collection(STATUS_COLLECTION_NAME)
 
+    def get_config_collection(self) -> Collection:
+        """
+        Returns the config collection.
+
+        :return: a pymongo Collection object
+        """
+        return self.get_database().get_collection(CONFIG_COLLECTION_NAME)
+
     def get_data_collection(self, name: str) -> Collection:
         """
         Returns the data collection for the given Splitgill database.
@@ -79,6 +89,7 @@ class SplitgillDatabase:
         self.name = name
         self._client = client
         self.data_collection = self._client.get_data_collection(self.name)
+        self.config_collection = self._client.get_config_collection()
         self.status_collection = self._client.get_status_collection()
         self.latest_index_name = get_latest_index_id(self.name)
 
@@ -246,6 +257,45 @@ class SplitgillDatabase:
         if commit:
             self.commit()
 
+    def update_options(self, options: ParsingOptions) -> bool:
+        """
+        Update the parsing options for this database.
+
+        :param options: the new parsing options
+        :return: a bool indicating whether the new options were different from the
+                 currently saved options. Returns True if the options were different and
+                 therefore updated, False if not.
+        """
+        latest_options = self.get_options().latest
+
+        # if the options are the same as the latest existing ones, don't update
+        if latest_options == options:
+            return False
+
+        # either the options are completely new or they differ from the existing
+        # options, write a fresh entry
+        new_doc = {
+            "name": self.name,
+            "version": now(),
+            "options": options.to_doc(),
+        }
+        self.config_collection.insert_one(new_doc)
+        return True
+
+    def get_options(self) -> ParsingOptionsRange:
+        """
+        Retrieve all the parsing options ever configured for this database. The options
+        are returned in a wrapping class to provide easy access by version.
+
+        :return: a ParsingOptionsRange object
+        """
+        return ParsingOptionsRange(
+            {
+                doc["version"]: ParsingOptions.from_doc(doc["options"])
+                for doc in self.config_collection.find({"name": self.name})
+            }
+        )
+
     def get_all_indices(self) -> List[str]:
         """
         Returns a list of all index possible index names for the data in this database.
@@ -326,7 +376,7 @@ class SplitgillDatabase:
         deque(
             bulk_function(
                 client,
-                generate_index_ops(self.name, docs, since),
+                generate_index_ops(self.name, docs, since, self.get_options()),
                 raise_on_error=True,
                 chunk_size=chunk_size,
             ),

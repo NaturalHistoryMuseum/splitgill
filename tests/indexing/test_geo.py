@@ -11,62 +11,34 @@ from splitgill.indexing.geo import (
     parse_uncertainty,
     is_winding_valid,
     as_geojson,
-    GeoFieldHints,
+    match_hints,
 )
-
-
-class TestGeoFieldHintGeoPath:
-    def test_geo_path_with_radius(self):
-        assert GeoFieldHint("latitude", "longitude", "radius").path == geo_path(
-            "latitude", "longitude", "radius"
-        )
-
-    def test_geo_path_without_radius(self):
-        assert GeoFieldHint("latitude", "longitude").path == geo_path(
-            "latitude", "longitude"
-        )
-
-
-def test_geo_field_hints_add():
-    old_hints = (
-        GeoFieldHint("lat", "lon"),
-        GeoFieldHint("iweofno92", "oibfewsef", "efe"),
-    )
-    new_hint = GeoFieldHint("x", "y")
-    a = GeoFieldHints(*old_hints)
-
-    b = a.add(new_hint)
-
-    assert a._hints == old_hints
-    # check that the order is maintained
-    assert b._hints == (*old_hints, new_hint)
 
 
 class TestGeoFieldHintsMatch:
     def test_invalid_latitude(self):
-        hint = GeoFieldHints(GeoFieldHint("lat", "lon"))
-        assert not any(hint.match({"lat": "1000", "lon": "23"}))
+        hint = GeoFieldHint("lat", "lon")
+        assert not any(match_hints({"lat": "1000", "lon": "23"}, [hint]))
 
     def test_missing_latitude(self):
-        hint = GeoFieldHints(GeoFieldHint("lat", "lon"))
-        assert not any(hint.match({"lat": None, "lon": "23"}))
+        hint = GeoFieldHint("lat", "lon")
+        assert not any(match_hints({"lat": None, "lon": "23"}, [hint]))
 
     def test_invalid_longitude(self):
-        hint = GeoFieldHints(GeoFieldHint("lat", "lon"))
-        assert not any(hint.match({"lat": "23", "lon": "1000"}))
+        hint = GeoFieldHint("lat", "lon")
+        assert not any(match_hints({"lat": "23", "lon": "1000"}, [hint]))
 
     def test_missing_longitude(self):
-        hint = GeoFieldHints(GeoFieldHint("lat", "lon"))
-        assert not any(hint.match({"lat": "23", "lon": None}))
+        hint = GeoFieldHint("lat", "lon")
+        assert not any(match_hints({"lat": "23", "lon": None}, [hint]))
 
     def test_invalid_radius(self):
-        hint = GeoFieldHints(GeoFieldHint("lat", "lon", "rad"))
-        assert not any(hint.match({"lat": "23", "lon": "24", "rad": "-1"}))
+        hint = GeoFieldHint("lat", "lon", "rad")
+        assert not any(match_hints({"lat": "23", "lon": "24", "rad": "-1"}, [hint]))
 
     def test_valid_without_radius(self):
         hint = GeoFieldHint("lat", "lon")
-        hints = GeoFieldHints(hint)
-        match = dict(hints.match({"lat": "51.496111", "lon": "-0.176111"}))
+        match = dict(match_hints({"lat": "51.496111", "lon": "-0.176111"}, [hint]))
 
         assert len(match) == 1
         path, geojson = next(iter(match.items()))
@@ -81,8 +53,9 @@ class TestGeoFieldHintsMatch:
         rad = 10.5
         circle = create_polygon_circle(lat, lon, rad)
         hint = GeoFieldHint("lat", "lon", "rad")
-        hints = GeoFieldHints(hint)
-        match = dict(hints.match({"lat": str(lat), "lon": str(lon), "rad": "10.5"}))
+        match = dict(
+            match_hints({"lat": str(lat), "lon": str(lon), "rad": "10.5"}, [hint])
+        )
         assert circle == match[hint.path]
 
 
