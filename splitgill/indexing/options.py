@@ -203,10 +203,10 @@ class ParsingOptionsRange:
         :param options: the options as a dict of version => options pairs
         """
         if options:
-            self._versions, self._values = zip(*sorted(options.items()))
+            self.versions, self.values = zip(*sorted(options.items()))
         else:
-            self._versions = tuple()
-            self._values = tuple()
+            self.versions = tuple()
+            self.values = tuple()
 
     @property
     def latest(self) -> ParsingOptions:
@@ -216,7 +216,7 @@ class ParsingOptionsRange:
 
         :return: a ParsingOptions object
         """
-        return self._values[-1] if self._values else DEFAULT_PARSING_OPTIONS
+        return self.values[-1] if self.values else DEFAULT_PARSING_OPTIONS
 
     # TODO: cache?
     def get(self, version: int) -> ParsingOptions:
@@ -227,8 +227,8 @@ class ParsingOptionsRange:
         :param version: the version of the parsing options to get
         :return: a ParsingOptions object
         """
-        index = bisect(self._versions, version)
+        index = bisect(self.versions, version)
         if index == 0:
             return DEFAULT_PARSING_OPTIONS
         else:
-            return self._values[index - 1]
+            return self.values[index - 1]
