@@ -1,4 +1,3 @@
-import numbers
 from collections import deque
 from datetime import datetime
 from itertools import chain, zip_longest
@@ -12,51 +11,40 @@ from cytoolz import get_in
 # (i.e. category C*) but not \n, \r, or \t.
 invalid_char_regex = rx.compile(r"[^\P{C}\n\r\t]")
 
-# these are the constant values the prepare function swaps bools with
-BOOL_TRUE = "true"
-BOOL_FALSE = "false"
 
-
-def prepare(value: Any) -> Union[str, dict, tuple, None]:
+def prepare(value: Any) -> Union[str, dict, tuple, int, float, bool, None]:
     """
     Prepares the given value for storage in MongoDB. Conversions are completed like so:
 
-        - strings and None values are returned with no changes made
-        - numeric values are converted using str(value)
-        - bool values are converted to either 'true' or 'false'
+        - None values are just returned as is
+        - str values have invalid characters removed and are then returned. The
+          characters are currently all unicode control characters except \n, \r, and \t.
+        - int, float, bool, and None values are returned with no changes made
         - datetime values are converted to isoformat strings
         - dict values are returned as a new dict instance, with all the keys converted
           to strings and all the values recursively prepared using this function.
         - lists, sets, and tuples are converted to tuples with each element of the value
           prepared by this function.
 
-    :param value: the value to store in MongoDB
-    :return: None, a str, dict or tuple depending on the value passed
+    :param value: the value to be stored in MongoDB
+    :return: None, str, int, float, bool, tuple, or dict depending on the input value
     """
     if value is None:
         return None
-    elif isinstance(value, str):
+    if isinstance(value, str):
         # replace any invalid characters in the string with the empty string
         return invalid_char_regex.sub("", value)
-    elif isinstance(value, bool):
-        return BOOL_TRUE if value else BOOL_FALSE
-    # TODO: using str(value) when the value is a float is a bit meh as str(value) will
-    #  chop the precision of the float represented in the value inconsistently. Might be
-    #  worth using a more predictable method so that we can tell users something like
-    #  "we can only accurately represent floats up to x decimal places".
-    if isinstance(value, numbers.Number):
-        # this could just fall to the fallback as it's the same outcome, but as ints and
-        # floats are likely inputs, it makes sense to catch them early with an if rather
-        # than let them fall through all the other types we check for manually
-        return str(value)
+    if isinstance(value, (int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        # mongodb doesn't allow non-string keys so we need to convert them here
+        return {str(key): prepare(value) for key, value in value.items()}
+    if isinstance(value, (list, set, tuple)):
+        return tuple(map(prepare, value))
     if isinstance(value, datetime):
         # stringifying this ensures the tz info is recorded and won't change going
         # in/out mongo
         return value.isoformat()
-    if isinstance(value, dict):
-        return {str(key): prepare(value) for key, value in value.items()}
-    if isinstance(value, (list, set, tuple)):
-        return tuple(map(prepare, value))
     # fallback
     return str(value)
 

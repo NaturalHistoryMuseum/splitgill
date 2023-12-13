@@ -1,14 +1,13 @@
 from collections import deque
 from contextlib import suppress
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import datetime, date
 from functools import lru_cache
 from typing import Union, Deque, Tuple, Optional, NamedTuple
 
 from cytoolz.dicttoolz import get_in
 from fastnumbers import try_float
-from parser import ParserError
-from pendulum.parsing import parse
+from pendulum.parsing import parse as parse_datetime
 
 from splitgill.indexing.fields import TypeField
 from splitgill.indexing.geo import (
@@ -76,8 +75,8 @@ def parse_for_index(data: dict, geo_hints: GeoFieldHints = DEFAULT_HINTS) -> Par
 
     def parse_value(qvalue: QualifiedValue) -> Optional[dict]:
         # this is the most likely condition to be true by far so check it first
-        if isinstance(qvalue.value, str):
-            return parse_str(qvalue.value)
+        if isinstance(qvalue.value, (str, None, int, bool, float)):
+            return parse(qvalue.value)
         else:
             queue.append(qvalue)
             # return a placeholder (in this case None) which will be replaced when the
@@ -149,44 +148,70 @@ BOOLS = {
 
 
 @lru_cache(maxsize=1_000_000)
-def parse_str(value: str) -> dict:
+def parse(value: Union[None, int, str, bool, float]) -> dict:
     """
-    Given a string, returns a dict of parsed values from the string. This dict will
-    always will include keyword and text values, but could also include boolean, number,
-    and date too. This function uses a cache.
+    Given a str, int, bool, float, or None, returns a dict of parsed values based on the
+    input. This dict will always will include keyword and text values, but could also
+    include boolean, number, and date too. This function uses a cache to help with
+    performance and therefore the value passed must be of a hashable type.
 
-    The text and keyword values will always just be the value passed into this function.
+    For all but float and None values, the text and keyword will just be the value
+    passed into this function, converted directly into a string. For floats, the value
+    is converted into a string using the f-string f"{value:.15g}" which creates an
+    accurate string representation of the float up to 15 significant digits. 15
+    significant digits represents the precision of an Elasticsearch double. If the value
+    is None then the string value used will be the empty string.
 
-    The boolean value will exist in the returned dict if the string is true, yes, y,
-    false, no, n. The string is lowercased before matching. Should be obvious which
-    boolean value gets returned if any of these values are matched.
+    The boolean value will exist in the returned dict if the value is a bool or a string
+    equal to true, yes, y, false, no, n. The string is lowercased before matching.
+    Should be obvious which boolean value gets returned if any of these values are
+    matched.
 
-    Numbers are found using fastnumbers try_float. NaN and inf are not allowed.
+    Numbers are found using fastnumbers try_float. NaN and inf are not recognised. If
+    the value is an int or a float, it is used directly.
 
-    Date values are found if they are a valid iso8601 date (this can be just a date, a
-    date and time, or a date and a time and a timezone). They are parsed and then
-    included in the returned dict as an iso8601 full datetime.
+    Date values are found using pendulum's parse function.
 
     :param value: the string value
     :return: a dict of parsed values
     """
+    # create a string version of the value, we only need to do something special for
+    # floats and Nones here as str(value) is sensible for int, bool, and str
+    if isinstance(value, float):
+        # format the float using 15 significant digits. This roughly matches what is
+        # actually stored in elasticsearch and therefore gives a somewhat sensible
+        # representative idea to users of what the number actually is and how it can be
+        # searched. This format will produce string representations of numbers in
+        # scientific notation if it decides it needs to (i.e. 1.2312e-20)
+        str_value = f"{value:.15g}"
+    elif value is None:
+        str_value = ""
+    else:
+        str_value = str(value)
+
+    # the always included values are used to set up the returned dict
     parsed = {
-        TypeField.TEXT: value,
-        # this value gets handled by Elasticsearch (basically it just lowercases it)
-        TypeField.KEYWORD_CASE_INSENSITIVE: value,
-        TypeField.KEYWORD_CASE_SENSITIVE: value,
+        TypeField.TEXT: str_value,
+        TypeField.KEYWORD_CASE_INSENSITIVE: str_value,
+        TypeField.KEYWORD_CASE_SENSITIVE: str_value,
     }
 
-    # attempt to parse booleans
-    if value.lower() in BOOLS:
-        parsed[TypeField.BOOLEAN] = BOOLS[value.lower()]
-        return parsed
+    # check for boolean values
+    if isinstance(value, bool):
+        parsed[TypeField.BOOLEAN] = value
+    elif str_value.lower() in BOOLS:
+        parsed[TypeField.BOOLEAN] = BOOLS[str_value.lower()]
 
-    # attempt parsing the value as a number
-    as_number = try_float(value, inf=None, nan=None, on_fail=None)
-    if as_number is not None:
-        parsed[TypeField.NUMBER] = as_number
+    # check for number values
+    if isinstance(value, (int, float)):
+        parsed[TypeField.NUMBER] = value
+    else:
+        # attempt parsing the value as a number
+        as_number = try_float(str_value, inf=None, nan=None, on_fail=None)
+        if as_number is not None:
+            parsed[TypeField.NUMBER] = as_number
 
+    # check for dates
     with suppress(Exception):
         # passing exact forces parse to return the object it parsed the string to,
         # rather than convert that object into a datetime. This means this call can
@@ -195,12 +220,12 @@ def parse_str(value: str) -> dict:
         # care about (only date and datetime). Passing strict stops pendulum falling
         # back on dateutil's parser. We could do this, but it'll have a performance hit,
         # and we're more likely to parse some absolute garbage.
-        date_value = parse(value, exact=True, strict=True)
+        date_value = parse_datetime(str_value, exact=True, strict=True)
 
         # date and datetime objects are both date objects, time and periods are not, so
         # this works to separate out those options
         if isinstance(date_value, date):
-            if type(date_value) is date:
+            if not isinstance(date_value, datetime):
                 # this defaults the time to 00:00:00 on the day of the date and converts
                 # the data into a datetime object
                 date_value = datetime(date_value.year, date_value.month, date_value.day)
@@ -208,6 +233,5 @@ def parse_str(value: str) -> dict:
             # the date field we've configured in the Elasticsearch model uses the
             # epoch_millis format so convert the datetime object to that here
             parsed[TypeField.DATE] = to_timestamp(date_value)
-            return parsed
 
     return parsed

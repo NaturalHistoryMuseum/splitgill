@@ -50,13 +50,13 @@ class TestMongoRecord:
         assert record.versions == [10, 7, 2]
 
     def test_is_prepared(self):
-        data = {"x": 5, "y": [1, 2, 3]}
+        data = {"x": 5, "y": [True, 2, "3"]}
         prepare_spy = Mock(wraps=prepare)
 
         with patch("splitgill.model.prepare", prepare_spy):
             record = MongoRecord(ObjectId(), str(uuid4()), 10, data)
 
-        assert record.data == {"x": "5", "y": ("1", "2", "3")}
+        assert record.data == {"x": 5, "y": (True, 2, "3")}
         prepare_spy.assert_called_once_with(data)
 
 

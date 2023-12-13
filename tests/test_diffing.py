@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 
 import pytest
 
@@ -8,8 +9,6 @@ from splitgill.diffing import (
     DiffOp,
     DiffingTypeComparisonException,
     patch,
-    BOOL_TRUE,
-    BOOL_FALSE,
 )
 
 
@@ -24,15 +23,17 @@ class TestPrepare:
         assert prepare("bea\x07ns\tand\rlem\x00ons\neh?") == "beans\tand\rlemons\neh?"
 
     def test_numbers(self):
-        assert prepare(23) == "23"
-        assert prepare(23.456) == "23.456"
-        assert prepare(-20.5012) == "-20.5012"
+        assert prepare(23) == 23
+        assert prepare(23.456) == 23.456
+        assert prepare(-20.5012) == -20.5012
+        assert prepare(0) == 0
+        # only ints and float please!
         assert prepare(complex(3, 4)) == "(3+4j)"
-        assert prepare(0) == "0"
+        assert prepare(Decimal("3.4")) == "3.4"
 
     def test_bool(self):
-        assert prepare(True) == BOOL_TRUE
-        assert prepare(False) == BOOL_FALSE
+        assert prepare(True) is True
+        assert prepare(False) is False
 
     def test_datetime(self):
         now = datetime.now()
@@ -42,32 +43,32 @@ class TestPrepare:
         assert prepare({}) == {}
         assert prepare({"x": None}) == {"x": None}
         assert prepare({"x": "beans"}) == {"x": "beans"}
-        assert prepare({"x": "4"}) == {"x": prepare(4)}
+        assert prepare({"x": "4"}) == {"x": prepare("4")}
         assert prepare({3: True}) == {"3": prepare(True)}
         assert prepare({4: {6: 1}}) == {"4": {"6": prepare(1)}}
 
     def test_list(self):
         assert prepare([]) == tuple()
-        assert prepare([3, None, 5]) == ("3", None, "5")
-        assert prepare([1, 2, 3]) == ("1", "2", "3")
-        assert prepare([1, True, 3]) == ("1", "true", "3")
+        assert prepare([3, None, 5]) == (3, None, 5)
+        assert prepare([1, 2, 3]) == (1, 2, 3)
+        assert prepare([1, True, "3"]) == (1, True, "3")
 
     def test_set(self):
         assert prepare(set()) == tuple()
 
         prepared = prepare({1, 2, 3, "beans", None})
         assert isinstance(prepared, tuple)
-        assert "1" in prepared
-        assert "2" in prepared
-        assert "3" in prepared
+        assert 1 in prepared
+        assert 2 in prepared
+        assert 3 in prepared
         assert "beans" in prepared
         assert None in prepared
 
     def test_tuple(self):
         assert prepare(tuple()) == tuple()
-        assert prepare((3, None, 5)) == ("3", None, "5")
-        assert prepare((1, 2, 3)) == ("1", "2", "3")
-        assert prepare((1, True, 3)) == ("1", "true", "3")
+        assert prepare((3, None, 5)) == (3, None, 5)
+        assert prepare((1, 2, 3)) == (1, 2, 3)
+        assert prepare((1, True, "3")) == (1, True, "3")
 
     def test_fallback(self):
         class A:
@@ -84,7 +85,7 @@ class TestPrepare:
                 "y": True,
                 "z": [1, 2, 3],
                 "a": {
-                    "x": [4, 20.7],
+                    "x": ["4", 20.7],
                     "y": now,
                 },
                 "b": [{"x": 1}, {"x": "4.2"}],
@@ -92,13 +93,13 @@ class TestPrepare:
         )
         assert prepared == {
             "x": "4",
-            "y": "true",
-            "z": ("1", "2", "3"),
+            "y": True,
+            "z": (1, 2, 3),
             "a": {
-                "x": ("4", "20.7"),
+                "x": ("4", 20.7),
                 "y": now.isoformat(),
             },
-            "b": ({"x": "1"}, {"x": "4.2"}),
+            "b": ({"x": 1}, {"x": "4.2"}),
         }
 
 
@@ -178,21 +179,30 @@ class TestDiff:
 patching_scenarios = [
     # a basic example
     ({"x": "4"}, {"x": "5"}),
+    ({"x": True}, {"x": 5}),
     # basic tuples
     # td
     ({"x": ("1", "2", "3")}, {"x": ("1", "5")}),
+    ({"x": (False, 5, "hello")}, {"x": (True, 5)}),
     # tn
     ({"x": ("1", "2", "3")}, {"x": ("1", "2", "3", "4")}),
+    ({"x": (1, 2, 3.4)}, {"x": (1, 2, 3.4, 4)}),
     # tc
     ({"x": ("1", "2", "3")}, {"x": ("1", "5", "3")}),
+    ({"x": ("1", 2, "3")}, {"x": ("1", 5, "3")}),
+    ({"x": ("1", None, "3")}, {"x": ("1", False, "3")}),
     # basic dicts
     ({"x": {"y": "5"}}, {"x": {"y": "6"}}),
+    ({"x": {"y": 5}}, {"x": {"y": 6}}),
     # dc
     ({"x": "4"}, {"x": "6"}),
+    ({"x": "4"}, {"x": 6}),
     # dn
     ({"x": "4"}, {"x": "6", "y": "10"}),
+    ({"x": "4"}, {"x": 6, "y": False}),
     # dd
     ({"x": "4", "y": "10"}, {"x": "4"}),
+    ({"x": 4.523, "y": "10"}, {"x": 4.523}),
     # tuple becomes str
     ({"x": ("1", "2", "3")}, {"x": "543"}),
     # dict becomes str
