@@ -23,7 +23,7 @@ from splitgill.utils import now, partition
 
 MONGO_DATABASE_NAME = "sg"
 STATUS_COLLECTION_NAME = "status"
-CONFIG_COLLECTION_NAME = "config"
+OPTIONS_COLLECTION_NAME = "options"
 OPS_SIZE = 500
 
 
@@ -53,13 +53,13 @@ class SplitgillClient:
         """
         return self.get_database().get_collection(STATUS_COLLECTION_NAME)
 
-    def get_config_collection(self) -> Collection:
+    def get_options_collection(self) -> Collection:
         """
-        Returns the config collection.
+        Returns the options collection.
 
         :return: a pymongo Collection object
         """
-        return self.get_database().get_collection(CONFIG_COLLECTION_NAME)
+        return self.get_database().get_collection(OPTIONS_COLLECTION_NAME)
 
     def get_data_collection(self, name: str) -> Collection:
         """
@@ -89,7 +89,7 @@ class SplitgillDatabase:
         self.name = name
         self._client = client
         self.data_collection = self._client.get_data_collection(self.name)
-        self.config_collection = self._client.get_config_collection()
+        self.options_collection = self._client.get_options_collection()
         self.status_collection = self._client.get_status_collection()
         self.latest_index_name = get_latest_index_id(self.name)
 
@@ -108,18 +108,18 @@ class SplitgillDatabase:
 
     def get_mongo_version(self) -> Optional[int]:
         """
-        Returns the latest version found in the data collection or config entry for this
-        database. If no records or config exist, None is returned.
+        Returns the latest version found in the data collection or options collection
+        for this database. If no records or options exist, None is returned.
 
         :return: the max version or None
         """
         sort = [("version", DESCENDING)]
         last_data = self.data_collection.find_one({}, sort=sort)
-        last_config = self.config_collection.find_one({"name": self.name}, sort=sort)
-        if last_data is None and last_config is None:
+        last_options = self.options_collection.find_one({"name": self.name}, sort=sort)
+        if last_data is None and last_options is None:
             return None
         return max(
-            last["version"] for last in (last_data, last_config) if last is not None
+            last["version"] for last in (last_data, last_options) if last is not None
         )
 
     def get_elasticsearch_version(self) -> Optional[int]:
@@ -163,12 +163,12 @@ class SplitgillDatabase:
         """
         Updates the status of this database with whichever is higher - the latest
         version in the data collection or the latest version for this database in the
-        config collection. After this, no more records at that latest version can be
-        added to the database, nor a new config update, they must all be newer.
+        options collection. After this, no more records at that latest version can be
+        added to the database, nor a new options update, they must all be newer.
 
         :return: True if the status was updated, False if not
         """
-        # get the latest data/config version
+        # get the latest data/options version
         version = self.get_mongo_version()
 
         if version is None:
@@ -191,11 +191,11 @@ class SplitgillDatabase:
 
     def determine_next_version(self) -> int:
         """
-        Figure out what version should be used with the next record(s) or config added
+        Figure out what version should be used with the next record(s) or options added
         to this database. If a transaction is in progress and changes haven't been
-        committed then the latest version from the data collection will be returned, but
-        if there is no current add in progress then the current time as a UNIX epoch is
-        returned.
+        committed then the latest version from the data collection or options collection
+        for this database will be returned, but if there is no current change in
+        progress then the current time as a UNIX epoch is returned.
 
         :return: a version timestamp to use for adding
         """
@@ -207,23 +207,23 @@ class SplitgillDatabase:
                 # no versions found at all, generate a new version
                 return now()
             else:
-                # use the latest data/config version
+                # use the latest data/options version
                 return version
 
-        # have a status version but no data/config version which is a weird state to
+        # have a status version but no data/options version which is a weird state to
         # be in, clean it up and return a new version
         if version is None:
             self.clear_status()
             return now()
 
-        # have a status version and a data/config version
+        # have a status version and a data/options version
         if version > committed_version:
-            # data/config version is newer, so data/config has been added without a
+            # data/options version is newer, so data/options has been added without a
             # commit. In this case allow a continuation of adding data to this
-            # version by returning the data/config version
+            # version by returning the data/options version
             return version
         else:
-            # otherwise data/config is behind status, so we should return a new
+            # otherwise data/options is behind status, so we should return a new
             # version
             return now()
 
@@ -286,7 +286,7 @@ class SplitgillDatabase:
             "version": self.determine_next_version(),
             "options": options.to_doc(),
         }
-        self.config_collection.insert_one(new_doc)
+        self.options_collection.insert_one(new_doc)
 
         if commit:
             self.commit()
@@ -303,7 +303,7 @@ class SplitgillDatabase:
         return ParsingOptionsRange(
             {
                 doc["version"]: ParsingOptions.from_doc(doc["options"])
-                for doc in self.config_collection.find({"name": self.name})
+                for doc in self.options_collection.find({"name": self.name})
             }
         )
 

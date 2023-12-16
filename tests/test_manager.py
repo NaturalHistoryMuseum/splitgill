@@ -95,7 +95,7 @@ class TestGetMongoVersion:
 
     def test_with_config_no_data(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
-        database.config_collection.insert_many(
+        database.options_collection.insert_many(
             [
                 {"name": database.name, "version": 4},
                 {"name": database.name, "version": 8},
@@ -114,7 +114,7 @@ class TestGetMongoVersion:
                 {"version": 4},
             ]
         )
-        database.config_collection.insert_many(
+        database.options_collection.insert_many(
             [
                 {"version": 5},
                 {"version": 7},
