@@ -99,6 +99,16 @@ class TestGeoFieldHint:
             "latitude", "longitude"
         )
 
+    def test_hash(self):
+        hints = set()
+        hints.add(GeoFieldHint("latitude", "longitude"))
+        hints.add(GeoFieldHint("latitude", "longitude"))
+        hints.add(GeoFieldHint("latitude", "longitude", None))
+        assert len(hints) == 1
+        hints.add(GeoFieldHint("latitude", "longitude", "radius"))
+        hints.add(GeoFieldHint("latitude", "longitude", "radius"))
+        assert len(hints) == 2
+
 
 class TestParsingOptions:
     def test_from_to_doc_empty(self):

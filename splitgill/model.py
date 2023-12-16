@@ -108,8 +108,14 @@ class Status:
         return doc
 
 
-@dataclass
+# use frozen to get a free hash method and as these objects have no reason to be mutable
+@dataclass(frozen=True)
 class GeoFieldHint:
+    """
+    Class holding the fields representing the fields in a record which describe its
+    latitude/longitude location and an optional uncertainty radius.
+    """
+
     lat_field: str
     lon_field: str
     radius_field: Optional[str] = None
@@ -117,9 +123,6 @@ class GeoFieldHint:
     @cached_property
     def path(self) -> str:
         return geo_path(self.lat_field, self.lon_field, self.radius_field)
-
-    def __hash__(self) -> int:
-        return hash(self.path)
 
 
 # set frozen=True to make the objects immutable and provide hashing (which we need for
