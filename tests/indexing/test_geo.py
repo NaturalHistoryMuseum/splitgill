@@ -15,7 +15,7 @@ from splitgill.indexing.geo import (
 )
 
 
-class TestGeoFieldHintsMatch:
+class TestMatchHints:
     def test_invalid_latitude(self):
         hint = GeoFieldHint("lat", "lon")
         assert not any(match_hints({"lat": "1000", "lon": "23"}, [hint]))
