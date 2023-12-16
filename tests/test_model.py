@@ -88,7 +88,7 @@ class TestStatus:
         }
 
 
-class TestGeoFieldHintGeoPath:
+class TestGeoFieldHint:
     def test_geo_path_with_radius(self):
         assert GeoFieldHint("latitude", "longitude", "radius").path == geo_path(
             "latitude", "longitude", "radius"
