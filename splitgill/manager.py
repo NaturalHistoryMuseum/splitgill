@@ -108,17 +108,19 @@ class SplitgillDatabase:
 
     def get_mongo_version(self) -> Optional[int]:
         """
-        Returns the latest version found in the data collection. If no records exist in
-        the collection, None is returned.
+        Returns the latest version found in the data collection or config entry for this
+        database. If no records or config exist, None is returned.
 
         :return: the max version or None
         """
-        last = next(
-            self.data_collection.find().sort("version", DESCENDING).limit(1), None
-        )
-        if last is None:
+        sort = [("version", DESCENDING)]
+        last_data = self.data_collection.find_one({}, sort=sort)
+        last_config = self.config_collection.find_one({"name": self.name}, sort=sort)
+        if last_data is None and last_config is None:
             return None
-        return last["version"]
+        return max(
+            last["version"] for last in (last_data, last_config) if last is not None
+        )
 
     def get_elasticsearch_version(self) -> Optional[int]:
         """
@@ -159,14 +161,16 @@ class SplitgillDatabase:
 
     def commit(self) -> bool:
         """
-        Updates the status of this database with the latest version in the data
-        collection. After this, no more records at that latest version can be added to
-        the database, they must all be newer.
+        Updates the status of this database with whichever is higher - the latest
+        version in the data collection or the latest version for this database in the
+        config collection. After this, no more records at that latest version can be
+        added to the database, nor a new config update, they must all be newer.
 
         :return: True if the status was updated, False if not
         """
-        # get the latest version in the data collection
+        # get the latest data/config version
         version = self.get_mongo_version()
+
         if version is None:
             # nothing to commit
             return False
@@ -187,40 +191,41 @@ class SplitgillDatabase:
 
     def determine_next_version(self) -> int:
         """
-        Figure out what version should be used with the next record(s) added to this
-        database. If a transaction is in progress and changes haven't been committed
-        then the latest version from the data collection will be returned, but if there
-        is no current add in progress then the current time as a UNIX epoch is returned.
+        Figure out what version should be used with the next record(s) or config added
+        to this database. If a transaction is in progress and changes haven't been
+        committed then the latest version from the data collection will be returned, but
+        if there is no current add in progress then the current time as a UNIX epoch is
+        returned.
 
         :return: a version timestamp to use for adding
         """
         committed_version = self.committed_version
-        data_version = self.get_mongo_version()
+        version = self.get_mongo_version()
 
-        # no data or status so generate a new version
-        if committed_version is None and data_version is None:
-            return now()
+        if committed_version is None:
+            if version is None:
+                # no versions found at all, generate a new version
+                return now()
+            else:
+                # use the latest data/config version
+                return version
 
-        # no status version, but there is data so use the latest data version
-        elif committed_version is None and data_version is not None:
-            return data_version
-
-        # have a status version but no data version which is a weird state to be in,
-        # clean it up and return a new version
-        elif committed_version is not None and data_version is None:
+        # have a status version but no data/config version which is a weird state to
+        # be in, clean it up and return a new version
+        if version is None:
             self.clear_status()
             return now()
 
-        # have a status version and a data version
+        # have a status version and a data/config version
+        if version > committed_version:
+            # data/config version is newer, so data/config has been added without a
+            # commit. In this case allow a continuation of adding data to this
+            # version by returning the data/config version
+            return version
         else:
-            if data_version > committed_version:
-                # data version is newer, so data has been added without a commit. In
-                # this case allow a continuation of adding data to this version by
-                # returning the data version
-                return data_version
-            else:
-                # otherwise data is behind status, so we should return a new version
-                return now()
+            # otherwise data/config is behind status, so we should return a new
+            # version
+            return now()
 
     def add(self, records: Iterable[Record], commit=True):
         """
@@ -257,11 +262,13 @@ class SplitgillDatabase:
         if commit:
             self.commit()
 
-    def update_options(self, options: ParsingOptions) -> bool:
+    def update_options(self, options: ParsingOptions, commit=True) -> bool:
         """
         Update the parsing options for this database.
 
         :param options: the new parsing options
+        :param commit: whether to commit the new version to the status after writing the
+                       config. Default: True.
         :return: a bool indicating whether the new options were different from the
                  currently saved options. Returns True if the options were different and
                  therefore updated, False if not.
@@ -276,10 +283,14 @@ class SplitgillDatabase:
         # options, write a fresh entry
         new_doc = {
             "name": self.name,
-            "version": now(),
+            "version": self.determine_next_version(),
             "options": options.to_doc(),
         }
         self.config_collection.insert_one(new_doc)
+
+        if commit:
+            self.commit()
+
         return True
 
     def get_options(self) -> ParsingOptionsRange:

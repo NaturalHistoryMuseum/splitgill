@@ -77,11 +77,11 @@ class TestSplitgillDatabaseCommittedVersion:
 
 
 class TestGetMongoVersion:
-    def test_no_docs(self, splitgill: SplitgillClient):
+    def test_no_data_or_config(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
         assert database.get_mongo_version() is None
 
-    def test_with_docs(self, splitgill: SplitgillClient):
+    def test_with_data_no_config(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
         database.data_collection.insert_many(
             [
@@ -92,6 +92,35 @@ class TestGetMongoVersion:
             ]
         )
         assert database.get_mongo_version() == 10000
+
+    def test_with_config_no_data(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        database.config_collection.insert_many(
+            [
+                {"name": database.name, "version": 4},
+                {"name": database.name, "version": 8},
+                # some versions to ignore
+                {"name": "not the database", "version": 12},
+                {"name": "not the database", "version": 1},
+            ]
+        )
+        assert database.get_mongo_version() == 8
+
+    def test_with_config_and_data(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        database.data_collection.insert_many(
+            [
+                {"version": 10},
+                {"version": 4},
+            ]
+        )
+        database.config_collection.insert_many(
+            [
+                {"version": 5},
+                {"version": 7},
+            ]
+        )
+        assert database.get_mongo_version() == 10
 
 
 class TestGetElasticsearchVersion:
