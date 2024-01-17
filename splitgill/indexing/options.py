@@ -79,7 +79,7 @@ class ParsingOptionsBuilder:
         :param value: the string value representing True
         :return: self
         """
-        if not value:
+        if value is not None:
             self._true_values.add(value.lower())
         return self
 
@@ -111,7 +111,7 @@ class ParsingOptionsBuilder:
         :param date_format: a date format string
         :return: self
         """
-        if not date_format:
+        if date_format:
             self._date_formats.add(date_format)
         return self
 
@@ -160,8 +160,10 @@ class ParsingOptionsBuilder:
 
         :return: self
         """
-        self._true_values.update(DEFAULT_TRUE_VALUES)
-        self._false_values.update(DEFAULT_FALSE_VALUES)
+        for true_value in DEFAULT_TRUE_VALUES:
+            self.with_true_value(true_value)
+        for false_value in DEFAULT_FALSE_VALUES:
+            self.with_false_value(false_value)
         return self
 
     def with_default_date_formats(self) -> "ParsingOptionsBuilder":
@@ -170,7 +172,8 @@ class ParsingOptionsBuilder:
 
         :return: self
         """
-        self._date_formats.update(DEFAULT_DATE_FORMATS)
+        for date_format in DEFAULT_DATE_FORMATS:
+            self.with_date_format(date_format)
         return self
 
     def with_default_geo_hints(self) -> "ParsingOptionsBuilder":
@@ -179,7 +182,10 @@ class ParsingOptionsBuilder:
 
         :return: self
         """
-        self._geo_hints.update(DEFAULT_GEO_HINTS)
+        for geo_hint in DEFAULT_GEO_HINTS:
+            self.with_geo_hint(
+                geo_hint.lat_field, geo_hint.lon_field, geo_hint.radius_field
+            )
         return self
 
 

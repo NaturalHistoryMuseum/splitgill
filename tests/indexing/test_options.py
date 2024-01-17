@@ -16,4 +16,25 @@ class TestParsingOptionsBuilder:
         # check the chaining works properly
         assert another_ref is builder
 
+    def test_with_true_value(self):
+        builder = ParsingOptionsBuilder()
+        builder.with_true_value("aye")
+        builder.with_true_value(None)
+        assert "aye" in builder._true_values
+        assert len(builder._true_values) == 1
+
+    def test_with_false_value(self):
+        builder = ParsingOptionsBuilder()
+        builder.with_false_value("narp")
+        builder.with_false_value(None)
+        assert "narp" in builder._false_values
+        assert len(builder._false_values) == 1
+
+    def test_with_date_format(self):
+        builder = ParsingOptionsBuilder()
+        builder.with_date_format("%Y")
+        builder.with_date_format(None)
+        assert "%Y" in builder._date_formats
+        assert len(builder._date_formats) == 1
+
     # TODO: test the rest
