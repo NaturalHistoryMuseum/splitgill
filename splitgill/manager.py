@@ -17,12 +17,11 @@ from splitgill.indexing.index import (
 )
 from splitgill.indexing.options import ParsingOptionsRange
 from splitgill.indexing.templates import DATA_TEMPLATE
-from splitgill.ingest import generate_ops
-from splitgill.model import Record, Status, MongoRecord, ParsingOptions
-from splitgill.utils import now, partition
+from splitgill.ingest import generate_ops, generate_rollback_ops
+from splitgill.model import Record, MongoRecord, ParsingOptions
+from splitgill.utils import partition, now
 
 MONGO_DATABASE_NAME = "sg"
-STATUS_COLLECTION_NAME = "status"
 OPTIONS_COLLECTION_NAME = "options"
 OPS_SIZE = 500
 
@@ -44,14 +43,6 @@ class SplitgillClient:
         :return: a pymongo Database object
         """
         return self.mongo.get_database(MONGO_DATABASE_NAME)
-
-    def get_status_collection(self) -> Collection:
-        """
-        Returns the status collection.
-
-        :return: a pymongo Collection object
-        """
-        return self.get_database().get_collection(STATUS_COLLECTION_NAME)
 
     def get_options_collection(self) -> Collection:
         """
@@ -90,36 +81,32 @@ class SplitgillDatabase:
         self._client = client
         self.data_collection = self._client.get_data_collection(self.name)
         self.options_collection = self._client.get_options_collection()
-        self.status_collection = self._client.get_status_collection()
         self.latest_index_name = get_latest_index_id(self.name)
 
-    @property
-    def committed_version(self) -> Optional[int]:
+    def get_committed_version(self) -> Optional[int]:
         """
-        Returns the currently committed data version, if there is one available. This
-        version is the number stored in the main database status object, not
-        (necessarily) the latest version in the actual data collection for this
-        database.
-
-        :return: a version timestamp or None
-        """
-        status = self.get_status()
-        return status.version if status else None
-
-    def get_mongo_version(self) -> Optional[int]:
-        """
-        Returns the latest version found in the data collection or options collection
-        for this database. If no records or options exist, None is returned.
+        Returns the latest committed version of the data or config (whichever is
+        higher). If no records or options exist, or if neither has any committed values,
+        None is returned.
 
         :return: the max version or None
         """
         sort = [("version", DESCENDING)]
-        last_data = self.data_collection.find_one({}, sort=sort)
+        last_data = self.data_collection.find_one(sort=sort)
         last_options = self.options_collection.find_one({"name": self.name}, sort=sort)
-        if last_data is None and last_options is None:
+
+        last_data_version = last_data.get("version") if last_data is not None else None
+        last_options_version = (
+            last_options.get("version") if last_options is not None else None
+        )
+        # there's no committed data or options
+        if last_data_version is None and last_options_version is None:
             return None
+
         return max(
-            last["version"] for last in (last_data, last_options) if last is not None
+            last
+            for last in (last_data_version, last_options_version)
+            if last is not None
         )
 
     def get_elasticsearch_version(self) -> Optional[int]:
@@ -144,159 +131,143 @@ class SplitgillDatabase:
         # convert it back to an int to avoid returning a float and causing confusion
         return int(version)
 
-    def get_status(self) -> Optional[Status]:
+    def commit(self) -> Optional[int]:
         """
-        Return the current status for this database.
+        Commits the currently uncommitted data and options changes for this database.
+        All new data/options will be given the same version which is the current time.
+        If no changes were made, None is returned, otherwise the new version is
+        returned.
 
-        :return: a Status object or None if no status is set currently
+        :return: the new version or None if no uncommitted changes were found
         """
-        doc = self.status_collection.find_one({"name": self.name})
-        return Status(**doc) if doc else None
+        # TODO: locking?
+        # TODO: global now?
+        # TODO: transaction/rollback? Can't do this without replicasets so who knows?
+        version = now()
 
-    def clear_status(self):
-        """
-        Clears the status for this database by deleting the doc.
-        """
-        self.status_collection.delete_one({"name": self.name})
-
-    def commit(self) -> bool:
-        """
-        Updates the status of this database with whichever is higher - the latest
-        version in the data collection or the latest version for this database in the
-        options collection. After this, no more records at that latest version can be
-        added to the database, nor a new options update, they must all be newer.
-
-        :return: True if the status was updated, False if not
-        """
-        # get the latest data/options version
-        version = self.get_mongo_version()
-
-        if version is None:
-            # nothing to commit
-            return False
-
-        status = self.get_status()
-        if status is None:
-            # make a new status object
-            status = Status(name=self.name, version=version)
-        else:
-            # update the existing status object
-            status.version = version
-
-        # replace (or insert) the current status
-        self.status_collection.replace_one(
-            {"name": self.name}, status.to_doc(), upsert=True
-        )
-        return True
-
-    def determine_next_version(self) -> int:
-        """
-        Figure out what version should be used with the next record(s) or options added
-        to this database. If a transaction is in progress and changes haven't been
-        committed then the latest version from the data collection or options collection
-        for this database will be returned, but if there is no current change in
-        progress then the current time as a UNIX epoch is returned.
-
-        :return: a version timestamp to use for adding
-        """
-        committed_version = self.committed_version
-        version = self.get_mongo_version()
-
-        if committed_version is None:
-            if version is None:
-                # no versions found at all, generate a new version
-                return now()
-            else:
-                # use the latest data/options version
-                return version
-
-        # have a status version but no data/options version which is a weird state to
-        # be in, clean it up and return a new version
-        if version is None:
-            self.clear_status()
-            return now()
-
-        # have a status version and a data/options version
-        if version > committed_version:
-            # data/options version is newer, so data/options has been added without a
-            # commit. In this case allow a continuation of adding data to this
-            # version by returning the data/options version
+        # update the uncommitted data and options in a transaction
+        count = 0
+        for collection in [self.data_collection, self.options_collection]:
+            result = collection.update_many(
+                filter={"version": None},
+                update={"$set": {"version": version}},
+            )
+            count += result.modified_count
+        # if nothing was updated, we had nothing to commit so no new version was created
+        if count:
             return version
-        else:
-            # otherwise data/options is behind status, so we should return a new
-            # version
-            return now()
+        return None
 
-    def add(self, records: Iterable[Record], commit=True):
+    def add(self, records: Iterable[Record], commit=True) -> Optional[int]:
         """
         Adds the given records to the database. This only adds the records to the
         MongoDB data collection, it doesn't trigger the indexing of this new data into
-        the Elasticsearch cluster.
+        the Elasticsearch cluster. All data will be added with a None version.
 
-        Use the commit keyword argument to either close the transaction after writing
-        these records or leave it open. By default, the transaction is committed before
-        the method returns.
+        Use the commit keyword argument to either close the "transaction" after writing
+        these records or leave it open. By default, the "transaction" is committed
+        before the method returns, and the version is set then.
 
-        If an error occurs, the transaction will not be committed, but the changes will
-        not be rolled back.
+        If an error occurs, the "transaction" will not be committed, but the changes
+        will not be rolled back.
 
         :param records: the records to add. These will be added in batches, so it is
                         safe to pass a very large stream of records
-        :param commit: whether to commit the new version to the status after writing the
-                       records. Default: True.
+        :param commit: whether to commit the data added with a new version after writing
+                       the records. Default: True.
+        :return: returns the new version if a commit happened, otherwise None. If a
+                 commit was requested but nothing was changed, None is returned.
         """
         # TODO: return some stats about the add
-        # TODO: locking?
-        version = self.determine_next_version()
-
         # this does nothing if the indexes already exist
         self.data_collection.create_indexes(
             [IndexModel([("id", ASCENDING)]), IndexModel([("version", DESCENDING)])]
         )
 
-        for ops in partition(
-            generate_ops(self.data_collection, records, version), OPS_SIZE
-        ):
+        for ops in partition(generate_ops(self.data_collection, records), OPS_SIZE):
             self.data_collection.bulk_write(ops)
 
         if commit:
-            self.commit()
+            return self.commit()
+        return None
 
-    def update_options(self, options: ParsingOptions, commit=True) -> bool:
+    def update_options(self, options: ParsingOptions, commit=True) -> Optional[int]:
         """
         Update the parsing options for this database.
 
         :param options: the new parsing options
-        :param commit: whether to commit the new version to the status after writing the
-                       config. Default: True.
-        :return: a bool indicating whether the new options were different from the
-                 currently saved options. Returns True if the options were different and
-                 therefore updated, False if not.
+        :param commit: whether to commit the new config added with a new version after
+                       writing the config. Default: True.
+        :return: returns the new version if a commit happened, otherwise None. If a
+                 commit was requested but nothing was changed, None is returned.
         """
+        # get the latest options that have been committed (get_options ignores
+        # uncommitted options)
         latest_options = self.get_options().latest
+
+        if self.has_uncommitted_options():
+            self.rollback_options()
 
         # if the options are the same as the latest existing ones, don't update
         if latest_options == options:
-            return False
+            return None
 
         # either the options are completely new or they differ from the existing
         # options, write a fresh entry
         new_doc = {
             "name": self.name,
-            "version": self.determine_next_version(),
+            # version = None to indicate this is an uncommitted change
+            "version": None,
             "options": options.to_doc(),
         }
         self.options_collection.insert_one(new_doc)
 
         if commit:
-            self.commit()
+            return self.commit()
+        return None
 
-        return True
+    def rollback_options(self):
+        """
+        Remove any uncommitted option changes.
+
+        There should only ever be one, but this deletes them all ensuring everything is
+        clean and tidy.
+        """
+        self.options_collection.delete_many({"version": None})
+
+    def rollback_records(self):
+        """
+        Remove any uncommitted data changes.
+
+        This method has to interrogate every uncommitted record in the data collection
+        to perform the rollback and therefore, depending on how much uncommitted data
+        there is, may take a bit of time to run.
+        """
+        if self.has_uncommitted_records():
+            for ops in partition(generate_rollback_ops(self.data_collection), OPS_SIZE):
+                self.data_collection.bulk_write(ops)
+
+    def has_uncommitted_records(self) -> bool:
+        """
+        Check if there are any uncommitted records stored against this database.
+
+        :return: returns True if there are any uncommitted records, False if not
+        """
+        return self.data_collection.find_one({"version": None}) is not None
+
+    def has_uncommitted_options(self) -> bool:
+        """
+        Check if there are any uncommitted options stored against this database.
+
+        :return: returns True if there are any uncommitted options, False if not
+        """
+        return self.options_collection.find_one({"version": None}) is not None
 
     def get_options(self) -> ParsingOptionsRange:
         """
         Retrieve all the parsing options ever configured for this database. The options
-        are returned in a wrapping class to provide easy access by version.
+        are returned in a wrapping class to provide easy access by version. Only
+        committed options are returned.
 
         :return: a ParsingOptionsRange object
         """
@@ -304,6 +275,7 @@ class SplitgillDatabase:
             {
                 doc["version"]: ParsingOptions.from_doc(doc["options"])
                 for doc in self.options_collection.find({"name": self.name})
+                if doc["version"] is not None
             }
         )
 
@@ -369,12 +341,16 @@ class SplitgillDatabase:
             if not client.indices.exists(index=index):
                 client.indices.create(index=index)
 
-        # set up a generator of all the records with a version newer than since
-        since = self.committed_version
-        docs = (
-            MongoRecord(**doc)
-            for doc in self.data_collection.find({"version": {"$gte": since}})
-        )
+        # set up a generator of all the records with a version newer than the last time
+        # version that has been synced
+        since = self.get_elasticsearch_version()
+        if since is not None:
+            # find all the updated records that haven't had the update synced yet
+            find_filter = {"version": {"$gte": since}}
+        else:
+            # find all the committed records as elasticsearch has nothing
+            find_filter = {"version": {"$ne": None}}
+        docs = (MongoRecord(**doc) for doc in self.data_collection.find(find_filter))
 
         # apply optimal indexing settings to all the indices we may update
         client.indices.put_settings(

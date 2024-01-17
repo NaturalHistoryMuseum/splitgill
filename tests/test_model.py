@@ -5,13 +5,7 @@ from bson import ObjectId
 
 from splitgill.diffing import diff, prepare
 from splitgill.indexing.fields import geo_path
-from splitgill.model import (
-    MongoRecord,
-    VersionedData,
-    Status,
-    GeoFieldHint,
-    ParsingOptions,
-)
+from splitgill.model import MongoRecord, VersionedData, GeoFieldHint, ParsingOptions
 
 
 def create_mongo_record(version: int, data: dict, *historical_data: VersionedData):
@@ -65,27 +59,6 @@ class TestMongoRecord:
 
         assert record.data == {"x": 5, "y": (True, 2, "3")}
         prepare_spy.assert_called_once_with(data)
-
-
-class TestStatus:
-    def test_to_doc_no_mongo_id(self):
-        status = Status("test", 100)
-        doc = status.to_doc()
-        assert doc == {
-            "name": status.name,
-            "version": status.version,
-        }
-        assert "_id" not in doc
-
-    def test_to_doc_with_mongo_id(self):
-        mongo_id = ObjectId()
-        status = Status("test", 100, _id=mongo_id)
-        doc = status.to_doc()
-        assert doc == {
-            "name": status.name,
-            "version": status.version,
-            "_id": mongo_id,
-        }
 
 
 class TestGeoFieldHint:

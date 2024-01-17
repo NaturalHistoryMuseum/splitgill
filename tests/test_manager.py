@@ -1,19 +1,18 @@
 from datetime import datetime
-from unittest.mock import patch, MagicMock, Mock
+from unittest.mock import patch, MagicMock
 
 import pytest
 from freezegun import freeze_time
 
 from splitgill.indexing.fields import RootField, MetaField
 from splitgill.indexing.index import get_data_index_id, create_index_op
+from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.manager import (
     SplitgillClient,
     MONGO_DATABASE_NAME,
-    STATUS_COLLECTION_NAME,
     SplitgillDatabase,
-    OPS_SIZE,
 )
-from splitgill.model import Record, Status
+from splitgill.model import Record
 from splitgill.utils import to_timestamp
 
 
@@ -21,20 +20,17 @@ class TestSplitgillClient:
     def test_database(self, splitgill: SplitgillClient):
         assert splitgill.get_database().name == MONGO_DATABASE_NAME
 
-    def test_get_status_collection(self, splitgill: SplitgillClient):
-        assert splitgill.get_status_collection().name == STATUS_COLLECTION_NAME
-
     def test_get_data_collection(self, splitgill: SplitgillClient):
         name = "test"
         assert splitgill.get_data_collection(name).name == f"data-{name}"
 
 
-class TestSplitgillDatabaseCommittedVersion:
-    def test_no_data(self, splitgill: SplitgillClient):
+class TestSplitgillDatabaseGetCommittedVersion:
+    def test_no_data_no_options(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
-        assert database.committed_version is None
+        assert database.get_committed_version() is None
 
-    def test_data_no_status(self, splitgill: SplitgillClient):
+    def test_uncommitted_data(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
         records = [
             Record.new({"x": 4}),
@@ -42,11 +38,10 @@ class TestSplitgillDatabaseCommittedVersion:
             Record.new({"x": 5}),
         ]
         database.add(records, commit=False)
-        assert database.committed_version is None
+        assert database.get_committed_version() is None
 
     @freeze_time("2012-01-14 12:00:01")
-    def test_data_with_status(self, splitgill: SplitgillClient):
-        version = 1326542401000
+    def test_committed_data(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
         records = [
             Record.new({"x": 4}),
@@ -54,73 +49,84 @@ class TestSplitgillDatabaseCommittedVersion:
             Record.new({"x": 5}),
         ]
         database.add(records, commit=True)
-        assert database.committed_version == version
+        assert database.get_committed_version() == 1326542401000
 
-    def test_data_with_status_different_to_data(self, splitgill: SplitgillClient):
+    @freeze_time("2012-01-14 12:00:01")
+    def test_mixed_data(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
+        version = 1326542401000
         records = [
             Record.new({"x": 4}),
             Record.new({"x": 89}),
             Record.new({"x": 5}),
         ]
+        database.add(records, commit=True)
+        assert database.get_committed_version() == version
+        more_records = [
+            # this one is new
+            Record.new({"x": 1}),
+            # this one is an update to one of the ones above
+            Record(records[0].id, {"x": 100}),
+        ]
+        database.add(more_records, commit=False)
+        assert database.get_committed_version() == version
 
+    def test_uncommitted_options(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        options = ParsingOptionsBuilder().with_defaults().build()
+        database.update_options(options, commit=False)
+        assert database.get_committed_version() is None
+
+    @freeze_time("2012-01-14 12:00:01")
+    def test_committed_options(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        options = ParsingOptionsBuilder().with_defaults().build()
+        database.update_options(options, commit=True)
+        assert database.get_committed_version() == 1326542401000
+
+    @freeze_time("2012-01-14 12:00:01")
+    def test_mixed_options(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        version = 1326542401000
+        options = ParsingOptionsBuilder().with_defaults().build()
+        database.update_options(options, commit=True)
+        assert database.get_committed_version() == version
+        new_options = (
+            ParsingOptionsBuilder().with_defaults().with_true_value("aye").build()
+        )
+        database.update_options(new_options, commit=False)
+        assert database.get_committed_version() == version
+
+    def test_mixed_both(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+
+        records = [
+            Record.new({"x": 4}),
+            Record.new({"x": 89}),
+            Record.new({"x": 5}),
+        ]
+        database.add(records, commit=False)
+        options = ParsingOptionsBuilder().with_defaults().build()
+        database.update_options(options, commit=False)
+
+        # add the new stuff
         with freeze_time("2012-01-14 12:00:01"):
-            database.add(records, commit=True)
-        assert database.committed_version == 1326542401000
+            version = database.commit()
+            assert database.get_committed_version() == version
 
-        another_record = Record.new({"x": 199})
-        with freeze_time("2016-02-15 12:00:01"):
-            database.add([another_record], commit=False)
-        # data version shouldn't have changed, even though the version in the data
-        # collection will be newer
-        assert database.committed_version == 1326542401000
+        # update the records
+        with freeze_time("2012-01-14 12:00:05"):
+            new_records = [Record.new({"x": 4})]
+            database.add(new_records, commit=True)
+        assert database.get_committed_version() == 1326542405000
 
-
-class TestGetMongoVersion:
-    def test_no_data_or_config(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        assert database.get_mongo_version() is None
-
-    def test_with_data_no_config(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        database.data_collection.insert_many(
-            [
-                {"version": 4},
-                {"version": 10000},
-                {"version": 4892},
-                {"version": 100},
-            ]
-        )
-        assert database.get_mongo_version() == 10000
-
-    def test_with_config_no_data(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        database.options_collection.insert_many(
-            [
-                {"name": database.name, "version": 4},
-                {"name": database.name, "version": 8},
-                # some versions to ignore
-                {"name": "not the database", "version": 12},
-                {"name": "not the database", "version": 1},
-            ]
-        )
-        assert database.get_mongo_version() == 8
-
-    def test_with_config_and_data(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        database.data_collection.insert_many(
-            [
-                {"version": 10},
-                {"version": 4},
-            ]
-        )
-        database.options_collection.insert_many(
-            [
-                {"version": 5},
-                {"version": 7},
-            ]
-        )
-        assert database.get_mongo_version() == 10
+        # update the options
+        with freeze_time("2012-01-14 12:00:09"):
+            new_options = (
+                ParsingOptionsBuilder().with_defaults().with_true_value("aye").build()
+            )
+            database.update_options(new_options, commit=True)
+        assert database.get_committed_version() == 1326542409000
 
 
 class TestGetElasticsearchVersion:
@@ -175,153 +181,66 @@ class TestGetElasticsearchVersion:
         assert database.get_elasticsearch_version() == versions[0]
 
 
-class TestSplitgillDatabaseGetStatus:
-    def test_no_status(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        assert database.get_status() is None
-
-    @freeze_time("2012-01-14 12:00:01")
-    def test_get(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        database.add([Record.new({"x": 5})], commit=True)
-        status = database.get_status()
-        assert status is not None
-        assert status.name == database.name
-        assert status.version == 1326542401000
-
-    def test_delete_status_no_status(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        database.clear_status()
-        assert database.get_status() is None
-
-    def test_delete_status(self, splitgill: SplitgillClient):
-        name = "test"
-        database = SplitgillDatabase(name, splitgill)
-        database.add([Record.new({"x": 5})], commit=True)
-
-        assert database.get_status() is not None
-        database.clear_status()
-        assert database.get_status() is None
-
-
 class TestCommit:
     def test_nothing_to_commit(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
-        assert not database.commit()
-        assert database.get_status() is None
+        assert database.commit() is None
 
     @freeze_time("2012-01-14 12:00:01")
-    def test_no_status(self, splitgill: SplitgillClient):
+    def test_new_records(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
         database.add([Record.new({"x": 5})], commit=False)
+        assert database.commit() == 1326542401000
 
-        assert database.commit()
-        assert database.get_status().version == 1326542401000
+    @freeze_time("2012-01-14 12:00:01")
+    def test_new_options(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        database.update_options(
+            ParsingOptionsBuilder().with_defaults().build(), commit=False
+        )
+        assert database.commit() == 1326542401000
 
-    def test_update_status(self, splitgill: SplitgillClient):
-        name = "test"
-        database = SplitgillDatabase(name, splitgill)
+    @freeze_time("2012-01-14 12:00:01")
+    def test_both(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
         database.add([Record.new({"x": 5})], commit=False)
-        database.commit()
-
-        first_status = database.get_status()
-        assert first_status is not None
-
-        database.add([Record.new({"x": 5})], commit=False)
-        database.commit()
-
-        second_status = database.get_status()
-        assert second_status.version > first_status.version
-
-
-class TestDetermineNextStatus:
-    def test_no_status_no_data_version(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        with patch("splitgill.manager.now", MagicMock(return_value=100)):
-            assert database.determine_next_version() == 100
-
-    def test_no_status_has_data_version(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        with freeze_time("2012-01-14 12:00:01"):
-            database.add([Record.new({"x": 5})], commit=False)
-        assert database.determine_next_version() == 1326542401000
-
-    def test_has_status_no_data_version(self, splitgill: SplitgillClient):
-        name = "test"
-        database = SplitgillDatabase(name, splitgill)
-        database.get_status = MagicMock(return_value=Status(name, 100))
-        database.clear_status = MagicMock()
-        with freeze_time("2012-01-14 12:00:01"):
-            assert database.determine_next_version() == 1326542401000
-        database.clear_status.assert_called_once()
-
-    def test_has_status_and_data_version_continuation(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        with freeze_time("2012-01-02 12:00:01"):
-            database.add([Record.new({"x": 5})], commit=True)
-
-        with freeze_time("2012-01-14 12:00:01"):
-            database.add([Record.new({"x": 5})], commit=False)
-
-        assert database.determine_next_version() == 1326542401000
-
-    def test_has_status_and_data_version_new_data(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        with freeze_time("2012-01-02 12:00:01"):
-            database.add([Record.new({"x": 5})], commit=True)
-
-        with freeze_time("2012-01-14 12:00:01"):
-            assert database.determine_next_version() == 1326542401000
+        database.update_options(
+            ParsingOptionsBuilder().with_defaults().build(), commit=False
+        )
+        assert database.commit() == 1326542401000
 
 
 class TestAdd:
     def test_no_records(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
         database.add([])
-        assert database.committed_version is None
+        assert database.get_committed_version() is None
 
     @freeze_time("2012-01-14 12:00:01")
     def test_with_records(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
-        count = 100
+        count = 103
         record_iter = (Record.new({"x": i}) for i in range(count))
 
-        database.add(record_iter)
+        database.add(record_iter, commit=True)
 
         assert database.data_collection.count_documents({}) == count
-        assert database.committed_version == 1326542401000
-        assert database.get_status().version == 1326542401000
+        assert database.get_committed_version() == 1326542401000
 
-    def test_is_batched(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        batches_goal = 5
-        count = OPS_SIZE * batches_goal
-        record_iter = (Record.new({"x": i}) for i in range(count))
-
-        bulk_write_spy = Mock(wraps=database.data_collection.bulk_write)
-        database.data_collection.bulk_write = bulk_write_spy
-
-        database.add(record_iter)
-
-        assert database.data_collection.count_documents({}) == count
-        assert bulk_write_spy.call_count == batches_goal
-
+    @freeze_time("2012-01-14 12:00:01")
     def test_commit_and_is_default(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
 
         database.add([Record.new({"x": 10})])
 
-        data_version = database.get_mongo_version()
-        assert data_version is not None
-        assert data_version == database.committed_version
+        assert database.get_committed_version() == 1326542401000
 
     def test_no_commit(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
 
         database.add([Record.new({"x": 10})], commit=False)
 
-        assert database.get_mongo_version() is not None
-        assert database.committed_version is None
+        assert database.get_committed_version() is None
 
     def test_no_commit_when_error(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
@@ -331,7 +250,7 @@ class TestAdd:
         with pytest.raises(Exception, match="oh no!"):
             database.add([Record.new({"x": 10})], commit=True)
 
-        assert database.committed_version is None
+        assert database.get_committed_version() is None
 
 
 class TestGetAllIndices:

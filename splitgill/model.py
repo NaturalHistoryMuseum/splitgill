@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field, asdict, astuple
+from dataclasses import dataclass, field, astuple
 from functools import cached_property
 from typing import Dict, Iterable, NamedTuple, List, Optional, FrozenSet
 from uuid import uuid4
@@ -18,12 +18,26 @@ class Record:
     id: str
     data: dict
 
+    @property
+    def is_delete(self) -> bool:
+        """
+        Returns True if this record is a delete request, otherwise False. A delete
+        request is a record with empty data ({}).
+
+        :return: True if this is a delete, False if not
+        """
+        return not self.data
+
     @staticmethod
     def new(data: dict) -> "Record":
         return Record(str(uuid4()), data)
 
+    @staticmethod
+    def delete(record_id: str) -> "Record":
+        return Record(record_id, {})
 
-VersionedData = NamedTuple("VersionedData", version=int, data=dict)
+
+VersionedData = NamedTuple("VersionedData", version=Optional[int], data=dict)
 
 
 @dataclass
@@ -34,7 +48,7 @@ class MongoRecord:
 
     _id: ObjectId
     id: str
-    version: int
+    version: Optional[int]
     data: dict
     # you'd expect the keys to be ints but MongoDB doesn't allow non-string keys
     diffs: Dict[str, List[DiffOp]] = field(default_factory=dict)
@@ -51,10 +65,28 @@ class MongoRecord:
 
         :return: True if this record has been deleted, False if not
         """
-        return not bool(self.data)
+        return not self.data
 
     @property
-    def versions(self) -> List[int]:
+    def is_uncommitted(self) -> bool:
+        """
+        A record is uncommitted if its current version is None.
+
+        :return: True if this record has been deleted, False if not
+        """
+        return self.version is None
+
+    @property
+    def has_history(self) -> bool:
+        """
+        A record has history if it has any diffs.
+
+        :return: True if this record has previous versions, False if not
+        """
+        return bool(self.diffs)
+
+    @property
+    def versions(self) -> List[Optional[int]]:
         """
         Returns a list of the record's versions in descending order.
 
@@ -83,29 +115,6 @@ class MongoRecord:
             # convert the string versions to ints on the way out the door
             yield VersionedData(int(version_str), data)
             base = data
-
-
-@dataclass
-class Status:
-    name: str
-    version: int
-    _id: Optional[ObjectId] = None
-
-    def to_doc(self) -> dict:
-        """
-        Converts this object to a dict ready for storage in MongoDB. If this object
-        hasn't been stored in the MongoDB yet, then the _id field is not included, if it
-        has, then the _id is included.
-
-        :return: a dict
-        """
-        doc = asdict(self)
-        # if the _id is None then this status object hasn't been saved, remove it from
-        # the dict to avoid attempting to write a doc with _id=None which MongoDB will
-        # allow
-        if self._id is None:
-            del doc["_id"]
-        return doc
 
 
 # use frozen to get a free hash method and as these objects have no reason to be mutable

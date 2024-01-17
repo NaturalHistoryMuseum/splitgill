@@ -91,7 +91,7 @@ def create_index_op(
 def generate_index_ops(
     name: str,
     records: Iterable[MongoRecord],
-    current: int,
+    current: Optional[int],
     options: ParsingOptionsRange,
 ) -> Iterable[dict]:
     """
@@ -103,15 +103,19 @@ def generate_index_ops(
 
     :param name: the name of the database
     :param records: the records to update from
-    :param current: the latest version in Elasticsearch
+    :param current: the latest version in Elasticsearch, None if there isn't any data in
+                    elasticsearch
     :param options: ParsingOptionsRange object so that we can get the right parsing
                     options for indexing
     :return: yields ops as dicts
     """
     latest_index = get_latest_index_id(name)
+    # only check the version of the record against the current version of elasticsearch
+    # if there is something to compare against
+    do_version_check = current is not None
 
     for record in records:
-        if record.version < current:
+        if do_version_check and record.version < current:
             # nothing to do for this record, move on
             continue
 
@@ -139,7 +143,7 @@ def generate_index_ops(
                 )
 
             # if the version is below the current version in Elasticsearch, we're done
-            if version < current:
+            if do_version_check and version < current:
                 break
 
             # update the next version to the version we just handled
