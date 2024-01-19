@@ -17,8 +17,16 @@ class TestParseForIndex:
         parsed = parse_for_index(data, options)
         assert parsed == ParsedData(data, {"x": parse("beans", options)}, {}, {})
 
-    def test_array_of_strings(self):
+    def test_tuple_of_strings(self):
         data = {"x": ("beans", "lemons", "goats")}
+        options = ParsingOptionsBuilder().build()
+        parsed = parse_for_index(data, options)
+        assert parsed == ParsedData(
+            data, {"x": [parse(value, options) for value in data["x"]]}, {}, {"x": 3}
+        )
+
+    def test_list_of_string(self):
+        data = {"x": ["beans", "lemons", "goats"]}
         options = ParsingOptionsBuilder().build()
         parsed = parse_for_index(data, options)
         assert parsed == ParsedData(

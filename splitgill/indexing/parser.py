@@ -33,7 +33,7 @@ class QualifiedValue(NamedTuple):
     """
 
     path: Tuple[Union[str, int], ...]
-    value: Union[str, dict, tuple, int, float, bool, None]
+    value: Union[str, dict, tuple, list, int, float, bool, None]
 
 
 def parse_for_index(data: dict, options: ParsingOptions) -> ParsedData:
@@ -65,7 +65,7 @@ def parse_for_index(data: dict, options: ParsingOptions) -> ParsedData:
     queue: Deque[QualifiedValue] = deque()
 
     def parse_value(qvalue: QualifiedValue) -> Optional[dict]:
-        if isinstance(qvalue.value, (dict, tuple)):
+        if isinstance(qvalue.value, (dict, tuple, list)):
             queue.append(qvalue)
             # return a placeholder (in this case None) which will be replaced when the
             # queued container is processed
@@ -116,7 +116,7 @@ def parse_for_index(data: dict, options: ParsingOptions) -> ParsedData:
                 key: parse_value(QualifiedValue((*path, key), value))
                 for key, value in container.items()
             }
-        elif isinstance(container, tuple):
+        elif isinstance(container, (tuple, list)):
             arrays[dot_path] = len(container)
             # set the parsed container in the parsed dict
             get_in(parent_path, parsed)[path_leaf] = [
