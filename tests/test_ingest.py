@@ -4,7 +4,7 @@ from uuid import uuid4
 from pymongo import InsertOne, UpdateOne
 from pymongo.collection import Collection
 
-from splitgill.diffing import prepare, diff
+from splitgill.diffing import prepare_data, diff
 from splitgill.ingest import generate_ops, FIND_SIZE
 from splitgill.model import Record
 
@@ -34,7 +34,7 @@ class TestGenerateOps:
         for record, op in zip(records, ops):
             assert op._doc["id"] == record.id
             assert op._doc["version"] is None
-            assert op._doc["data"] == prepare(record.data)
+            assert op._doc["data"] == prepare_data(record.data)
 
     def test_with_all_new_but_some_repeating_records(self, data_collection: Collection):
         records = [
@@ -51,7 +51,7 @@ class TestGenerateOps:
         for record, op in zip((records[0], records[4], records[3]), ops):
             assert op._doc["id"] == record.id
             assert op._doc["version"] is None
-            assert op._doc["data"] == prepare(record.data)
+            assert op._doc["data"] == prepare_data(record.data)
 
     def test_update_existing_records(self, data_collection: Collection):
         # add some records
@@ -88,11 +88,13 @@ class TestGenerateOps:
             assert new_record.id == old_record.id
             doc = data_collection.find_one({"id": new_record.id})
             assert doc["version"] is None
-            assert doc["data"] == prepare(new_record.data)
+            assert doc["data"] == prepare_data(new_record.data)
             # to compare the diff we have to convert the tuples into lists
             assert doc["diffs"][str(old_version)] == [
                 [list(diff_op.path), diff_op.ops]
-                for diff_op in diff(prepare(new_record.data), prepare(old_record.data))
+                for diff_op in diff(
+                    prepare_data(new_record.data), prepare_data(old_record.data)
+                )
             ]
 
     def test_lots_of_records(self, data_collection: Collection):
@@ -106,7 +108,7 @@ class TestGenerateOps:
         for record, op in zip(records, ops):
             assert op._doc["id"] == record.id
             assert op._doc["version"] is None
-            assert op._doc["data"] == prepare(record.data)
+            assert op._doc["data"] == prepare_data(record.data)
 
     def test_delete_of_non_existent_record(self, data_collection: Collection):
         records = [Record.new({})]

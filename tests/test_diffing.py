@@ -4,7 +4,7 @@ from decimal import Decimal
 import pytest
 
 from splitgill.diffing import (
-    prepare,
+    prepare_data,
     diff,
     DiffOp,
     DiffingTypeComparisonException,
@@ -14,49 +14,51 @@ from splitgill.diffing import (
 
 class TestPrepare:
     def test_none(self):
-        assert prepare(None) is None
+        assert prepare_data(None) is None
 
     def test_str(self):
-        assert prepare("beans") == "beans"
-        assert prepare("beans\tand\rlemons\neh?") == "beans\tand\rlemons\neh?"
-        assert prepare("beans\x07andabell") == "beansandabell"
-        assert prepare("bea\x07ns\tand\rlem\x00ons\neh?") == "beans\tand\rlemons\neh?"
+        assert prepare_data("beans") == "beans"
+        assert prepare_data("beans\tand\rlemons\neh?") == "beans\tand\rlemons\neh?"
+        assert prepare_data("beans\x07andabell") == "beansandabell"
+        assert (
+            prepare_data("bea\x07ns\tand\rlem\x00ons\neh?") == "beans\tand\rlemons\neh?"
+        )
 
     def test_numbers(self):
-        assert prepare(23) == 23
-        assert prepare(23.456) == 23.456
-        assert prepare(-20.5012) == -20.5012
-        assert prepare(0) == 0
+        assert prepare_data(23) == 23
+        assert prepare_data(23.456) == 23.456
+        assert prepare_data(-20.5012) == -20.5012
+        assert prepare_data(0) == 0
         # only ints and float please!
-        assert prepare(complex(3, 4)) == "(3+4j)"
-        assert prepare(Decimal("3.4")) == "3.4"
+        assert prepare_data(complex(3, 4)) == "(3+4j)"
+        assert prepare_data(Decimal("3.4")) == "3.4"
 
     def test_bool(self):
-        assert prepare(True) is True
-        assert prepare(False) is False
+        assert prepare_data(True) is True
+        assert prepare_data(False) is False
 
     def test_datetime(self):
         now = datetime.now()
-        assert prepare(now) == now.isoformat()
+        assert prepare_data(now) == now.isoformat()
 
     def test_dict(self):
-        assert prepare({}) == {}
-        assert prepare({"x": None}) == {"x": None}
-        assert prepare({"x": "beans"}) == {"x": "beans"}
-        assert prepare({"x": "4"}) == {"x": prepare("4")}
-        assert prepare({3: True}) == {"3": prepare(True)}
-        assert prepare({4: {6: 1}}) == {"4": {"6": prepare(1)}}
+        assert prepare_data({}) == {}
+        assert prepare_data({"x": None}) == {"x": None}
+        assert prepare_data({"x": "beans"}) == {"x": "beans"}
+        assert prepare_data({"x": "4"}) == {"x": prepare_data("4")}
+        assert prepare_data({3: True}) == {"3": prepare_data(True)}
+        assert prepare_data({4: {6: 1}}) == {"4": {"6": prepare_data(1)}}
 
     def test_list(self):
-        assert prepare([]) == tuple()
-        assert prepare([3, None, 5]) == (3, None, 5)
-        assert prepare([1, 2, 3]) == (1, 2, 3)
-        assert prepare([1, True, "3"]) == (1, True, "3")
+        assert prepare_data([]) == tuple()
+        assert prepare_data([3, None, 5]) == (3, None, 5)
+        assert prepare_data([1, 2, 3]) == (1, 2, 3)
+        assert prepare_data([1, True, "3"]) == (1, True, "3")
 
     def test_set(self):
-        assert prepare(set()) == tuple()
+        assert prepare_data(set()) == tuple()
 
-        prepared = prepare({1, 2, 3, "beans", None})
+        prepared = prepare_data({1, 2, 3, "beans", None})
         assert isinstance(prepared, tuple)
         assert 1 in prepared
         assert 2 in prepared
@@ -65,21 +67,21 @@ class TestPrepare:
         assert None in prepared
 
     def test_tuple(self):
-        assert prepare(tuple()) == tuple()
-        assert prepare((3, None, 5)) == (3, None, 5)
-        assert prepare((1, 2, 3)) == (1, 2, 3)
-        assert prepare((1, True, "3")) == (1, True, "3")
+        assert prepare_data(tuple()) == tuple()
+        assert prepare_data((3, None, 5)) == (3, None, 5)
+        assert prepare_data((1, 2, 3)) == (1, 2, 3)
+        assert prepare_data((1, True, "3")) == (1, True, "3")
 
     def test_fallback(self):
         class A:
             def __str__(self):
                 return "beans"
 
-        assert prepare(A()) == "beans"
+        assert prepare_data(A()) == "beans"
 
     def test_mix(self):
         now = datetime.now()
-        prepared = prepare(
+        prepared = prepare_data(
             {
                 "x": "4",
                 "y": True,

@@ -1,11 +1,11 @@
 from dataclasses import dataclass, field, astuple
 from functools import cached_property
-from typing import Dict, Iterable, NamedTuple, List, Optional, FrozenSet
+from typing import Dict, Iterable, NamedTuple, List, Optional, FrozenSet, Union
 from uuid import uuid4
 
 from bson import ObjectId
 
-from splitgill.diffing import patch, DiffOp, prepare
+from splitgill.diffing import patch, DiffOp
 from splitgill.indexing.fields import geo_path
 
 
@@ -37,6 +37,48 @@ class Record:
         return Record(record_id, {})
 
 
+def make_dict_safe(data: dict) -> dict:
+    """
+    Make all the values in the dict "safe". This means converting all lists to tuples
+    while maintaining the same elements within. The original dict will be returned, with
+    in place edits made if necessary.
+
+    :param data: the dict to make "safe"
+    :return: the original dict
+    """
+    if not data:
+        return data
+    data.update(
+        {
+            key: make_dict_safe(value)
+            if isinstance(value, dict)
+            else make_list_safe(value)
+            for key, value in data.items()
+            if isinstance(value, (dict, list, tuple))
+        }
+    )
+    return data
+
+
+def make_list_safe(data: Union[list, tuple]) -> tuple:
+    """
+    Make all the values in the list or tuple "safe". This means converting all lists to
+    tuples while maintaining the same elements within. A new tuple will be returned,
+    even if the data parameter passed in is a tuple already.
+
+    :param data: the list/tuple to make "safe"
+    :return: a new tuple
+    """
+    return tuple(
+        make_dict_safe(value)
+        if isinstance(value, dict)
+        else make_list_safe(value)
+        if isinstance(value, (list, tuple))
+        else value
+        for value in data
+    )
+
+
 VersionedData = NamedTuple("VersionedData", version=Optional[int], data=dict)
 
 
@@ -54,9 +96,9 @@ class MongoRecord:
     diffs: Dict[str, List[DiffOp]] = field(default_factory=dict)
 
     def __post_init__(self):
-        # to be safe, we need to prepare the data we have stored in MongoDB so that any
-        # patching or diffing that uses it can reliably use it
-        self.data = prepare(self.data)
+        # mongo stores tuples as lists and I can't find a way to get it to spit out
+        # tuples instead of lists, so we have to do a conversion step
+        self.data = make_dict_safe(self.data)
 
     @property
     def is_deleted(self) -> bool:
@@ -111,7 +153,8 @@ class MongoRecord:
         for version_str, diff in sorted(
             self.diffs.items(), key=lambda item: int(item[0]), reverse=True
         ):
-            data = patch(base, diff)
+            # patch and convert lists to tuples
+            data = make_dict_safe(patch(base, diff))
             # convert the string versions to ints on the way out the door
             yield VersionedData(int(version_str), data)
             base = data

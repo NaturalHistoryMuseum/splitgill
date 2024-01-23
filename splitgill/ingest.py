@@ -4,7 +4,7 @@ from typing import Iterable, Union, Optional
 from pymongo import InsertOne, UpdateOne, DeleteOne
 from pymongo.collection import Collection
 
-from splitgill.diffing import prepare, diff
+from splitgill.diffing import prepare_data, diff
 from splitgill.model import Record, MongoRecord
 from splitgill.utils import partition
 
@@ -60,7 +60,9 @@ def generate_ops(
             if record.is_delete and record_id not in existing:
                 continue
 
-            new_data = prepare(record.data)
+            # prepare the record's data, we will use this as both the record's new data
+            # that we actually store in Mongo and also to diff against the existing data
+            new_data = prepare_data(record.data)
 
             if record_id not in existing:
                 # the record is new, insert and carry on to the next
@@ -84,8 +86,7 @@ def generate_ops(
                     continue
                 else:
                     # revert the local object version back to the previous version of
-                    # the record's data and stash the UpdateOp to update Mongo in case
-                    # we need to use it lower down
+                    # the record's data and stash the UpdateOp
                     revert_update_op = revert_record(existing_record)
 
             changes = tuple(diff(new_data, existing_record.data))

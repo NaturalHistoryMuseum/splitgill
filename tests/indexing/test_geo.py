@@ -1,8 +1,7 @@
 import math
 import pytest
 
-from splitgill.diffing import prepare
-from splitgill.indexing.fields import geo_path
+from splitgill.diffing import prepare_data
 from splitgill.indexing.geo import (
     GeoFieldHint,
     create_polygon_circle,
@@ -191,20 +190,20 @@ class TestCreatePolygonCircle:
 
 class TestAsGeoJSON:
     def test_valid_point(self, geojson_point: dict):
-        assert as_geojson(prepare(geojson_point)) == geojson_point
+        assert as_geojson(prepare_data(geojson_point)) == geojson_point
 
     def test_valid_point_with_elevation(self, geojson_point: dict):
-        data = prepare(geojson_point)
+        data = prepare_data(geojson_point)
         data["coordinates"] = (*data["coordinates"], "2000.6")
         assert as_geojson(data) == geojson_point
 
     def test_invalid_with_too_many_points(self, geojson_point: dict):
-        data = prepare(geojson_point.copy())
+        data = prepare_data(geojson_point.copy())
         data["coordinates"] = (*data["coordinates"], "2000.6", "2004.2")
         assert as_geojson(data) is None
 
     def test_invalid_point_too_few_points(self, geojson_point: dict):
-        data = prepare(geojson_point.copy())
+        data = prepare_data(geojson_point.copy())
         data["coordinates"] = (data["coordinates"][0],)
         assert as_geojson(data) is None
 
@@ -217,10 +216,10 @@ class TestAsGeoJSON:
         assert as_geojson(data) is None
 
     def test_valid_linestring(self, geojson_linestring: dict):
-        assert as_geojson(prepare(geojson_linestring)) == geojson_linestring
+        assert as_geojson(prepare_data(geojson_linestring)) == geojson_linestring
 
     def test_invalid_linestring_too_few_points(self, geojson_linestring: dict):
-        data = prepare(geojson_linestring.copy())
+        data = prepare_data(geojson_linestring.copy())
         data["coordinates"] = [data["coordinates"][0]]
         assert as_geojson(data) is None
 
@@ -260,7 +259,7 @@ class TestAsGeoJSON:
     def test_invalid_linear_but_valid_hole_winding_polygon(
         self, geojson_holed_polygon: dict
     ):
-        polygon = prepare(geojson_holed_polygon.copy())
+        polygon = prepare_data(geojson_holed_polygon.copy())
         # reverse the linear ring winding direction
         polygon["coordinates"] = (
             polygon["coordinates"][0][::-1],
@@ -271,7 +270,7 @@ class TestAsGeoJSON:
     def test_valid_linear_but_invalid_hole_winding_polygon(
         self, geojson_holed_polygon: dict
     ):
-        polygon = prepare(geojson_holed_polygon.copy())
+        polygon = prepare_data(geojson_holed_polygon.copy())
         # reverse the hole winding direction
         polygon["coordinates"] = (
             polygon["coordinates"][0],

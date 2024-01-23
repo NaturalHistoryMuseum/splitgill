@@ -12,7 +12,7 @@ from cytoolz import get_in
 invalid_char_regex = rx.compile(r"[^\P{C}\n\r\t]")
 
 
-def prepare(value: Any) -> Union[str, dict, tuple, int, float, bool, None]:
+def prepare_data(value: Any) -> Union[str, dict, tuple, int, float, bool, None]:
     """
     Prepares the given value for storage in MongoDB. Conversions are completed like so:
 
@@ -38,9 +38,9 @@ def prepare(value: Any) -> Union[str, dict, tuple, int, float, bool, None]:
         return value
     if isinstance(value, dict):
         # mongodb doesn't allow non-string keys so we need to convert them here
-        return {str(key): prepare(value) for key, value in value.items()}
+        return {str(key): prepare_data(value) for key, value in value.items()}
     if isinstance(value, (list, set, tuple)):
-        return tuple(map(prepare, value))
+        return tuple(map(prepare_data, value))
     if isinstance(value, datetime):
         # stringifying this ensures the tz info is recorded and won't change going
         # in/out mongo

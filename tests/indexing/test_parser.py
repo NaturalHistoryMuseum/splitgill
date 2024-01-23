@@ -3,7 +3,7 @@ from itertools import chain
 
 import pytest
 
-from splitgill.diffing import prepare
+from splitgill.diffing import prepare_data
 from splitgill.indexing.fields import TypeField
 from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.indexing.parser import parse_for_index, ParsedData, parse
@@ -111,7 +111,7 @@ class TestParseForIndex:
 
     def test_geojson_field(self, geojson_point: dict):
         data = {
-            "x": prepare(geojson_point),
+            "x": prepare_data(geojson_point),
             "y": "somewhere",
         }
         options = ParsingOptionsBuilder().build()
@@ -132,7 +132,7 @@ class TestParseForIndex:
         )
 
     def test_geojson_at_root_not_recognised(self, geojson_point: dict):
-        data = prepare(geojson_point)
+        data = prepare_data(geojson_point)
         options = ParsingOptionsBuilder().build()
         parsed = parse_for_index(data, options)
         assert parsed == ParsedData(
@@ -155,7 +155,7 @@ class TestParseForIndex:
         geojson_holed_polygon: dict,
     ):
         data = {
-            "x": prepare(
+            "x": prepare_data(
                 (
                     geojson_point,
                     geojson_linestring,

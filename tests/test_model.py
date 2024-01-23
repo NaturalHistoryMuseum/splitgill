@@ -3,9 +3,15 @@ from uuid import uuid4
 
 from bson import ObjectId
 
-from splitgill.diffing import diff, prepare
+from splitgill.diffing import diff, prepare_data
 from splitgill.indexing.fields import geo_path
-from splitgill.model import MongoRecord, VersionedData, GeoFieldHint, ParsingOptions
+from splitgill.model import (
+    MongoRecord,
+    VersionedData,
+    GeoFieldHint,
+    ParsingOptions,
+    make_dict_safe,
+)
 
 
 def create_mongo_record(version: int, data: dict, *historical_data: VersionedData):
@@ -50,15 +56,10 @@ class TestMongoRecord:
 
         assert record.versions == [10, 7, 2]
 
-    def test_is_prepared(self):
+    def test_is_made_safe(self):
         data = {"x": 5, "y": [True, 2, "3"]}
-        prepare_spy = Mock(wraps=prepare)
-
-        with patch("splitgill.model.prepare", prepare_spy):
-            record = MongoRecord(ObjectId(), str(uuid4()), 10, data)
-
+        record = MongoRecord(ObjectId(), str(uuid4()), 10, data)
         assert record.data == {"x": 5, "y": (True, 2, "3")}
-        prepare_spy.assert_called_once_with(data)
 
 
 class TestGeoFieldHint:
