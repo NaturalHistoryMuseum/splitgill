@@ -58,6 +58,10 @@ class DiffingTypeComparisonException(Exception):
     pass
 
 
+# internal type for the diff function below
+_QueueItem = Tuple[Tuple[Union[str, int], ...], Union[dict, tuple], Union[dict, tuple]]
+
+
 def diff(base: dict, new: dict) -> Iterable[DiffOp]:
     """
     Finds the differences between the two dicts, yielding DiffOps. The DiffOps describe
@@ -79,9 +83,7 @@ def diff(base: dict, new: dict) -> Iterable[DiffOp]:
     # TODO: we could write a shortcut when one of the dicts is empty
 
     missing = object()
-    queue: Deque[
-        Tuple[Tuple[Union[str, int], ...], Union[dict, tuple], Union[dict, tuple]]
-    ] = deque(((tuple(), base, new),))
+    queue: Deque[_QueueItem] = deque([(tuple(), base, new)])
 
     while queue:
         path, left, right = queue.popleft()
