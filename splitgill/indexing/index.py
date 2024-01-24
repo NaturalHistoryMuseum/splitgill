@@ -78,6 +78,14 @@ def create_index_op(
             },
         },
     }
+
+    if parsed_data.geo:
+        # create a collection using the individual geo GeoJSON values
+        op[RootField.META][MetaField.GEO] = {
+            "type": "GeometryCollection",
+            "geometries": list(parsed_data.geo.values()),
+        }
+
     if next_version is None:
         op["_id"] = record_id
     else:

@@ -90,6 +90,29 @@ class TestCreateIndexOp:
             MetaField.NEXT_VERSION: next_version,
         }
 
+    def test_meta_geo_is_filled(self):
+        index_name = get_latest_index_id("test")
+        data = {
+            "x": "beans",
+            "lat": 4,
+            "lon": 10,
+            "location": {"type": "Point", "coordinates": [100.4, 0.1]},
+        }
+        record_id = "xyz"
+        version = 1691359001000
+        options = ParsingOptionsBuilder().with_geo_hint("lat", "lon").build()
+
+        op = create_index_op(
+            index_name, record_id, data, version, options, next_version=None
+        )
+
+        assert op[RootField.META][MetaField.GEO]["type"] == "GeometryCollection"
+        # there is no specific ordering for this so test using contains and assert size
+        geometries = op[RootField.META][MetaField.GEO]["geometries"]
+        assert len(geometries) == 2
+        assert {"type": "Point", "coordinates": (10.0, 4.0)} in geometries
+        assert {"type": "Point", "coordinates": (100.4, 0.1)} in geometries
+
 
 class TestGenerateIndexOps:
     def test_old_version(self, splitgill: SplitgillClient):

@@ -30,6 +30,7 @@ class MetaField(LowercaseStrEnum):
     VERSIONS = auto()
     VERSION = auto()
     NEXT_VERSION = auto()
+    GEO = auto()
 
     def path(self) -> str:
         """

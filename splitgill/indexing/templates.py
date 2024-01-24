@@ -44,6 +44,7 @@ DATA_TEMPLATE = {
                     RootField.PARSED,
                     RootField.GEO,
                     RootField.ARRAYS,
+                    MetaField.GEO.path(),
                 ],
             },
             "properties": {
@@ -71,6 +72,12 @@ DATA_TEMPLATE = {
                 # querying (see the dynamic keyword_field below)
                 MetaField.ALL.path(): {
                     "type": "text",
+                },
+                # a GeoJSON collection of all the found geo field values in this record,
+                # this makes it easy to search based on a record's geo data without
+                # caring which fields are being used
+                MetaField.GEO.path(): {
+                    "type": "geo_shape",
                 },
             },
             "dynamic_templates": [
