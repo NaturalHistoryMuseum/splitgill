@@ -89,7 +89,7 @@ def generate_ops(
                     # the record's data and stash the UpdateOp
                     revert_update_op = revert_record(existing_record)
 
-            changes = tuple(diff(new_data, existing_record.data))
+            changes = list(diff(new_data, existing_record.data))
             if changes:
                 # the existing record has been updated, yield the op necessary to
                 # update it in mongo

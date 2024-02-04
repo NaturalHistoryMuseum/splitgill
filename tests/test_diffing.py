@@ -9,6 +9,8 @@ from splitgill.diffing import (
     DiffOp,
     DiffingTypeComparisonException,
     patch,
+    DictComparison,
+    ListComparison,
 )
 
 
@@ -50,16 +52,16 @@ class TestPrepare:
         assert prepare_data({4: {6: 1}}) == {"4": {"6": prepare_data(1)}}
 
     def test_list(self):
-        assert prepare_data([]) == tuple()
-        assert prepare_data([3, None, 5]) == (3, None, 5)
-        assert prepare_data([1, 2, 3]) == (1, 2, 3)
-        assert prepare_data([1, True, "3"]) == (1, True, "3")
+        assert prepare_data([]) == []
+        assert prepare_data([3, None, 5]) == [3, None, 5]
+        assert prepare_data([1, 2, 3]) == [1, 2, 3]
+        assert prepare_data([1, True, "3"]) == [1, True, "3"]
 
     def test_set(self):
-        assert prepare_data(set()) == tuple()
+        assert prepare_data(set()) == []
 
         prepared = prepare_data({1, 2, 3, "beans", None})
-        assert isinstance(prepared, tuple)
+        assert isinstance(prepared, list)
         assert 1 in prepared
         assert 2 in prepared
         assert 3 in prepared
@@ -67,10 +69,10 @@ class TestPrepare:
         assert None in prepared
 
     def test_tuple(self):
-        assert prepare_data(tuple()) == tuple()
-        assert prepare_data((3, None, 5)) == (3, None, 5)
-        assert prepare_data((1, 2, 3)) == (1, 2, 3)
-        assert prepare_data((1, True, "3")) == (1, True, "3")
+        assert prepare_data(tuple()) == []
+        assert prepare_data((3, None, 5)) == [3, None, 5]
+        assert prepare_data((1, 2, 3)) == [1, 2, 3]
+        assert prepare_data((1, True, "3")) == [1, True, "3"]
 
     def test_fallback(self):
         class A:
@@ -96,12 +98,12 @@ class TestPrepare:
         assert prepared == {
             "x": "4",
             "y": True,
-            "z": (1, 2, 3),
+            "z": [1, 2, 3],
             "a": {
-                "x": ("4", 20.7),
+                "x": ["4", 20.7],
                 "y": now.isoformat(),
             },
-            "b": ({"x": 1}, {"x": "4.2"}),
+            "b": [{"x": 1}, {"x": "4.2"}],
         }
 
 
@@ -138,35 +140,34 @@ class TestDiff:
         new = {"a": "4", "b": "6"}
         assert list(diff(base, new)) == [DiffOp(tuple(), {"dc": {"b": "6"}})]
 
-    def test_tuple_new(self):
-        base = {"a": ("1", "2", "3")}
-        new = {"a": ("1", "2", "3", "4", "5")}
-        assert list(diff(base, new)) == [DiffOp(("a",), {"tn": ("4", "5")})]
+    def test_list_new(self):
+        base = {"a": ["1", "2", "3"]}
+        new = {"a": ["1", "2", "3", "4", "5"]}
+        assert list(diff(base, new)) == [DiffOp(("a",), {"ln": ["4", "5"]})]
 
-    def test_tuple_delete(self):
-        base = {"a": ("1", "2", "3", "4", "5")}
-        new = {"a": ("1", "2", "3")}
-        assert list(diff(base, new)) == [DiffOp(("a",), {"td": 3})]
+    def test_list_delete(self):
+        base = {"a": ["1", "2", "3", "4", "5"]}
+        new = {"a": ["1", "2", "3"]}
+        assert list(diff(base, new)) == [DiffOp(("a",), {"ld": 3})]
 
-    def test_tuple_change(self):
-        base = {"a": ("1", "2", "3", "4", "5")}
-        new = {"a": ("1", "2", "3", "10", "5")}
-        assert list(diff(base, new)) == [DiffOp(("a",), {"tc": [(3, "10")]})]
+    def test_list_change(self):
+        base = {"a": ["1", "2", "3", "4", "5"]}
+        new = {"a": ["1", "2", "3", "10", "5"]}
+        assert list(diff(base, new)) == [DiffOp(("a",), {"lc": [(3, "10")]})]
 
-    def test_tuple_with_embeds(self):
+    def test_list_with_embeds(self):
         base = {
-            "a": ({"y": "4"}, {"z": "5"}),
-            "b": (("1", "2", "3"), ("4", "5", "6"), ("7", "8", "9")),
+            "a": [{"y": "4"}, {"z": "5"}],
+            "b": [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"]],
         }
         new = {
-            "a": ({"y": "4"}, {"z": "3"}),
-            "b": (("1", "10", "3"), ("4", "5", "6"), ("4", "8", "9")),
+            "a": [{"y": "4"}, {"z": "3"}],
+            "b": [["1", "10", "3"], ["4", "5", "6"], ["4", "8", "9"]],
         }
         assert list(diff(base, new)) == [
-            DiffOp(
-                path=("b",), ops={"tc": [(0, ("1", "10", "3")), (2, ("4", "8", "9"))]}
-            ),
             DiffOp(path=("a", 1), ops={"dc": {"z": "3"}}),
+            DiffOp(path=("b", 0), ops={"lc": [(1, "10")]}),
+            DiffOp(path=("b", 2), ops={"lc": [(0, "4")]}),
         ]
 
     def test_dict_embeds(self):
@@ -177,22 +178,173 @@ class TestDiff:
         ]
 
 
+class TestDictComparisonCompare:
+    def test_same(self):
+        op, more = DictComparison(tuple(), {}, {}).compare()
+        assert op is None
+        assert len(more) == 0
+
+        op, more = DictComparison(tuple(), {"a": 4}, {"a": 4}).compare()
+        assert op is None
+        assert len(more) == 0
+
+        base = {"a": 4}
+        op, more = DictComparison(tuple(), base, base).compare()
+        assert op is None
+        assert len(more) == 0
+
+    def test_dn(self):
+        comp = DictComparison(tuple(), {"a": 4}, {"a": 4, "b": 3, "c": 8})
+        op, more = comp.compare()
+        assert op.path == tuple()
+        assert op.ops == {"dn": {"b": 3, "c": 8}}
+        assert len(more) == 0
+
+    def test_dd(self):
+        comp = DictComparison(tuple(), {"a": 4, "b": 3, "c": 8}, {"a": 4})
+        op, more = comp.compare()
+        assert op.path == tuple()
+        assert op.ops == {"dd": ["b", "c"]}
+        assert len(more) == 0
+
+    def test_dc(self):
+        comp = DictComparison(tuple(), {"a": 4, "b": 3}, {"a": 1, "b": 9})
+        op, more = comp.compare()
+        assert op.path == tuple()
+        assert op.ops == {"dc": {"a": 1, "b": 9}}
+        assert len(more) == 0
+
+    def test_nested_dicts(self):
+        # both dicts
+        op, more = DictComparison(("x",), {"a": {"x": 3}}, {"a": {"x": 4}}).compare()
+        assert op is None
+        assert more == [DictComparison(("x", "a"), {"x": 3}, {"x": 4})]
+
+    def test_nested_dict_and_not(self):
+        # one a dict, one not
+        op, more = DictComparison(tuple(), {"a": {"x": 3}}, {"a": "x"}).compare()
+        assert op.path == tuple()
+        assert op.ops == {"dc": {"a": "x"}}
+        assert len(more) == 0
+
+        # one not a dict, one a dict
+        op, more = DictComparison(tuple(), {"a": "x"}, {"a": {"x": 3}}).compare()
+        assert op.path == tuple()
+        assert op.ops == {"dc": {"a": {"x": 3}}}
+        assert len(more) == 0
+
+    def test_nested_lists(self):
+        # both lists
+        op, more = DictComparison(("x",), {"a": [1, 2, 3]}, {"a": [1, 2, 4]}).compare()
+        assert op is None
+        assert more == [ListComparison(("x", "a"), [1, 2, 3], [1, 2, 4])]
+
+    def test_nested_list_and_not(self):
+        # both dicts
+        op, more = DictComparison(tuple(), {"a": [1, 2, 3]}, {"a": "x"}).compare()
+        assert op.path == tuple()
+        assert op.ops == {"dc": {"a": "x"}}
+        assert len(more) == 0
+
+        op, more = DictComparison(tuple(), {"a": "x"}, {"a": [1, 2, 3]}).compare()
+        assert op.path == tuple()
+        assert op.ops == {"dc": {"a": [1, 2, 3]}}
+        assert len(more) == 0
+
+
+class TestListComparisonCompare:
+    def test_same(self):
+        op, more = ListComparison(tuple(), [], []).compare()
+        assert op is None
+        assert len(more) == 0
+
+        op, more = ListComparison(tuple(), [1, 2, 3], [1, 2, 3]).compare()
+        assert op is None
+        assert len(more) == 0
+
+        base = [1, 2, 3]
+        op, more = ListComparison(tuple(), base, base).compare()
+        assert op is None
+        assert len(more) == 0
+
+    def test_ln(self):
+        comp = ListComparison(tuple(), [1, 2, 3], [1, 2, 3, 4, 5])
+        op, more = comp.compare()
+        assert op.path == tuple()
+        assert op.ops == {"ln": [4, 5]}
+        assert len(more) == 0
+
+    def test_ld(self):
+        comp = ListComparison(tuple(), [1, 2, 3, 4, 5], [1, 2, 3])
+        op, more = comp.compare()
+        assert op.path == tuple()
+        assert op.ops == {"ld": 3}
+        assert len(more) == 0
+
+    def test_lc(self):
+        comp = ListComparison(tuple(), [1, 2, 3, 4, 5], [1, 9, 3, "b", 5])
+        op, more = comp.compare()
+        assert op.path == tuple()
+        assert op.ops == {"lc": [(1, 9), (3, "b")]}
+        assert len(more) == 0
+
+    def test_nested_dicts(self):
+        # both dicts
+        op, more = ListComparison(("x",), ["b", {"x": 1}], ["b", {"x": 2}]).compare()
+        assert op is None
+        assert more == [DictComparison(("x", 1), {"x": 1}, {"x": 2})]
+
+    def test_nested_dict_and_not(self):
+        # one a dict, one not
+        op, more = ListComparison(tuple(), ["b", {"x": 1}], ["b", "x"]).compare()
+        assert op.path == tuple()
+        assert op.ops == {"lc": [(1, "x")]}
+        assert len(more) == 0
+
+        # one not a dict, one a dict
+        op, more = ListComparison(tuple(), ["b", "x"], ["b", {"x": 1}]).compare()
+        assert op.path == tuple()
+        assert op.ops == {"lc": [(1, {"x": 1})]}
+        assert len(more) == 0
+
+    def test_nested_lists(self):
+        # both lists
+        op, more = ListComparison(
+            ("x",), [1, [9, 8, 7], 2], [1, [9, 8, 6], 2]
+        ).compare()
+        assert op is None
+        assert more == [ListComparison(("x", 1), [9, 8, 7], [9, 8, 6])]
+
+    def test_nested_list_and_not(self):
+        # one a list, one not
+        op, more = ListComparison(tuple(), ["a", [1, 2, 3]], ["a", "x"]).compare()
+        assert op.path == tuple()
+        assert op.ops == {"lc": [(1, "x")]}
+        assert len(more) == 0
+
+        # one not a list, one a dict
+        op, more = ListComparison(tuple(), ["a", "x"], ["a", [1, 2, 3]]).compare()
+        assert op.path == tuple()
+        assert op.ops == {"lc": [(1, [1, 2, 3])]}
+        assert len(more) == 0
+
+
 # TODO: make this a more complete, systematic set of scenarios
 patching_scenarios = [
     # a basic example
     ({"x": "4"}, {"x": "5"}),
     ({"x": True}, {"x": 5}),
-    # basic tuples
-    # td
-    ({"x": ("1", "2", "3")}, {"x": ("1", "5")}),
-    ({"x": (False, 5, "hello")}, {"x": (True, 5)}),
-    # tn
-    ({"x": ("1", "2", "3")}, {"x": ("1", "2", "3", "4")}),
-    ({"x": (1, 2, 3.4)}, {"x": (1, 2, 3.4, 4)}),
-    # tc
-    ({"x": ("1", "2", "3")}, {"x": ("1", "5", "3")}),
-    ({"x": ("1", 2, "3")}, {"x": ("1", 5, "3")}),
-    ({"x": ("1", None, "3")}, {"x": ("1", False, "3")}),
+    # basic lists
+    # ld
+    ({"x": ["1", "2", "3"]}, {"x": ["1", "5"]}),
+    ({"x": [False, 5, "hello"]}, {"x": [True, 5]}),
+    # ln
+    ({"x": ["1", "2", "3"]}, {"x": ["1", "2", "3", "4"]}),
+    ({"x": [1, 2, 3.4]}, {"x": [1, 2, 3.4, 4]}),
+    # lc
+    ({"x": ["1", "2", "3"]}, {"x": ["1", "5", "3"]}),
+    ({"x": ["1", 2, "3"]}, {"x": ["1", 5, "3"]}),
+    ({"x": ["1", None, "3"]}, {"x": ["1", False, "3"]}),
     # basic dicts
     ({"x": {"y": "5"}}, {"x": {"y": "6"}}),
     ({"x": {"y": 5}}, {"x": {"y": 6}}),
@@ -205,40 +357,40 @@ patching_scenarios = [
     # dd
     ({"x": "4", "y": "10"}, {"x": "4"}),
     ({"x": 4.523, "y": "10"}, {"x": 4.523}),
-    # tuple becomes str
-    ({"x": ("1", "2", "3")}, {"x": "543"}),
+    # list becomes str
+    ({"x": ["1", "2", "3"]}, {"x": "543"}),
     # dict becomes str
     ({"x": {"y": "4"}}, {"x": "543"}),
-    # str becomes tuple
-    ({"x": "543"}, {"x": ("1", "2", "3")}),
+    # str becomes list
+    ({"x": "543"}, {"x": ["1", "2", "3"]}),
     # str becomes dict
     ({"x": "543"}, {"x": {"y": "4"}}),
-    # tuple becomes dict
-    ({"x": ("1", "2", "3")}, {"x": {"y": "1"}}),
-    # dict becomes tuple
-    ({"x": {"y": "1"}}, {"x": ("1", "2", "3")}),
-    # dict becomes tuple in dict
-    ({"x": {"y": {"z": "43"}}}, {"x": {"y": ("1", "2", "3")}}),
-    # tuple of tuples
+    # list becomes dict
+    ({"x": ["1", "2", "3"]}, {"x": {"y": "1"}}),
+    # dict becomes list
+    ({"x": {"y": "1"}}, {"x": ["1", "2", "3"]}),
+    # dict becomes list in dict
+    ({"x": {"y": {"z": "43"}}}, {"x": {"y": ["1", "2", "3"]}}),
+    # list of lists
     (
-        {"x": (("1", "2", "3"), ("4", "5", "6"), ("7", "8", "9"))},
-        {"x": (("1", "2", "4"), ("4", "10", "6"), ("0", "8", "9"))},
+        {"x": [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"]]},
+        {"x": [["1", "2", "4"], ["4", "10", "6"], ["0", "8", "9"]]},
     ),
-    # tuple of dicts
-    ({"x": ({"y": "5"}, {"y": "7"})}, {"x": ({"y": "3"}, {"y": "7"})}),
-    # tuple of dicts with tuples and changing types
+    # list of dicts
+    ({"x": [{"y": "5"}, {"y": "7"}]}, {"x": [{"y": "3"}, {"y": "7"}]}),
+    # list of dicts with lists and changing types
     (
-        {"x": ({"y": ("1", "2", "3")}, {"y": ("7", "8")})},
-        {"x": ({"y": "nope"}, {"y": ("3", "8")})},
+        {"x": [{"y": ["1", "2", "3"]}, {"y": ["7", "8"]}]},
+        {"x": [{"y": "nope"}, {"y": ["3", "8"]}]},
     ),
-    # tuple of tuples becomes tuple of not-tuples (and vice versa)
+    # list of lists becomes list of not-lists (and vice versa)
     (
-        {"x": (("1", "2", "3"), ("4", "5", "6"), ("7", "8", "9"))},
-        {"x": ("not", "a", "tuple")},
+        {"x": [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"]]},
+        {"x": ["not", "a", "tuple"]},
     ),
     (
-        {"x": ("not", "a", "tuple")},
-        {"x": (("1", "2", "3"), ("4", "5", "6"), ("7", "8", "9"))},
+        {"x": ["not", "a", "tuple"]},
+        {"x": [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"]]},
     ),
 ]
 
@@ -246,11 +398,6 @@ patching_scenarios = [
 class TestPatch:
     def test_empty(self):
         assert patch({"c": "4"}, []) == {"c": "4"}
-
-    def test_always_a_new_dict(self):
-        base = {"c": "4"}
-        assert patch(base, []) is not base
-        assert patch(base, list(diff(base, {"c": "5"}))) is not base
 
     @pytest.mark.parametrize(("base", "new"), patching_scenarios)
     def test_patching(self, base: dict, new: dict):
