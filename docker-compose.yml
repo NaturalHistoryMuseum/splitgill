@@ -30,13 +30,20 @@ services:
   es:
     image: elasticsearch:8.10.1
     environment:
-      - "discovery.type=single-node"
-      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+      discovery.type: single-node
+      ES_JAVA_OPTS: -Xms2g -Xmx2g
+      cluster.name: sg
+      node.name: sg-one
+      network.bind_host: 0.0.0.0
+      cluster.routing.allocation.disk.threshold_enabled: "false"
+      network.host: 0.0.0.0
+      # this allows us to access the cluster over http
+      xpack.security.enabled: "false"
+      # this ensures the tests can delete indexes using wildcards
+      action.destructive_requires_name: "false"
     ports:
       - "9200:9200"
       - "9100:9100"
-    volumes:
-      - ./docker/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
 
   mongo:
     image: mongo:6.0.8

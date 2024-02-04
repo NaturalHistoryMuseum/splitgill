@@ -1,8 +1,0 @@
-cluster.name: sg
-node.name: sg-one
-network.bind_host: 0.0.0.0
-cluster.routing.allocation.disk.threshold_enabled: false
-network.host: 0.0.0.0
-xpack.security.enabled: false
-# having this just prevents a warning in our test logs due to using 7.x elasticsearch
-action.destructive_requires_name: false
