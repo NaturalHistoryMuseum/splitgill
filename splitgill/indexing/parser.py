@@ -191,7 +191,7 @@ def parse(value: Union[None, int, str, bool, float], options: ParsingOptions) ->
             parsed[TypeField.BOOLEAN] = False
 
     # check for number values
-    if isinstance(value, (int, float)):
+    if not isinstance(value, bool) and isinstance(value, (int, float)):
         parsed[TypeField.NUMBER] = value
     else:
         # attempt parsing the value as a number

@@ -336,3 +336,17 @@ class TestParse:
         parsed_int = parse(3, options)
 
         assert parsed_float is not parsed_int
+
+    def test_ensure_bools_are_not_ints(self):
+        options = ParsingOptionsBuilder().build()
+
+        result = parse(True, options)
+        assert TypeField.BOOLEAN in result
+        assert TypeField.NUMBER not in result
+
+    def test_ensure_ints_are_not_bools(self):
+        options = ParsingOptionsBuilder().build()
+
+        result = parse(1, options)
+        assert TypeField.BOOLEAN not in result
+        assert TypeField.NUMBER in result
