@@ -175,7 +175,7 @@ class TestParseForIndex:
         }
 
 
-class TestParseStr:
+class TestParse:
     def test_normal_text(self):
         options = ParsingOptionsBuilder().build()
         assert parse("banana", options) == {
@@ -320,3 +320,19 @@ class TestParseStr:
             TypeField.KEYWORD_CASE_INSENSITIVE: "",
             TypeField.KEYWORD_CASE_SENSITIVE: "",
         }
+
+    def test_caching_of_bools_and_ints(self):
+        options = ParsingOptionsBuilder().build()
+
+        parsed_bool = parse(False, options)
+        parsed_int = parse(0, options)
+
+        assert parsed_bool is not parsed_int
+
+    def test_caching_of_ints_and_floats(self):
+        options = ParsingOptionsBuilder().build()
+
+        parsed_float = parse(3.0, options)
+        parsed_int = parse(3, options)
+
+        assert parsed_float is not parsed_int

@@ -127,7 +127,9 @@ def parse_for_index(data: dict, options: ParsingOptions) -> ParsedData:
     return ParsedData(data, parsed, geo, arrays)
 
 
-@lru_cache(maxsize=1_000_000)
+# this must be typed=True otherwise values like False and 0, and 3.0 and 3 are cached as
+# the same key and therefore get the same parsed result dict which is incorrect
+@lru_cache(maxsize=1_000_000, typed=True)
 def parse(value: Union[None, int, str, bool, float], options: ParsingOptions) -> dict:
     """
     Given a str, int, bool, float, or None, returns a dict of parsed values based on the
