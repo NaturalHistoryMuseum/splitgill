@@ -1,10 +1,11 @@
 from collections import deque
-from dataclasses import dataclass
-from typing import Optional, Iterable, List
+from dataclasses import asdict
+from typing import Optional, Iterable, List, Dict
 
 from cytoolz.dicttoolz import get_in
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import parallel_bulk, streaming_bulk
+from elasticsearch_dsl import Search, A
 from pymongo import MongoClient, IndexModel, ASCENDING, DESCENDING
 from pymongo.collection import Collection
 from pymongo.database import Database
@@ -14,27 +15,31 @@ from splitgill.indexing.index import (
     generate_index_ops,
     get_latest_index_id,
     get_data_index_id,
+    get_index_wildcard,
 )
 from splitgill.indexing.options import ParsingOptionsRange
 from splitgill.indexing.templates import DATA_TEMPLATE
 from splitgill.ingest import generate_ops, generate_rollback_ops
 from splitgill.model import Record, MongoRecord, ParsingOptions
+from splitgill.profiles import Profile, Field, build_profile
 from splitgill.utils import partition, now
 
 MONGO_DATABASE_NAME = "sg"
 OPTIONS_COLLECTION_NAME = "options"
+PROFILES_INDEX_NAME = "profiles"
 OPS_SIZE = 500
 
 
-@dataclass
 class SplitgillClient:
     """
     Splitgill client class which holds a mongo connection, an elasticsearch connection
     and any other general information Splitgill needs to manage the databases.
     """
 
-    mongo: MongoClient
-    elasticsearch: Elasticsearch
+    def __init__(self, mongo: MongoClient, elasticsearch: Elasticsearch):
+        self.mongo = mongo
+        self.elasticsearch = elasticsearch
+        self.profile_manager = ProfileManager(elasticsearch)
 
     def get_database(self) -> Database:
         """
@@ -383,3 +388,172 @@ class SplitgillDatabase:
         for index in indices:
             if not any(client.search(index=index, size=1)["hits"]["hits"]):
                 client.indices.delete(index=index)
+
+        # update the profiles as needed
+        self._client.profile_manager.update_profiles(self)
+
+    def search(self, latest: bool) -> Search:
+        """
+        Creates a Search DSL object to use on this database's indexed data. This Search
+        object will be setup with the appropriate index depending on the given latest
+        parameter and the Elasticsearch client object in use on this database.
+
+        :param latest: whether to search the latest data or all data, this impacts the
+                       indexes that are added to the returned Search object
+        :return: a Search DSL object
+        """
+        # TODO: add more precise versioning options (latest, none, a specific version)
+        if latest:
+            index = self.latest_index_name
+        else:
+            index = get_index_wildcard(self.name)
+        return Search(using=self._client.elasticsearch, index=index)
+
+    def get_available_versions(self) -> List[int]:
+        """
+        Returns a list of the available versions that have been indexed into
+        Elasticsearch for this database. The versions are in ascending order.
+
+        :return: the available versions in ascending order
+        """
+        versions = set()
+        after = None
+        while True:
+            search = self.search(latest=False)[:0]
+            search.aggs.bucket(
+                "versions",
+                "composite",
+                size=50,
+                sources={
+                    "version": A("terms", field=MetaField.VERSION.path(), order="asc")
+                },
+            )
+            if after is not None:
+                search.aggs["versions"].after = after
+            result = search.execute().aggs.to_dict()
+            buckets = get_in(("versions", "buckets"), result, [])
+            after = get_in(("versions", "after_key"), result, None)
+            if not buckets:
+                break
+            versions.update(bucket["key"]["version"] for bucket in buckets)
+        return sorted(versions)
+
+    def get_profile(self, version: int) -> Optional[Profile]:
+        """
+        Given a version, gets the data profile that applies, if there is one available.
+
+        :param version: the data version to get the profile for
+        :return: a Profile object or None
+        """
+        return self._client.profile_manager.get_profile(self.name, version)
+
+    def get_fields(self, version: int) -> Dict[str, Field]:
+        """
+        Retrieves a dict of fields available at the given version with various
+        statistics about the data held within them. This is just the fields data stored
+        against the profile at this version.
+
+        :param version: the data version to get the fields for
+        :return: a dict of field name -> Field object
+        """
+        profile = self.get_profile(version)
+        if profile is None:
+            return {}
+        return profile.fields
+
+
+class ProfileManager:
+    """
+    Class that manages all database profiles in Elasticsearch.
+    """
+
+    def __init__(self, elasticsearch: Elasticsearch):
+        """
+        :param elasticsearch: an Elasticsearch client
+        """
+        self._elasticsearch = elasticsearch
+        # ensure the index exists
+        self._elasticsearch.indices.create(index=PROFILES_INDEX_NAME)
+
+    def get_profile_versions(self, name: str) -> List[int]:
+        """
+        Returns a list of the profile versions that are currently available for the
+        given database name. The list of versions is sorted in ascending order.
+
+        :param name: the database name
+        :return: the versions in ascending order
+        """
+        return [profile.version for profile in self.get_profiles(name)]
+
+    def get_profile(self, name: str, version: int) -> Optional[Profile]:
+        """
+        Returns the profile that applies to the given version of the database with the
+        given name. If no profile applies then None is returned. Each profile has a
+        version and is applicable from that version (inclusive) until the next version
+        (exclusive) that is available supersedes it. If no version supersedes then the
+        version is the latest.
+
+        :param name: the database name
+        :param version: the version to get a profile for
+        :return: a profile if one can be found, otherwise None
+        """
+        candidate = None
+        for profile in self.get_profiles(name):
+            if version >= profile.version:
+                candidate = profile
+            else:
+                break
+        return candidate
+
+    def get_profiles(self, name: str) -> List[Profile]:
+        """
+        Return a list of all the profiles available for this database, sorted in
+        ascending version order.
+
+        :param name: the name of the database
+        :return: a list of Profile objects
+        """
+        search = Search(using=self._elasticsearch, index=PROFILES_INDEX_NAME).filter(
+            "term", name=name
+        )
+        profiles = [Profile.from_dict(hit.to_dict()) for hit in search.scan()]
+        return sorted(profiles, key=lambda profile: profile.version)
+
+    def update_profiles(self, database: SplitgillDatabase, rebuild: bool = False):
+        """
+        Updates the profiles for the given database. This will find all the available
+        versions of the database, check if any versions don't have a profile, and then
+        create those versions as needed. If all versions have profiles, nothing happens.
+
+        If the rebuild option is True, all the profiles are deleted and recreated. This
+        may take a bit of time depending on the number of versions and size of the
+        database.
+
+        :param database: the database to profile
+        :param rebuild: whether to rebuild all the profiles for all versions
+        """
+        if rebuild:
+            # delete all the profiles
+            self._elasticsearch.delete_by_query(
+                index=PROFILES_INDEX_NAME,
+                refresh=True,
+                query=Search().filter("term", name=database.name).to_dict(),
+            )
+
+        profiled_versions = set(self.get_profile_versions(database.name))
+        for version in database.get_available_versions():
+            if version in profiled_versions:
+                continue
+            # no profile available for this version, build it
+            profile = build_profile(self._elasticsearch, database.name, version)
+
+            # create a doc from the profile and then add some extras
+            doc = {**asdict(profile), "name": database.name, "version": version}
+
+            # add to the profiles index
+            self._elasticsearch.create(
+                index=PROFILES_INDEX_NAME,
+                id=f"{database.name}-{version}",
+                document=doc,
+                refresh=True,
+            )
