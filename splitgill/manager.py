@@ -1,6 +1,6 @@
 from collections import deque
 from dataclasses import asdict
-from typing import Optional, Iterable, List, Dict
+from typing import Optional, Iterable, List
 
 from cytoolz.dicttoolz import get_in
 from elasticsearch import Elasticsearch
@@ -21,7 +21,7 @@ from splitgill.indexing.options import ParsingOptionsRange
 from splitgill.indexing.templates import DATA_TEMPLATE
 from splitgill.ingest import generate_ops, generate_rollback_ops
 from splitgill.model import Record, MongoRecord, ParsingOptions
-from splitgill.profiles import Profile, Field, build_profile
+from splitgill.profiles import Profile, build_profile
 from splitgill.utils import partition, now
 
 MONGO_DATABASE_NAME = "sg"
@@ -446,20 +446,6 @@ class SplitgillDatabase:
         :return: a Profile object or None
         """
         return self._client.profile_manager.get_profile(self.name, version)
-
-    def get_fields(self, version: int) -> Dict[str, Field]:
-        """
-        Retrieves a dict of fields available at the given version with various
-        statistics about the data held within them. This is just the fields data stored
-        against the profile at this version.
-
-        :param version: the data version to get the fields for
-        :return: a dict of field name -> Field object
-        """
-        profile = self.get_profile(version)
-        if profile is None:
-            return {}
-        return profile.fields
 
 
 class ProfileManager:
