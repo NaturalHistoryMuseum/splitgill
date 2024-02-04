@@ -4,7 +4,13 @@ from typing import Optional, Dict
 from elasticsearch_dsl import Q
 from elasticsearch_dsl.query import Bool, Query
 
-from indexing.fields import MetaField, RootField, geo_path, TypeField, parsed_path
+from splitgill.indexing.fields import (
+    MetaField,
+    RootField,
+    geo_path,
+    TypeField,
+    parsed_path,
+)
 
 # the all fields text field which contains all data for easy full record searching
 ALL_FIELDS = MetaField.ALL.path()
