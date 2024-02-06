@@ -304,3 +304,32 @@ class TestBuildProfile:
 
 
 # TODO: write a test which fails on nested arrays
+
+
+class TestProfile:
+    def test_field_helpers(self):
+        parent_field = Field("parent", "parent", 1, is_parent=True, is_value=False)
+        value_field = Field("value", "value", 1, is_parent=False, is_value=True)
+        both_field = Field("both", "both", 1, is_parent=True, is_value=True)
+        profile = Profile(
+            name="test",
+            version=1,
+            total=1,
+            changes=1,
+            field_count=1,
+            fields={
+                field.name: field for field in [parent_field, value_field, both_field]
+            },
+        )
+
+        assert profile.get_parents(exclusive=False) == {
+            "parent": parent_field,
+            "both": both_field,
+        }
+        assert profile.get_parents(exclusive=True) == {"parent": parent_field}
+
+        assert profile.get_values(exclusive=False) == {
+            "value": value_field,
+            "both": both_field,
+        }
+        assert profile.get_values(exclusive=True) == {"value": value_field}

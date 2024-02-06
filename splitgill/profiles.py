@@ -59,6 +59,36 @@ class Profile:
     # version
     fields: Dict[str, Field]
 
+    def get_values(self, exclusive: bool = False) -> Dict[str, Field]:
+        """
+        Returns a dict containing just the value fields.
+
+        :param exclusive: whether to only include fields which are exclusively values or
+                          not. By default, fields which are both values and parents are
+                          included (exclusive = False).
+        :return: a dict of names -> value Fields
+        """
+        return {
+            name: field
+            for name, field in self.fields.items()
+            if field.is_value and (not exclusive or not field.is_parent)
+        }
+
+    def get_parents(self, exclusive: bool = False) -> Dict[str, Field]:
+        """
+        Returns a dict containing just the parent fields.
+
+        :param exclusive: whether to only include fields which are exclusively parents
+                          or not. By default, fields which are both parents and values
+                          are included (exclusive = False).
+        :return: a dict of names -> value Fields
+        """
+        return {
+            name: field
+            for name, field in self.fields.items()
+            if field.is_parent and (not exclusive or not field.is_value)
+        }
+
     @classmethod
     def from_dict(cls, profile: dict) -> "Profile":
         """
