@@ -33,6 +33,17 @@ class TestParseForIndex:
             data, {"x": [parse(value, options) for value in data["x"]]}, {}, {"x": 3}
         )
 
+    def test_list_of_dicts(self):
+        data = {"x": [{"a": 4}, {"a": 5}, {"a": 6}]}
+        options = ParsingOptionsBuilder().build()
+        parsed = parse_for_index(data, options)
+        assert parsed == ParsedData(
+            data=data,
+            parsed={"x": [{"a": parse(n, options)} for n in range(4, 7)]},
+            geo={},
+            arrays={"x": 3},
+        )
+
     def test_nested_dict(self):
         data = {"x": "beans", "y": {"a": "5", "b": "buckets!"}}
         options = ParsingOptionsBuilder().build()
