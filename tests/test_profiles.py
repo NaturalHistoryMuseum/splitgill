@@ -196,13 +196,21 @@ class TestBuildProfile:
             version=version,
             total=len(records),
             changes=len(records),
-            field_count=5,
+            field_count=6,
             fields={
                 "_id": Field(
                     "_id",
                     "_id",
                     count=2,
                     number_count=2,
+                ),
+                "associatedMedia": Field(
+                    "associatedMedia",
+                    "associatedMedia",
+                    count=2,
+                    array_count=2,
+                    is_value=False,
+                    is_parent=True,
                 ),
                 "associatedMedia._id": Field(
                     "_id",
@@ -226,6 +234,71 @@ class TestBuildProfile:
                     count=2,
                     number_count=2,
                 ),
+            },
+        )
+
+    def test_parent_override(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        records = [
+            Record.new({"a": {"x": "arms"}}),
+            Record.new({"a": {"x": "legs"}}),
+            Record.new({"a": 7}),
+            Record.new({"a": 3}),
+            Record.new({"a": 9}),
+        ]
+        version = add_data(database, datetime(2020, 7, 2), records)
+
+        profile = database.get_profile(version)
+        assert profile == Profile(
+            name="test",
+            version=version,
+            total=len(records),
+            changes=len(records),
+            field_count=2,
+            fields={
+                "a": Field(
+                    name="a",
+                    path="a",
+                    is_value=True,
+                    is_parent=True,
+                    count=5,
+                    number_count=3,
+                ),
+                "a.x": Field(
+                    name="x", path="a.x", is_value=True, is_parent=False, count=2
+                ),
+            },
+        )
+
+    def test_parent_with_arrays(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        records = [
+            Record.new({"a": [{"x": "arms"}, {"x": "legs"}]}),
+            Record.new({"a": [{"x": "ears"}]}),
+            Record.new({"b": "beans"}),
+        ]
+        version = add_data(database, datetime(2020, 7, 2), records)
+
+        profile = database.get_profile(version)
+        assert profile == Profile(
+            name="test",
+            version=version,
+            total=len(records),
+            changes=len(records),
+            field_count=3,
+            fields={
+                "a": Field(
+                    name="a",
+                    path="a",
+                    is_value=False,
+                    is_parent=True,
+                    count=2,
+                    array_count=2,
+                ),
+                "a.x": Field(
+                    name="x", path="a.x", is_value=True, is_parent=False, count=2
+                ),
+                "b": Field(name="b", path="b", is_value=True, is_parent=False, count=1),
             },
         )
 

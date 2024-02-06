@@ -1,12 +1,12 @@
 from dataclasses import dataclass
-from typing import Iterable, Tuple, Set, Dict
+from typing import Iterable, Tuple, Dict
 
 from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search
 
+from splitgill.indexing.fields import RootField, MetaField, TypeField
 from splitgill.indexing.index import get_index_wildcard
 from splitgill.search import create_version_query, keyword_ci, boolean, date, number
-from splitgill.indexing.fields import RootField, MetaField, TypeField
 
 
 @dataclass
@@ -30,6 +30,12 @@ class Field:
     number_count: int = 0
     # total number of records where this field is an array of values
     array_count: int = 0
+    # these two booleans describe what kind of field this is. A value field is one that
+    # holds an actual value, like an int or string, while a parent field is one that
+    # contains other fields, like a list or dict. A field can also be both if in one
+    # record the field has a value and in another it is a parent field.
+    is_value: bool = True
+    is_parent: bool = False
 
 
 @dataclass
@@ -91,47 +97,81 @@ def build_profile(elasticsearch: Elasticsearch, name: str, version: int) -> Prof
     changes = search.filter("term", **{MetaField.VERSION.path(): version}).count()
 
     mappings = elasticsearch.indices.get_mapping(index=get_index_wildcard(name))
-    field_paths: Set[str] = set()
-    # pull out all the fields and add their full dotted paths to the field_paths set
+    value_paths = set()
+    parent_paths = set()
     for mapping in mappings.values():
-        field_paths.update(
-            _extract_fields(
-                tuple(), mapping["mappings"]["properties"]["parsed"]["properties"]
-            )
-        )
+        for path in _extract_fields(
+            tuple(), mapping["mappings"]["properties"]["parsed"]["properties"]
+        ):
+            value_paths.add(path)
+            # add all the parents included in the path to the parents set
+            parent_paths.update(path[:i] for i in range(1, len(path)))
+
+    # a base search object filtering on the version for all below to use
+    search = search.filter(create_version_query(version))
 
     fields = {}
-    for field_path in field_paths:
-        # a base search object filtering on the version for all below to use
-        search = search.filter(create_version_query(version))
-
+    for value_path in value_paths:
+        dotted_path = ".".join(value_path)
         # all fields get a keyword case-insensitive field so use this for the full count
-        count = search.filter("exists", field=keyword_ci(field_path)).count()
-        # now count each type
-        boolean_count = search.filter("exists", field=boolean(field_path)).count()
-        date_count = search.filter("exists", field=date(field_path)).count()
-        number_count = search.filter("exists", field=number(field_path)).count()
-        array_count = search.filter(
-            "exists", field=f"{RootField.ARRAYS}.{field_path}"
-        ).count()
-
+        count = search.filter("exists", field=keyword_ci(dotted_path)).count()
         # only add the field if it actually has some data in it
-        if count > 0:
-            name = field_path[field_path.rfind(".") + 1 :]
-            fields[field_path] = Field(
-                name,
-                field_path,
-                count,
-                boolean_count,
-                date_count,
-                number_count,
-                array_count,
+        if count == 0:
+            continue
+        # now count each type
+        boolean_count = search.filter("exists", field=boolean(dotted_path)).count()
+        date_count = search.filter("exists", field=date(dotted_path)).count()
+        number_count = search.filter("exists", field=number(dotted_path)).count()
+        array_count = search.filter(
+            "exists", field=f"{RootField.ARRAYS}.{dotted_path}"
+        ).count()
+        fields[dotted_path] = Field(
+            name=value_path[-1],
+            path=dotted_path,
+            count=count,
+            boolean_count=boolean_count,
+            date_count=date_count,
+            number_count=number_count,
+            array_count=array_count,
+            is_value=True,
+            is_parent=False,
+        )
+
+    for parent_path in parent_paths:
+        dotted_path = ".".join(parent_path)
+        count = search.filter(
+            "exists", field=f"{RootField.PARSED}.{dotted_path}"
+        ).count()
+        # only add the field if it actually has some data in it
+        if count == 0:
+            continue
+        array_count = search.filter(
+            "exists", field=f"{RootField.ARRAYS}.{dotted_path}"
+        ).count()
+        if dotted_path not in fields:
+            # the field doesn't exist as a value field, so we can just create a new
+            # parent field
+            fields[dotted_path] = Field(
+                name=parent_path[-1],
+                path=dotted_path,
+                is_value=False,
+                is_parent=True,
+                count=count,
+                array_count=array_count,
             )
+        else:
+            # if this field is also a value field we need to do some combining
+            field = fields[dotted_path]
+            field.is_parent = True
+            field.count = count
+            field.array_count = array_count
 
     return Profile(name, version, total, changes, len(fields), fields)
 
 
-def _extract_fields(base_path: Tuple[str, ...], properties: dict) -> Iterable[str]:
+def _extract_fields(
+    base_path: Tuple[str, ...], properties: dict
+) -> Iterable[Tuple[str, ...]]:
     """
     Utility function to extract the full paths of fields within an Elasticsearch mapping
     definition. This is a recursive function which yields the full paths one by one,
@@ -148,10 +188,18 @@ def _extract_fields(base_path: Tuple[str, ...], properties: dict) -> Iterable[st
         if not field_properties:
             # something weird, let's just run away
             return
-        elif TypeField.KEYWORD_CASE_INSENSITIVE in field_properties:
-            # every field gets a keyword case-insensitive value so use that to check if
-            # we hit a leaf field definition. Create the full dotted path and yield it
-            yield ".".join(path)
-        else:
-            # nested object, recurse into it
-            yield from _extract_fields(path, field_config["properties"])
+
+        # find the fields below this field by filtering out our type fields
+        sub_properties = {
+            key: value
+            for key, value in field_properties.items()
+            if key not in set(TypeField)
+        }
+
+        # if we did filter out some subfields, this is a value field
+        if len(sub_properties) != len(field_properties):
+            yield path
+
+        # if there are other properties left then this is a parent field, recurse
+        if sub_properties:
+            yield from _extract_fields(path, sub_properties)
