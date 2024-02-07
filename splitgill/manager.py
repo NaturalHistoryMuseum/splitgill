@@ -458,7 +458,21 @@ class ProfileManager:
         :param elasticsearch: an Elasticsearch client
         """
         self._elasticsearch = elasticsearch
-        # ensure the index exists
+
+    def _index_exists(self) -> bool:
+        """
+        Check if the profiles index exists.
+
+        :return: True if the profiles index exists, False if not
+        """
+        return self._elasticsearch.indices.exists(index=PROFILES_INDEX_NAME)
+
+    def _create_index(self):
+        """
+        If the profiles index doesn't exist, create it.
+        """
+        if self._index_exists():
+            return
         self._elasticsearch.indices.create(index=PROFILES_INDEX_NAME)
 
     def get_profile_versions(self, name: str) -> List[int]:
@@ -499,6 +513,8 @@ class ProfileManager:
         :param name: the name of the database
         :return: a list of Profile objects
         """
+        if not self._index_exists():
+            return []
         search = Search(using=self._elasticsearch, index=PROFILES_INDEX_NAME).filter(
             "term", name=name
         )
@@ -518,7 +534,7 @@ class ProfileManager:
         :param database: the database to profile
         :param rebuild: whether to rebuild all the profiles for all versions
         """
-        if rebuild:
+        if rebuild and self._index_exists():
             # delete all the profiles
             self._elasticsearch.delete_by_query(
                 index=PROFILES_INDEX_NAME,
@@ -535,6 +551,9 @@ class ProfileManager:
 
             # create a doc from the profile and then add some extras
             doc = {**asdict(profile), "name": database.name, "version": version}
+
+            # make sure the index exists
+            self._create_index()
 
             # add to the profiles index
             self._elasticsearch.create(
