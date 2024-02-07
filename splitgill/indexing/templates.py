@@ -27,6 +27,11 @@ DATA_TEMPLATE = {
             "index": {
                 "number_of_shards": 5,
                 "number_of_replicas": 1,
+                "mapping": {
+                    "total_fields": {
+                        "limit": "4000",
+                    },
+                },
             },
         },
         "mappings": {
