@@ -474,6 +474,10 @@ class ProfileManager:
         if self._index_exists():
             return
         self._elasticsearch.indices.create(index=PROFILES_INDEX_NAME)
+        self._elasticsearch.indices.put_settings(
+            settings={"index.mapping.total_fields.limit": 10000},
+            index=PROFILES_INDEX_NAME,
+        )
 
     def get_profile_versions(self, name: str) -> List[int]:
         """
