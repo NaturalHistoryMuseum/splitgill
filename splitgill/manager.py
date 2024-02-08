@@ -576,9 +576,7 @@ class ProfileManager:
         profiled_versions = set(self.get_profile_versions(database.name))
         for version in database.get_available_versions():
             if version in profiled_versions:
-                print(f"skipping {version}")
                 continue
-            print(f"updating {version}")
             # no profile available for this version, build it
             profile = build_profile(self._elasticsearch, database.name, version)
 
