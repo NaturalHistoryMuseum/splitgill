@@ -447,6 +447,14 @@ class SplitgillDatabase:
         """
         return self._client.profile_manager.get_profile(self.name, version)
 
+    def update_profiles(self, rebuild: bool = False):
+        """
+        Force an update of the profiles for this database, optionally rebuilding them.
+
+        :param rebuild: whether to rebuild the profiles completely
+        """
+        self._client.profile_manager.update_profiles(self, rebuild)
+
 
 class ProfileManager:
     """
