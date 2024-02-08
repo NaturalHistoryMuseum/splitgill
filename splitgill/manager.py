@@ -473,7 +473,30 @@ class ProfileManager:
         """
         if self._index_exists():
             return
-        self._elasticsearch.indices.create(index=PROFILES_INDEX_NAME)
+        self._elasticsearch.indices.create(
+            index=PROFILES_INDEX_NAME,
+            mappings={
+                "properties": {
+                    "name": {"type": "keyword"},
+                    "version": {"type": "long"},
+                    "total": {"type": "long"},
+                    "changes": {"type": "long"},
+                    "fields": {
+                        "properties": {
+                            "name": {"type": "keyword"},
+                            "path": {"type": "keyword"},
+                            "count": {"type": "long"},
+                            "boolean_count": {"type": "long"},
+                            "date_count": {"type": "long"},
+                            "number_count": {"type": "long"},
+                            "array_count": {"type": "long"},
+                            "is_value": {"type": "boolean"},
+                            "is_parent": {"type": "boolean"},
+                        }
+                    },
+                },
+            },
+        )
         self._elasticsearch.indices.put_settings(
             settings={"index.mapping.total_fields.limit": 10000},
             index=PROFILES_INDEX_NAME,
@@ -549,7 +572,9 @@ class ProfileManager:
         profiled_versions = set(self.get_profile_versions(database.name))
         for version in database.get_available_versions():
             if version in profiled_versions:
+                print(f"skipping {version}")
                 continue
+            print(f"updating {version}")
             # no profile available for this version, build it
             profile = build_profile(self._elasticsearch, database.name, version)
 

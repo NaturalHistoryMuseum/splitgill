@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 from freezegun import freeze_time
 
@@ -7,7 +7,6 @@ from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.manager import SplitgillDatabase, SplitgillClient
 from splitgill.model import Record
 from splitgill.profiles import Field, Profile
-from splitgill.utils import to_timestamp
 
 
 def add_data(
@@ -31,11 +30,11 @@ def add_data(
     )
     # commit the records and options at a specific version
     with freeze_time(version):
-        database.commit()
+        version = database.commit()
     # sync the index, this will also update the profile
     database.sync(parallel=False)
     # return the new version
-    return to_timestamp(version)
+    return version
 
 
 class TestBuildProfile:
@@ -56,12 +55,12 @@ class TestBuildProfile:
             total=len(records),
             changes=len(records),
             field_count=4,
-            fields={
-                "a": Field("a", "a", count=1),
-                "b": Field("b", "b", count=1, number_count=1),
-                "c": Field("c", "c", count=1, boolean_count=1),
-                "d": Field("d", "d", count=1, date_count=1),
-            },
+            fields=[
+                Field("a", "a", count=1),
+                Field("b", "b", count=1, number_count=1),
+                Field("c", "c", count=1, boolean_count=1),
+                Field("d", "d", count=1, date_count=1),
+            ],
         )
 
     def test_profile_one_mixed(self, splitgill: SplitgillClient):
@@ -81,11 +80,9 @@ class TestBuildProfile:
             total=len(records),
             changes=len(records),
             field_count=1,
-            fields={
-                "a": Field(
-                    "a", "a", count=4, boolean_count=1, date_count=1, number_count=1
-                ),
-            },
+            fields=[
+                Field("a", "a", count=4, boolean_count=1, date_count=1, number_count=1),
+            ],
         )
 
     def test_profile_single_type_arrays(self, splitgill: SplitgillClient):
@@ -105,14 +102,14 @@ class TestBuildProfile:
             total=len(records),
             changes=len(records),
             field_count=4,
-            fields={
-                "a": Field("a", "a", count=1, array_count=1),
-                "b": Field("b", "b", count=1, number_count=1, array_count=1),
-                "c": Field("c", "c", count=1, boolean_count=1, array_count=1),
+            fields=[
+                Field("a", "a", count=1, array_count=1),
+                Field("b", "b", count=1, number_count=1, array_count=1),
+                Field("c", "c", count=1, boolean_count=1, array_count=1),
                 # note that this is still counted as an array even though it's only got
                 # one value (the parser doesn't unpack it basically)
-                "d": Field("d", "d", count=1, date_count=1, array_count=1),
-            },
+                Field("d", "d", count=1, date_count=1, array_count=1),
+            ],
         )
 
     def test_profile_mixed(self, splitgill: SplitgillClient):
@@ -131,8 +128,8 @@ class TestBuildProfile:
             total=len(records),
             changes=len(records),
             field_count=2,
-            fields={
-                "a": Field(
+            fields=[
+                Field(
                     "a",
                     "a",
                     count=2,
@@ -141,7 +138,7 @@ class TestBuildProfile:
                     number_count=2,
                     array_count=2,
                 ),
-                "b": Field(
+                Field(
                     "b",
                     "b",
                     count=1,
@@ -150,7 +147,7 @@ class TestBuildProfile:
                     number_count=1,
                     array_count=1,
                 ),
-            },
+            ],
         )
 
     def test_profile_nesting(self, splitgill: SplitgillClient):
@@ -197,14 +194,14 @@ class TestBuildProfile:
             total=len(records),
             changes=len(records),
             field_count=6,
-            fields={
-                "_id": Field(
+            fields=[
+                Field(
                     "_id",
                     "_id",
                     count=2,
                     number_count=2,
                 ),
-                "associatedMedia": Field(
+                Field(
                     "associatedMedia",
                     "associatedMedia",
                     count=2,
@@ -212,29 +209,29 @@ class TestBuildProfile:
                     is_value=False,
                     is_parent=True,
                 ),
-                "associatedMedia._id": Field(
+                Field(
                     "_id",
                     "associatedMedia._id",
                     count=2,
                     number_count=2,
                 ),
-                "associatedMedia.assetID": Field(
+                Field(
                     "assetID",
                     "associatedMedia.assetID",
                     count=2,
                 ),
-                "associatedMedia.category": Field(
+                Field(
                     "category",
                     "associatedMedia.category",
                     count=1,
                 ),
-                "associatedMedia.created": Field(
+                Field(
                     "created",
                     "associatedMedia.created",
                     count=2,
                     number_count=2,
                 ),
-            },
+            ],
         )
 
     def test_parent_override(self, splitgill: SplitgillClient):
@@ -255,8 +252,8 @@ class TestBuildProfile:
             total=len(records),
             changes=len(records),
             field_count=2,
-            fields={
-                "a": Field(
+            fields=[
+                Field(
                     name="a",
                     path="a",
                     is_value=True,
@@ -264,10 +261,8 @@ class TestBuildProfile:
                     count=5,
                     number_count=3,
                 ),
-                "a.x": Field(
-                    name="x", path="a.x", is_value=True, is_parent=False, count=2
-                ),
-            },
+                Field(name="x", path="a.x", is_value=True, is_parent=False, count=2),
+            ],
         )
 
     def test_parent_with_arrays(self, splitgill: SplitgillClient):
@@ -286,8 +281,8 @@ class TestBuildProfile:
             total=len(records),
             changes=len(records),
             field_count=3,
-            fields={
-                "a": Field(
+            fields=[
+                Field(
                     name="a",
                     path="a",
                     is_value=False,
@@ -295,12 +290,29 @@ class TestBuildProfile:
                     count=2,
                     array_count=2,
                 ),
-                "a.x": Field(
-                    name="x", path="a.x", is_value=True, is_parent=False, count=2
-                ),
-                "b": Field(name="b", path="b", is_value=True, is_parent=False, count=1),
-            },
+                Field(name="x", path="a.x", is_value=True, is_parent=False, count=2),
+                Field(name="b", path="b", is_value=True, is_parent=False, count=1),
+            ],
         )
+
+    def test_multiple_versions(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        records = [
+            Record("1", {"a": "a string of data"}),
+            Record("2", {"b": 50}),
+            Record("3", {"c": True}),
+            Record("4", {"d": datetime.now()}),
+        ]
+        version_1 = add_data(database, datetime(2020, 1, 2), records)
+
+        records = [
+            Record("1", {"a": "another string of data"}),
+            Record("2", {"b": 30}),
+            Record("5", {"c": False}),
+        ]
+        version_2 = add_data(database, datetime(2020, 1, 5), records)
+
+        assert version_1 != version_2
 
 
 # TODO: write a test which fails on nested arrays
@@ -309,7 +321,7 @@ class TestBuildProfile:
 class TestProfile:
     def test_field_helpers(self):
         parent_field = Field("parent", "parent", 1, is_parent=True, is_value=False)
-        value_field = Field("value", "value", 1, is_parent=False, is_value=True)
+        value_field = Field("value", "parent.value", 1, is_parent=False, is_value=True)
         both_field = Field("both", "both", 1, is_parent=True, is_value=True)
         profile = Profile(
             name="test",
@@ -317,9 +329,7 @@ class TestProfile:
             total=1,
             changes=1,
             field_count=1,
-            fields={
-                field.name: field for field in [parent_field, value_field, both_field]
-            },
+            fields=[both_field, parent_field, value_field],
         )
 
         assert profile.get_parents(exclusive=False) == {
@@ -329,7 +339,9 @@ class TestProfile:
         assert profile.get_parents(exclusive=True) == {"parent": parent_field}
 
         assert profile.get_values(exclusive=False) == {
-            "value": value_field,
+            "parent.value": value_field,
             "both": both_field,
         }
-        assert profile.get_values(exclusive=True) == {"value": value_field}
+        assert profile.get_values(exclusive=True) == {"parent.value": value_field}
+
+        assert profile.get_fields() == {field.path: field for field in profile.fields}

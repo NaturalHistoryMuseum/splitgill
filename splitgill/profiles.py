@@ -1,5 +1,6 @@
 from dataclasses import dataclass
-from typing import Iterable, Tuple, Dict
+from functools import total_ordering
+from typing import Iterable, Tuple, Dict, List, Any
 
 from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search
@@ -9,7 +10,8 @@ from splitgill.indexing.index import get_index_wildcard
 from splitgill.search import create_version_query, keyword_ci, boolean, date, number
 
 
-@dataclass
+@dataclass(eq=False)
+@total_ordering
 class Field:
     """
     Class representing a field in a database and some statistics (well, simple counts)
@@ -37,6 +39,16 @@ class Field:
     is_value: bool = True
     is_parent: bool = False
 
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, Field):
+            return self.path == other.path
+        return NotImplemented
+
+    def __lt__(self, other: Any) -> bool:
+        if isinstance(other, Field):
+            return self.path < other.path
+        return NotImplemented
+
 
 @dataclass
 class Profile:
@@ -57,7 +69,7 @@ class Profile:
     field_count: int
     # the full name (i.e. the full dotted path) and stats about each field at this
     # version
-    fields: Dict[str, Field]
+    fields: List[Field]
 
     def get_values(self, exclusive: bool = False) -> Dict[str, Field]:
         """
@@ -66,11 +78,11 @@ class Profile:
         :param exclusive: whether to only include fields which are exclusively values or
                           not. By default, fields which are both values and parents are
                           included (exclusive = False).
-        :return: a dict of names -> value Fields
+        :return: a dict of paths -> value Fields
         """
         return {
-            name: field
-            for name, field in self.fields.items()
+            field.path: field
+            for field in self.fields
             if field.is_value and (not exclusive or not field.is_parent)
         }
 
@@ -81,13 +93,21 @@ class Profile:
         :param exclusive: whether to only include fields which are exclusively parents
                           or not. By default, fields which are both parents and values
                           are included (exclusive = False).
-        :return: a dict of names -> value Fields
+        :return: a dict of paths -> value Fields
         """
         return {
-            name: field
-            for name, field in self.fields.items()
+            field.path: field
+            for field in self.fields
             if field.is_parent and (not exclusive or not field.is_value)
         }
+
+    def get_fields(self) -> Dict[str, Field]:
+        """
+        Returns a dict containing all the fields.
+
+        :return: a dict of paths -> all Fields
+        """
+        return {field.path: field for field in self.fields}
 
     @classmethod
     def from_dict(cls, profile: dict) -> "Profile":
@@ -103,7 +123,7 @@ class Profile:
             profile["total"],
             profile["changes"],
             profile["field_count"],
-            {name: Field(**field) for name, field in profile["fields"].items()},
+            [Field(**field) for field in profile["fields"]],
         )
 
 
@@ -196,7 +216,7 @@ def build_profile(elasticsearch: Elasticsearch, name: str, version: int) -> Prof
             field.count = count
             field.array_count = array_count
 
-    return Profile(name, version, total, changes, len(fields), fields)
+    return Profile(name, version, total, changes, len(fields), sorted(fields.values()))
 
 
 def _extract_fields(
