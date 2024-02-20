@@ -10,7 +10,7 @@ from pymongo import MongoClient, IndexModel, ASCENDING, DESCENDING
 from pymongo.collection import Collection
 from pymongo.database import Database
 
-from splitgill.indexing.fields import MetaField
+from splitgill.indexing import fields
 from splitgill.indexing.index import (
     generate_index_ops,
     get_latest_index_id,
@@ -122,7 +122,7 @@ class SplitgillDatabase:
         :return: the max version or None
         """
         result = self._client.elasticsearch.search(
-            aggs={"max_version": {"max": {"field": MetaField.VERSION.path()}}},
+            aggs={"max_version": {"max": {"field": fields.VERSION}}},
             size=0,
             # search all data indices for this database
             index=f"data-{self.name}-*",
@@ -334,7 +334,6 @@ class SplitgillDatabase:
         # choose which bulk function we're using based on the parallel parameter
         bulk_function = parallel_bulk if parallel else streaming_bulk
 
-        # ensure the data template exists
         client.indices.put_index_template(name="data-template", body=DATA_TEMPLATE)
 
         # grab a list of all the indices we may update during this operation
@@ -365,15 +364,19 @@ class SplitgillDatabase:
 
         # we don't care about the results so just throw them away into a 0-sized
         # deque (errors will be raised directly)
-        deque(
-            bulk_function(
-                client,
-                generate_index_ops(self.name, docs, since, self.get_options()),
-                raise_on_error=True,
-                chunk_size=chunk_size,
-            ),
-            maxlen=0,
-        )
+        try:
+            deque(
+                bulk_function(
+                    client,
+                    generate_index_ops(self.name, docs, since, self.get_options()),
+                    raise_on_error=True,
+                    chunk_size=chunk_size,
+                ),
+                maxlen=0,
+            )
+        except Exception as e:
+            print(e)
+            raise e
 
         # refresh all indices to make the changes visible all at once
         client.indices.refresh(index=indices)
@@ -424,9 +427,7 @@ class SplitgillDatabase:
                 "versions",
                 "composite",
                 size=50,
-                sources={
-                    "version": A("terms", field=MetaField.VERSION.path(), order="asc")
-                },
+                sources={"version": A("terms", field=fields.VERSION, order="asc")},
             )
             if after is not None:
                 search.aggs["versions"].after = after

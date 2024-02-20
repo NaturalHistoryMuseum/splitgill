@@ -7,9 +7,9 @@ from typing import Union, Deque, Tuple, Optional, NamedTuple
 from cytoolz.dicttoolz import get_in
 from fastnumbers import try_float
 
-from splitgill.model import ParsingOptions
-from splitgill.indexing.fields import TypeField
+from splitgill.indexing.fields import DataType
 from splitgill.indexing.geo import as_geojson, match_hints
+from splitgill.model import ParsingOptions
 from splitgill.utils import to_timestamp
 
 
@@ -22,7 +22,7 @@ class ParsedData:
     data: dict
     parsed: dict
     geo: dict
-    arrays: dict
+    lists: dict
 
 
 class QualifiedValue(NamedTuple):
@@ -39,7 +39,7 @@ class QualifiedValue(NamedTuple):
 def parse_for_index(data: dict, options: ParsingOptions) -> ParsedData:
     """
     Given a record's data, create the parsed data to be indexed into Elasticsearch. The
-    returned ParsedData object contains the arrays, geo, parsed, and data root field
+    returned ParsedData object contains the lists, geo, parsed, and data root field
     values. The passed options object is used to control how the values in the data are
     parsed.
 
@@ -74,7 +74,7 @@ def parse_for_index(data: dict, options: ParsingOptions) -> ParsedData:
             # otherwise, parse the value and return the result
             return parse(qvalue.value, options)
 
-    arrays = {}
+    lists = {}
 
     # find any top-level fields which match our geo hints and create the geo dict in the
     # process. Note that we don't match any GeoJSON at the top-level, this is to avoid
@@ -117,14 +117,14 @@ def parse_for_index(data: dict, options: ParsingOptions) -> ParsedData:
                 for key, value in container.items()
             }
         elif isinstance(container, (tuple, list)):
-            arrays[dot_path] = len(container)
+            lists[dot_path] = len(container)
             # set the parsed container in the parsed dict
             get_in(parent_path, parsed)[path_leaf] = [
                 parse_value(QualifiedValue((*path, i), value))
                 for i, value in enumerate(container)
             ]
 
-    return ParsedData(data, parsed, geo, arrays)
+    return ParsedData(data, parsed, geo, lists)
 
 
 # this must be typed=True otherwise values like False and 0, and 3.0 and 3 are cached as
@@ -161,12 +161,7 @@ def parse(value: Union[None, int, str, bool, float], options: ParsingOptions) ->
     # create a string version of the value, we only need to do something special for
     # floats and Nones here as str(value) is sensible for int, bool, and str
     if isinstance(value, float):
-        # format the float using 15 significant digits. This roughly matches what is
-        # actually stored in elasticsearch and therefore gives a somewhat sensible
-        # representative idea to users of what the number actually is and how it can be
-        # searched. This format will produce string representations of numbers in
-        # scientific notation if it decides it needs to (i.e. 1.2312e-20)
-        str_value = f"{value:.15g}"
+        str_value = options.float_format.format(value)
     elif value is None:
         str_value = ""
     else:
@@ -174,30 +169,30 @@ def parse(value: Union[None, int, str, bool, float], options: ParsingOptions) ->
 
     # the always included values are used to set up the returned dict
     parsed = {
-        TypeField.TEXT: str_value,
-        TypeField.KEYWORD_CASE_INSENSITIVE: str_value,
-        TypeField.KEYWORD_CASE_SENSITIVE: str_value,
+        DataType.TEXT.value: str_value,
+        DataType.KEYWORD_CASE_SENSITIVE.value: str_value[: options.keyword_length],
+        DataType.KEYWORD_CASE_INSENSITIVE.value: str_value[: options.keyword_length],
     }
 
     # check for boolean values
     if isinstance(value, bool):
-        parsed[TypeField.BOOLEAN] = value
+        parsed[DataType.BOOLEAN.value] = value
     else:
         # attempt to parse true boolean values
         if str_value.lower() in options.true_values:
-            parsed[TypeField.BOOLEAN] = True
+            parsed[DataType.BOOLEAN.value] = True
         # attempt to parse false boolean values
         if str_value.lower() in options.false_values:
-            parsed[TypeField.BOOLEAN] = False
+            parsed[DataType.BOOLEAN.value] = False
 
     # check for number values
     if not isinstance(value, bool) and isinstance(value, (int, float)):
-        parsed[TypeField.NUMBER] = value
+        parsed[DataType.NUMBER.value] = value
     else:
         # attempt parsing the value as a number
         as_number = try_float(str_value, inf=None, nan=None, on_fail=None)
         if as_number is not None:
-            parsed[TypeField.NUMBER] = as_number
+            parsed[DataType.NUMBER.value] = as_number
 
     # attempt to parse dates using the formats listed in the options
     for date_format in options.date_formats:
@@ -205,7 +200,7 @@ def parse(value: Union[None, int, str, bool, float], options: ParsingOptions) ->
             date_value = datetime.strptime(str_value, date_format)
             # the date field we've configured in the Elasticsearch model uses the
             # epoch_millis format so convert the datetime object to that here
-            parsed[TypeField.DATE] = to_timestamp(date_value)
+            parsed[DataType.DATE.value] = to_timestamp(date_value)
             # if we have a match, break out and don't try the other formats
             break
         except ValueError:

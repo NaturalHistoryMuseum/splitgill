@@ -4,7 +4,7 @@ from bson import ObjectId
 from cytoolz.itertoolz import sliding_window
 
 from splitgill.diffing import diff
-from splitgill.indexing.fields import RootField, MetaField
+from splitgill.indexing import fields
 from splitgill.indexing.index import (
     get_data_index_id,
     get_latest_index_id,
@@ -50,18 +50,18 @@ class TestCreateIndexOp:
         assert op["_op_type"] == "index"
         assert op["_index"] == index_name
         assert op["_id"] == record_id
-        assert op[RootField.ID] == record_id
-        assert op[RootField.DATA] == data
-        assert op[RootField.PARSED] == parsed_data.parsed
-        assert op[RootField.GEO] == parsed_data.geo
-        assert op[RootField.ARRAYS] == parsed_data.arrays
-        assert op[RootField.META] == {
-            MetaField.VERSION: version,
-            MetaField.VERSIONS: {
-                "gte": version,
-                # no lt
-            },
+        assert op[fields.ID] == record_id
+        assert op[fields.DATA] == data
+        assert op[fields.PARSED] == parsed_data.parsed
+        assert op[fields.GEO] == parsed_data.geo
+        assert op[fields.LISTS] == parsed_data.lists
+        assert op[fields.VERSION] == version
+        assert op[fields.VERSIONS] == {
+            "gte": version,
+            # no lt
         }
+        assert fields.NEXT not in op
+        assert fields.GEO_ALL not in op
 
     def test_old_op(self):
         data = {"x": "beans"}
@@ -79,16 +79,15 @@ class TestCreateIndexOp:
         assert op["_op_type"] == "index"
         assert op["_index"] == index_name
         assert op["_id"] == f"{record_id}:{version}"
-        assert op[RootField.ID] == record_id
-        assert op[RootField.DATA] == data
-        assert op[RootField.PARSED] == parsed_data.parsed
-        assert op[RootField.GEO] == parsed_data.geo
-        assert op[RootField.ARRAYS] == parsed_data.arrays
-        assert op[RootField.META] == {
-            MetaField.VERSION: version,
-            MetaField.VERSIONS: {"gte": version, "lt": next_version},
-            MetaField.NEXT_VERSION: next_version,
-        }
+        assert op[fields.ID] == record_id
+        assert op[fields.DATA] == data
+        assert op[fields.PARSED] == parsed_data.parsed
+        assert op[fields.GEO] == parsed_data.geo
+        assert op[fields.LISTS] == parsed_data.lists
+        assert op[fields.VERSION] == version
+        assert op[fields.NEXT] == next_version
+        assert op[fields.VERSIONS] == {"gte": version, "lt": next_version}
+        assert fields.GEO_ALL not in op
 
     def test_meta_geo_is_filled(self):
         index_name = get_latest_index_id("test")
@@ -106,9 +105,9 @@ class TestCreateIndexOp:
             index_name, record_id, data, version, options, next_version=None
         )
 
-        assert op[RootField.META][MetaField.GEO]["type"] == "GeometryCollection"
+        assert op[fields.GEO_ALL]["type"] == "GeometryCollection"
         # there is no specific ordering for this so test using contains and assert size
-        geometries = op[RootField.META][MetaField.GEO]["geometries"]
+        geometries = op[fields.GEO_ALL]["geometries"]
         assert len(geometries) == 2
         assert {"type": "Point", "coordinates": (10.0, 4.0)} in geometries
         assert {"type": "Point", "coordinates": (100.4, 0.1)} in geometries

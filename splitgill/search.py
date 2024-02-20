@@ -1,126 +1,41 @@
 from collections import defaultdict
+from functools import partial
 from typing import Optional, Dict
 
 from elasticsearch_dsl import Q
 from elasticsearch_dsl.query import Bool, Query
 
-from splitgill.indexing.fields import (
-    MetaField,
-    RootField,
-    geo_path,
-    TypeField,
-    parsed_path,
-)
+from splitgill.indexing import fields
 
 # the all fields text field which contains all data for easy full record searching
-ALL_FIELDS = MetaField.ALL.path()
+ALL_FIELD = fields.ALL
 # the all geo values field which contains all geo values found in this record, again
 # for easy searching
-ALL_GEO_FIELDS = MetaField.GEO.path()
+ALL_GEO_FIELD = fields.GEO_ALL
+
+# convenient access for the data type path functions
+text = fields.text_path
+keyword_ci = partial(fields.keyword_path, case_sensitive=False)
+keyword_cs = partial(fields.keyword_path, case_sensitive=True)
+boolean = fields.boolean_path
+number = fields.number_path
+date = fields.date_path
+list_length = fields.list_path
+geo = fields.geo_compound_path
+geojson = fields.geo_single_path
 
 
-def full_path(field: str, type_field: TypeField):
+def exists(field: str, full: bool = True) -> str:
     """
-    Returns the full path to the given field parsed using the given type.
+    Returns the path to the field's parsed base which can be used for existence checks.
+    At the returned path, the field's value is represented using an object with the
+    various parsed data types as properties.
 
-    :param field: the field name
-    :param type_field: the type of the parsed field
-    :return: the full path to the value
+    :param field: the field path
+    :param full: whether to include the "parsed." prefix on the returned path or not
+    :return: the path to the field
     """
-    return f"{RootField.PARSED}.{parsed_path(field, type_field)}"
-
-
-def keyword_ci(field: str) -> str:
-    """
-    Returns the full keyword case-insensitive parsed path for the given field.
-
-    :param field: the field name
-    :return: the full path to the value
-    """
-    return full_path(field, TypeField.KEYWORD_CASE_INSENSITIVE)
-
-
-def keyword_cs(field: str) -> str:
-    """
-    Returns the full keyword case-sensitive parsed path for the given field.
-
-    :param field: the field name
-    :return: the full path to the value
-    """
-    return full_path(field, TypeField.KEYWORD_CASE_SENSITIVE)
-
-
-def text(field: str) -> str:
-    """
-    Returns the full text parsed path for the given field.
-
-    :param field: the field name
-    :return: the full path to the value
-    """
-    return full_path(field, TypeField.TEXT)
-
-
-def date(field: str) -> str:
-    """
-    Returns the full date parsed path for the given field.
-
-    :param field: the field name
-    :return: the full path to the value
-    """
-    return full_path(field, TypeField.DATE)
-
-
-def number(field: str) -> str:
-    """
-    Returns the full number parsed path for the given field.
-
-    :param field: the field name
-    :return: the full path to the value
-    """
-    return full_path(field, TypeField.NUMBER)
-
-
-def boolean(field: str) -> str:
-    """
-    Returns the full boolean parsed path for the given field.
-
-    :param field: the field name
-    :return: the full path to the value
-    """
-    return full_path(field, TypeField.BOOLEAN)
-
-
-def array_length(field: str) -> str:
-    """
-    Returns the full path to the field's array length value.
-
-    :param field: the field name
-    :return: the full path to the value
-    """
-    return f"{RootField.ARRAYS}.{field}"
-
-
-def geo(latitude: str, longitude: str, radius: Optional[str] = None):
-    """
-    Returns the full geo path for the given latitude, longitude, and optional radius
-    field combination.
-
-    :param latitude: the latitude field
-    :param longitude: the longitude field
-    :param radius: the radius field (optional)
-    :return: the full path to the geo value
-    """
-    return f"{RootField.GEO}.{geo_path(latitude, longitude, radius)}"
-
-
-def geojson(field: str):
-    """
-    Returns the full geo path for the given field which must have been GeoJSON.
-
-    :param field: the field name
-    :return: the full path to the geo value
-    """
-    return f"{RootField.GEO}.{field}"
+    return fields.parsed_path(field, data_type=None, full=full)
 
 
 def create_version_query(version: int) -> Query:
@@ -132,7 +47,7 @@ def create_version_query(version: int) -> Query:
     :param version: the requested version
     :return: an elasticsearch-dsl Query object
     """
-    return Q("term", **{MetaField.VERSIONS.path(): version})
+    return Q("term", **{fields.VERSIONS: version})
 
 
 def create_index_specific_version_filter(indexes_and_versions: Dict[str, int]) -> Query:

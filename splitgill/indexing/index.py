@@ -2,7 +2,7 @@ from datetime import datetime
 from functools import lru_cache
 from typing import Optional, Iterable
 
-from splitgill.indexing.fields import RootField, MetaField
+from splitgill.indexing import fields
 from splitgill.indexing.options import ParsingOptionsRange
 from splitgill.indexing.parser import parse_for_index
 from splitgill.model import MongoRecord, ParsingOptions
@@ -66,22 +66,20 @@ def create_index_op(
     op = {
         "_op_type": "index",
         "_index": index_name,
-        RootField.ID: record_id,
-        RootField.DATA: data,
-        RootField.PARSED: parsed_data.parsed,
-        RootField.GEO: parsed_data.geo,
-        RootField.ARRAYS: parsed_data.arrays,
-        RootField.META: {
-            MetaField.VERSION: version,
-            MetaField.VERSIONS: {
-                "gte": version,
-            },
+        fields.ID: record_id,
+        fields.VERSION: version,
+        fields.VERSIONS: {
+            "gte": version,
         },
+        fields.DATA: data,
+        fields.PARSED: parsed_data.parsed,
+        fields.GEO: parsed_data.geo,
+        fields.LISTS: parsed_data.lists,
     }
 
     if parsed_data.geo:
         # create a collection using the individual geo GeoJSON values
-        op[RootField.META][MetaField.GEO] = {
+        op[fields.GEO_ALL] = {
             "type": "GeometryCollection",
             "geometries": list(parsed_data.geo.values()),
         }
@@ -90,8 +88,8 @@ def create_index_op(
         op["_id"] = record_id
     else:
         op["_id"] = f"{record_id}:{version}"
-        op[RootField.META][MetaField.NEXT_VERSION] = next_version
-        op[RootField.META][MetaField.VERSIONS]["lt"] = next_version
+        op[fields.NEXT] = next_version
+        op[fields.VERSIONS]["lt"] = next_version
 
     return op
 

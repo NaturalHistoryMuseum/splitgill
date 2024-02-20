@@ -85,7 +85,7 @@ class TestBuildProfile:
             ],
         )
 
-    def test_profile_single_type_arrays(self, splitgill: SplitgillClient):
+    def test_profile_single_type_lists(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
         records = [
             Record.new({"a": ["a string of data", "another!", "and another?"]}),
@@ -103,12 +103,12 @@ class TestBuildProfile:
             changes=len(records),
             field_count=4,
             fields=[
-                Field("a", "a", count=1, array_count=1),
-                Field("b", "b", count=1, number_count=1, array_count=1),
-                Field("c", "c", count=1, boolean_count=1, array_count=1),
-                # note that this is still counted as an array even though it's only got
+                Field("a", "a", count=1, lists_count=1),
+                Field("b", "b", count=1, number_count=1, lists_count=1),
+                Field("c", "c", count=1, boolean_count=1, lists_count=1),
+                # note that this is still counted as a list even though it's only got
                 # one value (the parser doesn't unpack it basically)
-                Field("d", "d", count=1, date_count=1, array_count=1),
+                Field("d", "d", count=1, date_count=1, lists_count=1),
             ],
         )
 
@@ -136,7 +136,7 @@ class TestBuildProfile:
                     boolean_count=2,
                     date_count=2,
                     number_count=2,
-                    array_count=2,
+                    lists_count=2,
                 ),
                 Field(
                     "b",
@@ -145,7 +145,7 @@ class TestBuildProfile:
                     boolean_count=1,
                     date_count=1,
                     number_count=1,
-                    array_count=1,
+                    lists_count=1,
                 ),
             ],
         )
@@ -205,7 +205,7 @@ class TestBuildProfile:
                     "associatedMedia",
                     "associatedMedia",
                     count=2,
-                    array_count=2,
+                    lists_count=2,
                     is_value=False,
                     is_parent=True,
                 ),
@@ -265,7 +265,7 @@ class TestBuildProfile:
             ],
         )
 
-    def test_parent_with_arrays(self, splitgill: SplitgillClient):
+    def test_parent_with_lists(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
         records = [
             Record.new({"a": [{"x": "arms"}, {"x": "legs"}]}),
@@ -288,7 +288,7 @@ class TestBuildProfile:
                     is_value=False,
                     is_parent=True,
                     count=2,
-                    array_count=2,
+                    lists_count=2,
                 ),
                 Field(name="x", path="a.x", is_value=True, is_parent=False, count=2),
                 Field(name="b", path="b", is_value=True, is_parent=False, count=1),
@@ -314,8 +314,88 @@ class TestBuildProfile:
 
         assert version_1 != version_2
 
+    def test_nested_lists(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        records = [
+            Record.new({"a": [[1, 2, 3], [4, 5, 6], [7, 8, 9]]}),
+            Record.new({"a": [[1, 2, 3], [4, 1, 6], [7, 8, 9]]}),
+            Record.new({"a": [[1, 7, 3], [4, 5, 6], [7, 8, 9]]}),
+        ]
+        version = add_data(database, datetime(2020, 7, 2), records)
 
-# TODO: write a test which fails on nested arrays
+        profile = database.get_profile(version)
+        assert profile == Profile(
+            name="test",
+            version=version,
+            total=len(records),
+            changes=len(records),
+            field_count=1,
+            fields=[
+                Field(
+                    name="a",
+                    path="a",
+                    is_value=True,
+                    is_parent=False,
+                    number_count=3,
+                    count=3,
+                    lists_count=3,
+                ),
+            ],
+        )
+
+    def test_list_in_dict(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        records = [
+            Record.new({"a": {"b": [1, 2, 3]}}),
+            Record.new({"a": {"c": [1, 2, 3]}}),
+            Record.new({"a": {"b": {"c": [1, 2, 3]}}}),
+        ]
+        version = add_data(database, datetime(2020, 7, 2), records)
+
+        profile = database.get_profile(version)
+        assert profile == Profile(
+            name="test",
+            version=version,
+            total=len(records),
+            changes=len(records),
+            field_count=4,
+            fields=[
+                Field(
+                    name="a",
+                    path="a",
+                    is_value=False,
+                    is_parent=True,
+                    count=3,
+                ),
+                Field(
+                    name="b",
+                    path="a.b",
+                    is_value=True,
+                    is_parent=True,
+                    number_count=1,
+                    count=2,
+                    lists_count=1,
+                ),
+                Field(
+                    name="c",
+                    path="a.b.c",
+                    is_value=True,
+                    is_parent=False,
+                    number_count=1,
+                    count=1,
+                    lists_count=1,
+                ),
+                Field(
+                    name="c",
+                    path="a.c",
+                    is_value=True,
+                    is_parent=False,
+                    number_count=1,
+                    count=1,
+                    lists_count=1,
+                ),
+            ],
+        )
 
 
 class TestProfile:

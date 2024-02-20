@@ -1,60 +1,106 @@
+from functools import partial
+
+import pytest
+
 from splitgill.indexing.fields import (
-    geo_path,
-    text_path,
-    TypeField,
-    keyword_case_insensitive_path,
-    keyword_case_sensitive_path,
-    keyword_ci_path,
-    keyword_cs_path,
-    date_path,
+    DataType,
     parsed_path,
     number_path,
+    PARSED,
     boolean_path,
-    arrays_path,
+    date_path,
+    keyword_path,
+    text_path,
+    geo_make_name,
+    geo_compound_path,
+    geo_single_path,
+    list_path,
+    LISTS,
+    GEO,
 )
 
 
-class TestGeoPath:
-    def test_without_radius(self):
-        assert geo_path("lat", "lon") == "lat/lon"
-
-    def test_with_radius(self):
-        assert geo_path("lat", "lon", "rad") == "lat/lon/rad"
+def test_all_types():
+    assert DataType.all() == frozenset(
+        [
+            DataType.NUMBER.value,
+            DataType.BOOLEAN.value,
+            DataType.DATE.value,
+            DataType.TEXT.value,
+            DataType.KEYWORD_CASE_INSENSITIVE.value,
+            DataType.KEYWORD_CASE_SENSITIVE.value,
+        ]
+    )
 
 
 def test_parsed_path():
-    # just try a couple
-    assert parsed_path("beans", TypeField.KEYWORD_CASE_INSENSITIVE) == "beans.ki"
-    assert parsed_path("beans", TypeField.DATE) == "beans.d"
+    assert (
+        parsed_path("a.field.in.the.record", DataType.NUMBER, True)
+        == f"{PARSED}.a.field.in.the.record.{DataType.NUMBER}"
+    )
+    assert (
+        parsed_path("a.field.in.the.record", DataType.NUMBER, False)
+        == f"a.field.in.the.record.{DataType.NUMBER}"
+    )
+    assert (
+        parsed_path("a.field.in.the.record", None, True)
+        == f"{PARSED}.a.field.in.the.record"
+    )
+    assert parsed_path("a.field.in.the.record", None, False) == "a.field.in.the.record"
 
 
-def test_text_path():
-    assert text_path("beans") == "beans.t"
+type_specific_functions = [
+    (DataType.NUMBER, number_path),
+    (DataType.DATE, date_path),
+    (DataType.BOOLEAN, boolean_path),
+    (DataType.TEXT, text_path),
+    (DataType.KEYWORD_CASE_SENSITIVE, partial(keyword_path, case_sensitive=True)),
+    (DataType.KEYWORD_CASE_INSENSITIVE, partial(keyword_path, case_sensitive=False)),
+]
 
 
-def test_keyword_case_insensitive_path():
-    assert keyword_case_insensitive_path("beans") == "beans.ki"
-    assert keyword_ci_path("beans") == "beans.ki"
-    assert keyword_case_insensitive_path is keyword_ci_path
+@pytest.mark.parametrize("data_type, function", type_specific_functions)
+def test_type_specific_functions(data_type, function):
+    full_path = f"{PARSED}.a.field.in.the.record.{data_type}"
+    rel_path = f"a.field.in.the.record.{data_type}"
+    assert function("a.field.in.the.record", full=True) == full_path
+    assert function("a.field.in.the.record", full=False) == rel_path
+    assert data_type.path_to("a.field.in.the.record", full=True) == full_path
+    assert data_type.path_to("a.field.in.the.record", full=False) == rel_path
 
 
-def test_keyword_sensitive_path():
-    assert keyword_case_sensitive_path("beans") == "beans.ks"
-    assert keyword_cs_path("beans") == "beans.ks"
-    assert keyword_case_sensitive_path is keyword_cs_path
+def test_geo_make_name():
+    assert geo_make_name("lat", "lon", "rad") == "lat/lon/rad"
+    assert geo_make_name("lat", "lon") == "lat/lon"
 
 
-def test_date_path():
-    assert date_path("beans") == "beans.d"
+def test_compound_path():
+    assert geo_compound_path("lat", "lon", "rad", True) == "geo.compound.lat/lon/rad"
+    assert geo_compound_path("lat", "lon", "rad", False) == "compound.lat/lon/rad"
+    assert (
+        geo_compound_path(
+            "nested.field.lat", "nested.field.lon", "nested.field.rad", True
+        )
+        == "geo.compound.nested.field.lat/nested.field.lon/nested.field.rad"
+    )
+    assert (
+        geo_compound_path(
+            "nested.field.lat", "nested.field.lon", "nested.field.rad", False
+        )
+        == "compound.nested.field.lat/nested.field.lon/nested.field.rad"
+    )
 
 
-def test_number_path():
-    assert number_path("beans") == "beans.n"
+def test_single_path():
+    assert geo_single_path("lat", True) == f"{GEO}.single.lat"
+    assert geo_single_path("nested.field.lat", True) == f"{GEO}.single.nested.field.lat"
+    assert geo_single_path("lat", False) == "single.lat"
+    assert geo_single_path("nested.field.lat", False) == "single.nested.field.lat"
 
 
-def test_boolean_path():
-    assert boolean_path("beans") == "beans.b"
-
-
-def test_arrays_path():
-    assert arrays_path("beans") == "beans"
+def test_lists():
+    assert (
+        list_path("nested.list.in.the.record", True)
+        == f"{LISTS}.nested.list.in.the.record"
+    )
+    assert list_path("nested.list.in.the.record", False) == "nested.list.in.the.record"

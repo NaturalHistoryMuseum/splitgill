@@ -1,13 +1,4 @@
-from splitgill.indexing.fields import (
-    MetaField,
-    RootField,
-    keyword_ci_path,
-    keyword_cs_path,
-    text_path,
-    number_path,
-    date_path,
-    boolean_path,
-)
+from splitgill.indexing import fields
 
 # template for the data-* indices
 DATA_TEMPLATE = {
@@ -29,66 +20,60 @@ DATA_TEMPLATE = {
                 "number_of_replicas": 1,
                 "mapping": {
                     "total_fields": {
-                        "limit": "4000",
+                        # this essentially means a maximum of around 500-600 fields, but
+                        # in reality the number of fields a record is indexed into
+                        # depends on how many values are recognised as geo or list
+                        # values and how many data types the values are parsed into
+                        "limit": 4000,
                     },
                 },
             },
         },
         "mappings": {
-            # TODO: does this make a difference?!
-            "_source": {
-                # these fields are stored and will be returned in search results. The
-                # id and the meta fields are also indexed, but the data fields are not
-                "includes": [
-                    RootField.ID,
-                    RootField.DATA,
-                    RootField.META,
-                ],
-                # these fields are not stored, only indexed
-                "excludes": [
-                    RootField.PARSED,
-                    RootField.GEO,
-                    RootField.ARRAYS,
-                    MetaField.GEO.path(),
-                ],
-            },
+            # "_source": {
+            #     # these fields are stored and will be returned in search results
+            #     "includes": [
+            #         fields.ID,
+            #         fields.VERSION,
+            #         fields.NEXT,
+            #         fields.DATA,
+            #     ],
+            #     # these fields are not stored, only indexed
+            #     "excludes": [
+            #         fields.ALL,
+            #         fields.VERSIONS,
+            #         fields.PARSED,
+            #         fields.GEO,
+            #         fields.LISTS,
+            #     ],
+            # },
             "properties": {
-                RootField.ID: {
-                    "type": "keyword",
-                },
-                RootField.DATA: {
-                    "type": "object",
-                    # enabled set to false means don't index this object
-                    "enabled": False,
-                },
-                MetaField.VERSIONS.path(): {
-                    "type": "date_range",
-                    "format": "epoch_millis",
-                },
-                MetaField.VERSION.path(): {
-                    "type": "date",
-                    "format": "epoch_millis",
-                },
-                MetaField.NEXT_VERSION.path(): {
-                    "type": "date",
-                    "format": "epoch_millis",
-                },
+                fields.ID: {"type": "keyword"},
+                fields.VERSION: {"type": "date", "format": "epoch_millis"},
+                fields.NEXT: {"type": "date", "format": "epoch_millis"},
+                fields.VERSIONS: {"type": "date_range", "format": "epoch_millis"},
+                # enabled set to false means don't index this object
+                fields.DATA: {"type": "object", "enabled": False},
                 # the values of each field will be copied into this field for easy
                 # querying (see the dynamic keyword_field below)
-                MetaField.ALL.path(): {
-                    "type": "text",
-                },
+                fields.ALL: {"type": "text"},
                 # a GeoJSON collection of all the found geo field values in this record,
                 # this makes it easy to search based on a record's geo data without
                 # caring which fields are being used
-                MetaField.GEO.path(): {
-                    "type": "geo_shape",
-                },
+                fields.GEO_ALL: {"type": "geo_shape"},
+                # detected geo field values are stored in this object. Turn off
+                # subobjects so that we can use dots without creating a complex object
+                # and to make the mapping definition easier.
+                fields.GEO: {"type": "object", "subobjects": False},
+                # detected list field values are stored in this object. Turn off
+                # subobjects so that we can use dots without creating a complex object
+                # and to make the mapping definition easier.
+                fields.LISTS: {"type": "object", "subobjects": False},
             },
             "dynamic_templates": [
                 {
                     "geo_field": {
-                        "path_match": f"{RootField.GEO}.*",
+                        "path_match": f"{fields.GEO}.*",
                         "mapping": {
                             "type": "geo_shape",
                         },
@@ -96,70 +81,55 @@ DATA_TEMPLATE = {
                 },
                 {
                     "arrays_field": {
-                        "path_match": f"{RootField.ARRAYS}.*",
+                        "path_match": fields.list_path("*", full=True),
                         "mapping": {
-                            "type": "short",
+                            "type": "integer",
                         },
                     },
                 },
                 {
                     "text_field": {
-                        "path_match": f"{RootField.PARSED}.{text_path('*')}",
+                        "path_match": fields.text_path("*", full=True),
                         "mapping": {
                             "type": "text",
                             # copy the text value of this field into the meta.all field
-                            "copy_to": MetaField.ALL.path(),
+                            "copy_to": fields.ALL,
                         },
                     },
                 },
                 {
                     "keyword_case_insensitive_field": {
-                        "path_match": f"{RootField.PARSED}.{keyword_ci_path('*')}",
+                        "path_match": fields.keyword_path("*", False, full=True),
                         "mapping": {
                             "type": "keyword",
                             # lowercase the text when storing it, this allows
                             # case-insensitive usage
                             "normalizer": "lowercase_normalizer",
-                            # 256 to limit the data we store (this is the default, but
-                            # might as well specify it)
-                            "ignore_above": 256,
                         },
                     },
                 },
                 {
                     "keyword_case_sensitive_field": {
-                        "path_match": f"{RootField.PARSED}.{keyword_cs_path('*')}",
-                        "mapping": {
-                            "type": "keyword",
-                            # 256 to limit the data we store (this is the default, but
-                            # might as well specify it)
-                            "ignore_above": 256,
-                        },
+                        "path_match": fields.keyword_path("*", True, full=True),
+                        "mapping": {"type": "keyword"},
                     },
                 },
                 {
                     "number_field": {
-                        "path_match": f"{RootField.PARSED}.{number_path('*')}",
-                        "mapping": {
-                            "type": "double",
-                        },
+                        "path_match": fields.number_path("*", full=True),
+                        "mapping": {"type": "double"},
                     },
                 },
                 {
                     "date_field": {
-                        "path_match": f"{RootField.PARSED}.{date_path('*')}",
-                        "mapping": {
-                            "type": "date",
-                            "format": "epoch_millis",
-                        },
+                        "path_match": fields.date_path("*", full=True),
+                        "mapping": {"type": "date", "format": "epoch_millis"},
                     },
                 },
                 {
                     "boolean_field": {
-                        "path_match": f"{RootField.PARSED}.{boolean_path('*')}",
-                        "mapping": {
-                            "type": "boolean",
-                        },
+                        "path_match": fields.boolean_path("*", full=True),
+                        "mapping": {"type": "boolean"},
                     },
                 },
             ],

@@ -52,6 +52,9 @@ class ParsingOptionsBuilder:
         self._false_values: Set[str] = set()
         self._date_formats: Set[str] = set()
         self._geo_hints: Set[GeoFieldHint] = set()
+        # see ParsingOptions for information about these default values
+        self._keyword_length: int = 2147483647
+        self._float_format: str = "{0:.15g}"
 
     def build(self) -> ParsingOptions:
         """
@@ -65,6 +68,8 @@ class ParsingOptionsBuilder:
             frozenset(self._false_values),
             frozenset(self._date_formats),
             frozenset(self._geo_hints),
+            self._keyword_length,
+            self._float_format,
         )
 
     def with_true_value(self, value: str) -> "ParsingOptionsBuilder":
@@ -142,6 +147,35 @@ class ParsingOptionsBuilder:
             self._geo_hints.add(GeoFieldHint(lat_field, lon_field, radius_field))
         return self
 
+    def with_keyword_length(self, keyword_length: int) -> "ParsingOptionsBuilder":
+        """
+        Sets the maximum keyword length which will be used when indexing. Any strings
+        longer than this value will be trimmed down before they are sent to
+        Elasticsearch.
+
+        The length value must be in the range 0 <= keyword_length <= 2147483647 and will
+        be clamped to ensure this.
+
+        :param keyword_length: the maximum keyword length
+        :return: self
+        """
+        # set the new keyword length but clamp it between 0 and 2147483647 to ensure it
+        # is a valid input
+        self._keyword_length = max(0, min(keyword_length, 2147483647))
+        return self
+
+    def with_float_format(self, float_format: str) -> "ParsingOptionsBuilder":
+        """
+        Sets the format string to use when converting a float to a string for indexing.
+        The string will have its format() method called during indexing with the float
+        value passed as the only parameter.
+
+        :param float_format: the format string
+        :return: self
+        """
+        self._float_format = float_format
+        return self
+
     def with_defaults(self) -> "ParsingOptionsBuilder":
         """
         Apply defaults for the boolean values, date formats, and geo hints.
@@ -151,6 +185,8 @@ class ParsingOptionsBuilder:
         self.with_default_boolean_values()
         self.with_default_date_formats()
         self.with_default_geo_hints()
+        self.with_default_keyword_length()
+        self.with_default_float_format()
         return self
 
     def with_default_boolean_values(self) -> "ParsingOptionsBuilder":
@@ -186,6 +222,24 @@ class ParsingOptionsBuilder:
             self.with_geo_hint(
                 geo_hint.lat_field, geo_hint.lon_field, geo_hint.radius_field
             )
+        return self
+
+    def with_default_keyword_length(self) -> "ParsingOptionsBuilder":
+        """
+        Set the keyword length to the default value (2147483647).
+
+        :return: self
+        """
+        self.with_keyword_length(2147483647)
+        return self
+
+    def with_default_float_format(self) -> "ParsingOptionsBuilder":
+        """
+        Set the float format to the default value ("{0:.15g}").
+
+        :return: self
+        """
+        self.with_float_format("{0:.15g}")
         return self
 
 

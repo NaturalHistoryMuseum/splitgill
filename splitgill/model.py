@@ -5,8 +5,8 @@ from uuid import uuid4
 
 from bson import ObjectId
 
+from splitgill.indexing import fields
 from splitgill.diffing import patch, DiffOp
-from splitgill.indexing.fields import geo_path
 
 
 @dataclass
@@ -174,7 +174,9 @@ class GeoFieldHint:
 
     @cached_property
     def path(self) -> str:
-        return geo_path(self.lat_field, self.lon_field, self.radius_field)
+        return fields.geo_compound_path(
+            self.lat_field, self.lon_field, self.radius_field, full=False
+        )
 
 
 # set frozen=True to make the objects immutable and provide hashing (which we need for
@@ -197,6 +199,19 @@ class ParsingOptions:
     # GeoFieldHint objects which can be used to test if a record contains any geographic
     # coordinate data
     geo_hints: FrozenSet[GeoFieldHint]
+    # the maximum length of keyword strings (both case-sensitive and -insensitive).
+    # Strings will be truncated to this length before indexing them in either keyword
+    # field. Defaults to the maximum Elasticsearch allows.
+    keyword_length: int = 2147483647
+    # the format to use to convert a float to a string for indexing. The string will
+    # have format() called on it with the float value passed as the only parameter,
+    # therefore the format string should use 0 to reference it. The default format uses
+    # 15 significant digits. This roughly matches how a float is actually stored in
+    # elasticsearch and therefore gives a somewhat sensible representative idea to users
+    # of what the number actually is and how it can be searched. This format will
+    # produce string representations of numbers in scientific notation if it decides it
+    # needs to.
+    float_format: str = "{0:.15g}"
 
     def to_doc(self) -> dict:
         return {
@@ -204,6 +219,8 @@ class ParsingOptions:
             "false_values": list(self.false_values),
             "date_formats": list(self.date_formats),
             "geo_hints": [astuple(hint) for hint in self.geo_hints],
+            "keyword_length": self.keyword_length,
+            "float_format": self.float_format,
         }
 
     @classmethod
@@ -213,4 +230,6 @@ class ParsingOptions:
             frozenset(doc["false_values"]),
             frozenset(doc["date_formats"]),
             frozenset(GeoFieldHint(*params) for params in doc["geo_hints"]),
+            doc["keyword_length"],
+            doc["float_format"],
         )

@@ -5,9 +5,16 @@ from typing import Iterable, Tuple, Dict, List, Any
 from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search
 
-from splitgill.indexing.fields import RootField, MetaField, TypeField
+from splitgill.indexing.fields import VERSION, DataType
 from splitgill.indexing.index import get_index_wildcard
-from splitgill.search import create_version_query, keyword_ci, boolean, date, number
+from splitgill.search import (
+    create_version_query,
+    boolean,
+    date,
+    number,
+    exists,
+    list_length,
+)
 
 
 @dataclass(eq=False)
@@ -30,8 +37,8 @@ class Field:
     boolean_count: int = 0
     date_count: int = 0
     number_count: int = 0
-    # total number of records where this field is an array of values
-    array_count: int = 0
+    # total number of records where this field is a list of values
+    lists_count: int = 0
     # these two booleans describe what kind of field this is. A value field is one that
     # holds an actual value, like an int or string, while a parent field is one that
     # contains other fields, like a list or dict. A field can also be both if in one
@@ -144,7 +151,7 @@ def build_profile(elasticsearch: Elasticsearch, name: str, version: int) -> Prof
     total = search.filter(create_version_query(version)).count()
     # count how many records have this version as their version (i.e. how many were
     # added or changed)
-    changes = search.filter("term", **{MetaField.VERSION.path(): version}).count()
+    changes = search.filter("term", **{VERSION: version}).count()
 
     mappings = elasticsearch.indices.get_mapping(index=get_index_wildcard(name))
     value_paths = set()
@@ -163,8 +170,7 @@ def build_profile(elasticsearch: Elasticsearch, name: str, version: int) -> Prof
     fields = {}
     for value_path in value_paths:
         dotted_path = ".".join(value_path)
-        # all fields get a keyword case-insensitive field so use this for the full count
-        count = search.filter("exists", field=keyword_ci(dotted_path)).count()
+        count = search.filter("exists", field=exists(dotted_path)).count()
         # only add the field if it actually has some data in it
         if count == 0:
             continue
@@ -172,8 +178,8 @@ def build_profile(elasticsearch: Elasticsearch, name: str, version: int) -> Prof
         boolean_count = search.filter("exists", field=boolean(dotted_path)).count()
         date_count = search.filter("exists", field=date(dotted_path)).count()
         number_count = search.filter("exists", field=number(dotted_path)).count()
-        array_count = search.filter(
-            "exists", field=f"{RootField.ARRAYS}.{dotted_path}"
+        lists_count = search.filter(
+            "range", **{list_length(dotted_path, full=True): {"gt": 0}}
         ).count()
         fields[dotted_path] = Field(
             name=value_path[-1],
@@ -182,21 +188,22 @@ def build_profile(elasticsearch: Elasticsearch, name: str, version: int) -> Prof
             boolean_count=boolean_count,
             date_count=date_count,
             number_count=number_count,
-            array_count=array_count,
+            lists_count=lists_count,
             is_value=True,
             is_parent=False,
         )
 
     for parent_path in parent_paths:
         dotted_path = ".".join(parent_path)
-        count = search.filter(
-            "exists", field=f"{RootField.PARSED}.{dotted_path}"
-        ).count()
+        count = search.filter("exists", field=exists(dotted_path, full=True)).count()
         # only add the field if it actually has some data in it
         if count == 0:
             continue
-        array_count = search.filter(
-            "exists", field=f"{RootField.ARRAYS}.{dotted_path}"
+        # using a range query here avoids finding root paths which aren't lists (e.g.
+        # when a.b.c is in lists and that means an exists query on a results in an lists
+        # count for a)
+        lists_count = search.filter(
+            "range", **{list_length(dotted_path, full=True): {"gt": 0}}
         ).count()
         if dotted_path not in fields:
             # the field doesn't exist as a value field, so we can just create a new
@@ -207,14 +214,14 @@ def build_profile(elasticsearch: Elasticsearch, name: str, version: int) -> Prof
                 is_value=False,
                 is_parent=True,
                 count=count,
-                array_count=array_count,
+                lists_count=lists_count,
             )
         else:
             # if this field is also a value field we need to do some combining
             field = fields[dotted_path]
             field.is_parent = True
             field.count = count
-            field.array_count = array_count
+            field.lists_count = lists_count
 
     return Profile(name, version, total, changes, len(fields), sorted(fields.values()))
 
@@ -243,7 +250,7 @@ def _extract_fields(
         sub_properties = {
             key: value
             for key, value in field_properties.items()
-            if key not in set(TypeField)
+            if key not in DataType.all()
         }
 
         # if we did filter out some subfields, this is a value field

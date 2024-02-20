@@ -1,173 +1,241 @@
-from strenum import LowercaseStrEnum, StrEnum
-from typing import Optional
-from enum import auto
+from enum import Enum
+from typing import Optional, FrozenSet
+
+# a keyword ID field
+ID = "id"
+# a version of this record in epoch milliseconds
+VERSION = "meta.version"
+# the next version of this record in epoch milliseconds (will be missing if this
+# version is the current version)
+NEXT = "meta.next"
+# the range of versions this record is valid for. The lower bound is the same value
+# as the version field and the upper bound is the same value as the next field
+VERSIONS = "meta.versions"
+# the record's data, not indexed
+DATA = "data"
+# a text field into which all data is added to support "search everything" searches
+ALL = "all"
+# a geo shape field into which all geo data is combined to support "search
+# everything" searches for geo
+GEO_ALL = "geo_all"
+# the record's data, indexed for searching
+PARSED = "parsed"
+# individually indexed geo shapes
+GEO = "geo"
+# lengths of any lists in the record's data
+LISTS = "lists"
 
 
-# TODO: Python3.11 has a StrEnum in the stdlib but we need to support <= 3.11 atm so we
-#       can't use it. When we do go up to >=3.11 we should be able to remove strenum as
-#       a dependency
-
-
-class RootField(LowercaseStrEnum):
+def list_path(field: str, full: bool = True) -> str:
     """
-    Fields at the root of the Elasticsearch doc.
+    Given a field, return the lists path of it.
+
+    :param field: the name (including dots if needed) of the field
+    :param full: whether to prepend the lists root name to the path or not
+                 (default: True)
+    :return: the full path to the lists field
     """
-
-    ID = auto()
-    DATA = auto()
-    META = auto()
-    PARSED = auto()
-    GEO = auto()
-    ARRAYS = auto()
-
-
-class MetaField(LowercaseStrEnum):
-    """
-    Fields at the root of the meta object.
-    """
-
-    ALL = auto()
-    VERSIONS = auto()
-    VERSION = auto()
-    NEXT_VERSION = auto()
-    GEO = auto()
-
-    def path(self) -> str:
-        """
-        Returns the full path to the meta field including the "meta." part.
-
-        :return: the full, dotted path to the field
-        """
-        return f"{RootField.META}.{self}"
-
-
-class TypeField(StrEnum):
-    """
-    Parsed field short names, these are the leaf fields of the parsed field object, e.g.
-    if we have a field called "height", then we're likely to have:
-
-        - parsed.height.ki
-        - parsed.height.ks
-        - parsed.height.t
-        - parsed.height.n
-
-    under the parsed root level object.
-    """
-
-    KEYWORD_CASE_INSENSITIVE = "ki"
-    KEYWORD_CASE_SENSITIVE = "ks"
-    TEXT = "t"
-    NUMBER = "n"
-    DATE = "d"
-    BOOLEAN = "b"
-
-
-def parsed_path(field_name: str, type_field: TypeField) -> str:
-    """
-    Creates the path to a parsed type field given the field name and the type. This path
-    excludes the "parsed." root.
-
-    :param field_name: the field name
-    :param type_field: the type of the parsed field
-    :return: the path to the field when cast to this type
-    """
-    return f"{field_name}.{type_field}"
-
-
-def text_path(field_name: str) -> str:
-    """
-    Creates the path to the text typed version of this field. This path excludes the
-    "parsed." root.
-
-    :param field_name: the name of the field
-    :return: the path to the field as text
-    """
-    return parsed_path(field_name, TypeField.TEXT)
-
-
-def keyword_case_insensitive_path(field_name: str) -> str:
-    """
-    Creates the path to the case-insensitive keyword typed version of this field. This
-    path excludes the "parsed." root.
-
-    :param field_name: the name of the field
-    :return: the path to the field as a case-insensitive keyword
-    """
-    return parsed_path(field_name, TypeField.KEYWORD_CASE_INSENSITIVE)
-
-
-def keyword_case_sensitive_path(field_name: str) -> str:
-    """
-    Creates the path to the keyword natural typed version of this field. This path
-    excludes the "parsed." root.
-
-    :param field_name: the name of the field
-    :return: the path to the field as keyword natural
-    """
-    return parsed_path(field_name, TypeField.KEYWORD_CASE_SENSITIVE)
-
-
-# the names of these path functions are really long so make some aliases for convenience
-keyword_ci_path = keyword_case_insensitive_path
-keyword_cs_path = keyword_case_sensitive_path
-
-
-def date_path(field_name: str) -> str:
-    """
-    Creates the path to the date typed version of this field. This path excludes the
-    "parsed." root.
-
-    :param field_name: the name of the field
-    :return: the path to the field as date
-    """
-    return parsed_path(field_name, TypeField.DATE)
-
-
-def number_path(field_name: str) -> str:
-    """
-    Creates the path to the number typed version of this field. This path excludes the
-    "parsed." root.
-
-    :param field_name: the name of the field
-    :return: the path to the field as number
-    """
-    return parsed_path(field_name, TypeField.NUMBER)
-
-
-def boolean_path(field_name: str) -> str:
-    """
-    Creates the path to the boolean typed version of this field. This path excludes the
-    "parsed." root.
-
-    :param field_name: the name of the field
-    :return: the path to the field as boolean
-    """
-    return parsed_path(field_name, TypeField.BOOLEAN)
-
-
-def geo_path(latitude: str, longitude: str, radius: Optional[str] = None) -> str:
-    """
-    Creates the path to a geo field. This is created using the latitude/longitude pair
-    and if there's a radius as well, this is added with another /. This path excludes
-    the "geo." root.
-
-    :param latitude: the latitude field name
-    :param longitude: the longitude field name
-    :param radius: the radius field name (optional)
-    :return: the field name for this combination of geo fields
-    """
-    base = f"{latitude}/{longitude}"
-    if radius is None:
-        return base
+    if full:
+        return f"{LISTS}.{field}"
     else:
-        return f"{base}/{radius}"
+        return field
 
 
-def arrays_path(field_name: str) -> str:
+def geo_make_name(latitude: str, longitude: str, radius: Optional[str] = None) -> str:
     """
-    Creates the arrays path for this field. This path excludes the "arrays." root.
+    Given the field names of the latitude, longitude, and optional radius in a record,
+    return the name the GeoJSON shape formed from their values is stored under in the
+    geo object.
 
-    :param field_name: the field name
-    :return: the field under the arrays path
+    :param latitude: the name (including dots if needed) of the latitude field
+    :param longitude: the name (including dots if needed) of the longitude field
+    :param radius: the name (including dots if needed) of the radius field
+    :return: the path
     """
-    return field_name
+    path = f"{latitude}/{longitude}"
+    if radius is not None:
+        path = f"{path}/{radius}"
+    return path
+
+
+def geo_compound_path(
+    latitude: str, longitude: str, radius: Optional[str] = None, full: bool = True
+) -> str:
+    """
+    Given the field names of the latitude, longitude, and optional radius in a record,
+    return the path to the GeoJSON shape formed from their values is stored under in the
+    geo object, including the compound prefix, and optionally the geo root name.
+
+    This function differs from the geo_make_name function (which it uses!) as it always
+    include the "compound" prefix, and optionally includes the geo root prefix.
+
+    :param latitude: the name (including dots if needed) of the latitude field
+    :param longitude: the name (including dots if needed) of the longitude field
+    :param radius: the name (including dots if needed) of the radius field
+    :param full: whether to prepend the geo root name to the path or not (default: True)
+    :return: the path
+    """
+    path = f"compound.{geo_make_name(latitude, longitude, radius)}"
+    if full:
+        return f"{GEO}.{path}"
+    else:
+        return path
+
+
+def geo_single_path(field: str, full: bool = True) -> str:
+    """
+    Given a field containing a GeoJSON shape in the data, return the path to the shape
+    in the geo object. The returned path will always include the "single" prefix, but
+    will also optionally include the geo root name too.
+
+    :param field: the name (including dots if needed) of the field
+    :param full: whether to prepend the geo root name to the path or not (default: True)
+    :return: the path
+    """
+    path = f"single.{field}"
+    if full:
+        return f"{GEO}.{path}"
+    else:
+        return path
+
+
+class DataType(Enum):
+    """
+    Enum representing the possible data types a value can be indexed as.
+
+    It's generally recommended to not use these directly, but to use the convenience
+    functions defined later in this module.
+    """
+
+    # a number field
+    NUMBER = "_n"
+    # the date field
+    DATE = "_d"
+    # the boolean field
+    BOOLEAN = "_b"
+    # the text field
+    TEXT = "_t"
+    # the keyword case-insensitive field
+    KEYWORD_CASE_INSENSITIVE = "_ki"
+    # the keyword case-sensitive field
+    KEYWORD_CASE_SENSITIVE = "_ks"
+
+    def __str__(self) -> str:
+        return self.value
+
+    def path_to(self, field: str, full: bool = True) -> str:
+        """
+        Creates and returns the parsed path to the field indexed with this data type.
+
+        :param field: the name (including dots if needed) of the field
+        :param full: whether to prepend the geo root name to the path or not (default:
+                     True)
+        :return: the path
+        """
+        return parsed_path(field, self, full)
+
+    @staticmethod
+    def all() -> FrozenSet[str]:
+        """
+        Returns the string field names of all the available data types.
+
+        :return: the string field names in a frozenset.
+        """
+        return frozenset([data_type.value for data_type in DataType])
+
+
+def parsed_path(
+    field: str, data_type: Optional[DataType] = None, full: bool = True
+) -> str:
+    """
+    Creates and returns the parsed path to the field indexed with the given data type.
+    Optionally, the full path is created and therefore the result includes the "parsed"
+    prefix. If no data_type is provided (i.e. data_type=None, the default), then the
+    root path to the field in the parsed object is returned.
+
+    :param field: the name (including dots if needed) of the field
+    :param data_type: the data type (default: None)
+    :param full: whether to prepend the parsed root name to the path or not (default:
+                 True)
+    :return: the path
+    """
+    if data_type is not None:
+        path = f"{field}.{data_type}"
+    else:
+        path = field
+
+    if full:
+        return f"{PARSED}.{path}"
+    else:
+        return path
+
+
+def number_path(field: str, full: bool = True) -> str:
+    """
+    Creates and returns the parsed path to the field indexed as a number. Optionally,
+    the full path is created and therefore the result includes the "parsed" prefix.
+
+    :param field: the name (including dots if needed) of the field
+    :param full: whether to prepend the parsed root name to the path or not (default:
+                 True)
+    :return: the path
+    """
+    return parsed_path(field, DataType.NUMBER, full)
+
+
+def date_path(field: str, full: bool = True) -> str:
+    """
+    Creates and returns the parsed path to the field indexed as a date. Optionally, the
+    full path is created and therefore the result includes the "parsed" prefix.
+
+    :param field: the name (including dots if needed) of the field
+    :param full: whether to prepend the parsed root name to the path or not (default:
+                 True)
+    :return: the path
+    """
+    return parsed_path(field, DataType.DATE, full)
+
+
+def boolean_path(field: str, full: bool = True) -> str:
+    """
+    Creates and returns the parsed path to the field indexed as a boolean. Optionally,
+    the full path is created and therefore the result includes the "parsed" prefix.
+
+    :param field: the name (including dots if needed) of the field
+    :param full: whether to prepend the parsed root name to the path or not (default:
+                 True)
+    :return: the path
+    """
+    return parsed_path(field, DataType.BOOLEAN, full)
+
+
+def text_path(field: str, full: bool = True) -> str:
+    """
+    Creates and returns the parsed path to the field indexed as text. Optionally, the
+    full path is created and therefore the result includes the "parsed" prefix.
+
+    :param field: the name (including dots if needed) of the field
+    :param full: whether to prepend the parsed root name to the path or not (default:
+                 True)
+    :return: the path
+    """
+    return parsed_path(field, DataType.TEXT, full)
+
+
+def keyword_path(field: str, case_sensitive: bool, full: bool = True) -> str:
+    """
+    Creates and returns the parsed path to the field indexed as a keyword. Optionally,
+    the full path is created and therefore the result includes the "parsed" prefix.
+
+    :param field: the name (including dots if needed) of the field
+    :param case_sensitive: whether the returned path should be to the case-sensitive or
+                           case-insensitive keyword representation of the field
+    :param full: whether to prepend the parsed root name to the path or not (default:
+                 True)
+    :return: the path
+    """
+    if case_sensitive:
+        data_type = DataType.KEYWORD_CASE_SENSITIVE
+    else:
+        data_type = DataType.KEYWORD_CASE_INSENSITIVE
+    return parsed_path(field, data_type, full)

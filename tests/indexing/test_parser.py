@@ -4,7 +4,7 @@ from itertools import chain
 import pytest
 
 from splitgill.diffing import prepare_data
-from splitgill.indexing.fields import TypeField
+from splitgill.indexing.fields import DataType
 from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.indexing.parser import parse_for_index, ParsedData, parse
 from splitgill.utils import to_timestamp
@@ -41,7 +41,7 @@ class TestParseForIndex:
             data=data,
             parsed={"x": [{"a": parse(n, options)} for n in range(4, 7)]},
             geo={},
-            arrays={"x": 3},
+            lists={"x": 3},
         )
 
     def test_nested_dict(self):
@@ -112,7 +112,7 @@ class TestParseForIndex:
                 "decimalLongitude": parse("-87.956", options),
             },
             {
-                "decimalLatitude/decimalLongitude": {
+                "compound.decimalLatitude/decimalLongitude": {
                     "type": "Point",
                     "coordinates": (-87.956, 14.897),
                 }
@@ -177,7 +177,7 @@ class TestParseForIndex:
         }
         options = ParsingOptionsBuilder().build()
         parsed = parse_for_index(data, options)
-        assert parsed.arrays["x"] == 4
+        assert parsed.lists["x"] == 4
         assert parsed.geo == {
             "x.0": geojson_point,
             "x.1": geojson_linestring,
@@ -190,9 +190,9 @@ class TestParse:
     def test_normal_text(self):
         options = ParsingOptionsBuilder().build()
         assert parse("banana", options) == {
-            TypeField.TEXT: "banana",
-            TypeField.KEYWORD_CASE_INSENSITIVE: "banana",
-            TypeField.KEYWORD_CASE_SENSITIVE: "banana",
+            DataType.TEXT.value: "banana",
+            DataType.KEYWORD_CASE_INSENSITIVE.value: "banana",
+            DataType.KEYWORD_CASE_SENSITIVE.value: "banana",
         }
 
     def test_bools(self):
@@ -202,79 +202,79 @@ class TestParse:
             options.true_values, [o.upper() for o in options.true_values]
         ):
             assert parse(value, options) == {
-                TypeField.TEXT: value,
-                TypeField.KEYWORD_CASE_INSENSITIVE: value,
-                TypeField.KEYWORD_CASE_SENSITIVE: value,
-                TypeField.BOOLEAN: True,
+                DataType.TEXT.value: value,
+                DataType.KEYWORD_CASE_INSENSITIVE.value: value,
+                DataType.KEYWORD_CASE_SENSITIVE.value: value,
+                DataType.BOOLEAN.value: True,
             }
         for value in chain(
             options.false_values, [o.upper() for o in options.false_values]
         ):
             assert parse(value, options) == {
-                TypeField.TEXT: value,
-                TypeField.KEYWORD_CASE_INSENSITIVE: value,
-                TypeField.KEYWORD_CASE_SENSITIVE: value,
-                TypeField.BOOLEAN: False,
+                DataType.TEXT.value: value,
+                DataType.KEYWORD_CASE_INSENSITIVE.value: value,
+                DataType.KEYWORD_CASE_SENSITIVE.value: value,
+                DataType.BOOLEAN.value: False,
             }
 
     def test_number(self):
         options = ParsingOptionsBuilder().build()
         assert parse("5.3", options) == {
-            TypeField.TEXT: "5.3",
-            TypeField.KEYWORD_CASE_INSENSITIVE: "5.3",
-            TypeField.KEYWORD_CASE_SENSITIVE: "5.3",
-            TypeField.NUMBER: 5.3,
+            DataType.TEXT.value: "5.3",
+            DataType.KEYWORD_CASE_INSENSITIVE.value: "5.3",
+            DataType.KEYWORD_CASE_SENSITIVE.value: "5.3",
+            DataType.NUMBER.value: 5.3,
         }
         assert parse("70", options) == {
-            TypeField.TEXT: "70",
-            TypeField.KEYWORD_CASE_INSENSITIVE: "70",
-            TypeField.KEYWORD_CASE_SENSITIVE: "70",
-            TypeField.NUMBER: 70.0,
+            DataType.TEXT.value: "70",
+            DataType.KEYWORD_CASE_INSENSITIVE.value: "70",
+            DataType.KEYWORD_CASE_SENSITIVE.value: "70",
+            DataType.NUMBER.value: 70.0,
         }
         assert parse("70.0", options) == {
-            TypeField.TEXT: "70.0",
-            TypeField.KEYWORD_CASE_INSENSITIVE: "70.0",
-            TypeField.KEYWORD_CASE_SENSITIVE: "70.0",
-            TypeField.NUMBER: 70.0,
+            DataType.TEXT.value: "70.0",
+            DataType.KEYWORD_CASE_INSENSITIVE.value: "70.0",
+            DataType.KEYWORD_CASE_SENSITIVE.value: "70.0",
+            DataType.NUMBER.value: 70.0,
         }
         assert parse(4, options) == {
-            TypeField.TEXT: "4",
-            TypeField.KEYWORD_CASE_INSENSITIVE: "4",
-            TypeField.KEYWORD_CASE_SENSITIVE: "4",
-            TypeField.NUMBER: 4,
+            DataType.TEXT.value: "4",
+            DataType.KEYWORD_CASE_INSENSITIVE.value: "4",
+            DataType.KEYWORD_CASE_SENSITIVE.value: "4",
+            DataType.NUMBER.value: 4,
         }
         assert parse(16.04, options) == {
-            TypeField.TEXT: "16.04",
-            TypeField.KEYWORD_CASE_INSENSITIVE: "16.04",
-            TypeField.KEYWORD_CASE_SENSITIVE: "16.04",
-            TypeField.NUMBER: 16.04,
+            DataType.TEXT.value: "16.04",
+            DataType.KEYWORD_CASE_INSENSITIVE.value: "16.04",
+            DataType.KEYWORD_CASE_SENSITIVE.value: "16.04",
+            DataType.NUMBER.value: 16.04,
         }
         assert parse(16.042245342119813456, options) == {
-            TypeField.TEXT: "16.0422453421198",
-            TypeField.KEYWORD_CASE_INSENSITIVE: "16.0422453421198",
-            TypeField.KEYWORD_CASE_SENSITIVE: "16.0422453421198",
-            TypeField.NUMBER: 16.042245342119813456,
+            DataType.TEXT.value: "16.0422453421198",
+            DataType.KEYWORD_CASE_INSENSITIVE.value: "16.0422453421198",
+            DataType.KEYWORD_CASE_SENSITIVE.value: "16.0422453421198",
+            DataType.NUMBER.value: 16.042245342119813456,
         }
         assert parse("1.2312e-20", options) == {
-            TypeField.TEXT: "1.2312e-20",
-            TypeField.KEYWORD_CASE_INSENSITIVE: "1.2312e-20",
-            TypeField.KEYWORD_CASE_SENSITIVE: "1.2312e-20",
-            TypeField.NUMBER: 1.2312e-20,
+            DataType.TEXT.value: "1.2312e-20",
+            DataType.KEYWORD_CASE_INSENSITIVE.value: "1.2312e-20",
+            DataType.KEYWORD_CASE_SENSITIVE.value: "1.2312e-20",
+            DataType.NUMBER.value: 1.2312e-20,
         }
 
     def test_invalid_numbers(self):
         options = ParsingOptionsBuilder().build()
-        assert TypeField.NUMBER not in parse("5.3.4", options)
-        assert TypeField.NUMBER not in parse("NaN", options)
-        assert TypeField.NUMBER not in parse("inf", options)
+        assert DataType.NUMBER.value not in parse("5.3.4", options)
+        assert DataType.NUMBER.value not in parse("NaN", options)
+        assert DataType.NUMBER.value not in parse("inf", options)
 
     def test_date_date_and_time(self):
         options = ParsingOptionsBuilder().with_default_date_formats().build()
         assert parse("2005-07-02 20:16:47.458301", options) == {
-            TypeField.TEXT: "2005-07-02 20:16:47.458301",
-            TypeField.KEYWORD_CASE_INSENSITIVE: "2005-07-02 20:16:47.458301",
-            TypeField.KEYWORD_CASE_SENSITIVE: "2005-07-02 20:16:47.458301",
-            TypeField.DATE: to_timestamp(
+            DataType.TEXT.value: "2005-07-02 20:16:47.458301",
+            DataType.KEYWORD_CASE_INSENSITIVE.value: "2005-07-02 20:16:47.458301",
+            DataType.KEYWORD_CASE_SENSITIVE.value: "2005-07-02 20:16:47.458301",
+            DataType.DATE.value: to_timestamp(
                 datetime.fromisoformat("2005-07-02T20:16:47.458301")
             ),
         }
@@ -282,10 +282,10 @@ class TestParse:
     def test_date_date_and_time_and_tz(self):
         options = ParsingOptionsBuilder().with_default_date_formats().build()
         assert parse("2005-07-02 20:16:47.103+05:00", options) == {
-            TypeField.TEXT: "2005-07-02 20:16:47.103+05:00",
-            TypeField.KEYWORD_CASE_INSENSITIVE: "2005-07-02 20:16:47.103+05:00",
-            TypeField.KEYWORD_CASE_SENSITIVE: "2005-07-02 20:16:47.103+05:00",
-            TypeField.DATE: to_timestamp(
+            DataType.TEXT.value: "2005-07-02 20:16:47.103+05:00",
+            DataType.KEYWORD_CASE_INSENSITIVE.value: "2005-07-02 20:16:47.103+05:00",
+            DataType.KEYWORD_CASE_SENSITIVE.value: "2005-07-02 20:16:47.103+05:00",
+            DataType.DATE.value: to_timestamp(
                 datetime.fromisoformat("2005-07-02T20:16:47.103000+05:00")
             ),
         }
@@ -293,10 +293,12 @@ class TestParse:
     def test_date_just_a_date(self):
         options = ParsingOptionsBuilder().with_default_date_formats().build()
         assert parse("2005-07-02", options) == {
-            TypeField.TEXT: "2005-07-02",
-            TypeField.KEYWORD_CASE_INSENSITIVE: "2005-07-02",
-            TypeField.KEYWORD_CASE_SENSITIVE: "2005-07-02",
-            TypeField.DATE: to_timestamp(datetime.fromisoformat("2005-07-02T00:00:00")),
+            DataType.TEXT.value: "2005-07-02",
+            DataType.KEYWORD_CASE_INSENSITIVE.value: "2005-07-02",
+            DataType.KEYWORD_CASE_SENSITIVE.value: "2005-07-02",
+            DataType.DATE.value: to_timestamp(
+                datetime.fromisoformat("2005-07-02T00:00:00")
+            ),
         }
 
     @pytest.mark.parametrize(
@@ -315,21 +317,21 @@ class TestParse:
     def test_date_formats(self, value: str, epoch: int):
         options = ParsingOptionsBuilder().with_default_date_formats().build()
         parsed = parse(value, options)
-        assert parsed[TypeField.DATE] == epoch
+        assert parsed[DataType.DATE.value] == epoch
 
     def test_date_formats_that_we_want_ignore(self):
         options = ParsingOptionsBuilder().with_default_date_formats().build()
-        assert TypeField.DATE not in parse("12:04:23", options)
-        assert TypeField.DATE not in parse(
+        assert DataType.DATE.value not in parse("12:04:23", options)
+        assert DataType.DATE.value not in parse(
             "2007-03-01T13:00:00Z/2008-05-11T15:30:00Z", options
         )
 
     def test_none(self):
         options = ParsingOptionsBuilder().build()
         assert parse(None, options) == {
-            TypeField.TEXT: "",
-            TypeField.KEYWORD_CASE_INSENSITIVE: "",
-            TypeField.KEYWORD_CASE_SENSITIVE: "",
+            DataType.TEXT.value: "",
+            DataType.KEYWORD_CASE_INSENSITIVE.value: "",
+            DataType.KEYWORD_CASE_SENSITIVE.value: "",
         }
 
     def test_caching_of_bools_and_ints(self):
@@ -352,12 +354,12 @@ class TestParse:
         options = ParsingOptionsBuilder().build()
 
         result = parse(True, options)
-        assert TypeField.BOOLEAN in result
-        assert TypeField.NUMBER not in result
+        assert DataType.BOOLEAN.value in result
+        assert DataType.NUMBER.value not in result
 
     def test_ensure_ints_are_not_bools(self):
         options = ParsingOptionsBuilder().build()
 
         result = parse(1, options)
-        assert TypeField.BOOLEAN not in result
-        assert TypeField.NUMBER in result
+        assert DataType.BOOLEAN.value not in result
+        assert DataType.NUMBER.value in result

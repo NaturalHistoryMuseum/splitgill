@@ -1,16 +1,14 @@
-from unittest.mock import patch, Mock
 from uuid import uuid4
 
 from bson import ObjectId
 
-from splitgill.diffing import diff, prepare_data
-from splitgill.indexing.fields import geo_path
+from splitgill.indexing.fields import geo_compound_path
+from splitgill.diffing import diff
 from splitgill.model import (
     MongoRecord,
     VersionedData,
     GeoFieldHint,
     ParsingOptions,
-    make_dict_safe,
 )
 
 
@@ -64,13 +62,13 @@ class TestMongoRecord:
 
 class TestGeoFieldHint:
     def test_geo_path_with_radius(self):
-        assert GeoFieldHint("latitude", "longitude", "radius").path == geo_path(
+        assert GeoFieldHint(
             "latitude", "longitude", "radius"
-        )
+        ).path == geo_compound_path("latitude", "longitude", "radius", full=False)
 
     def test_geo_path_without_radius(self):
-        assert GeoFieldHint("latitude", "longitude").path == geo_path(
-            "latitude", "longitude"
+        assert GeoFieldHint("latitude", "longitude").path == geo_compound_path(
+            "latitude", "longitude", full=False
         )
 
     def test_hash(self):
