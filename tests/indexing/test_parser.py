@@ -112,7 +112,7 @@ class TestParseForIndex:
                 "decimalLongitude": parse("-87.956", options),
             },
             {
-                "compound.decimalLatitude/decimalLongitude": {
+                "compound.decimalLatitude/decimalLongitude.geojson": {
                     "type": "Point",
                     "coordinates": (-87.956, 14.897),
                 }
@@ -137,7 +137,7 @@ class TestParseForIndex:
                 "y": parse("somewhere", options),
             },
             {
-                "x": geojson_point,
+                "single.x.geojson": geojson_point,
             },
             {"x.coordinates": 2},
         )
@@ -179,10 +179,10 @@ class TestParseForIndex:
         parsed = parse_for_index(data, options)
         assert parsed.lists["x"] == 4
         assert parsed.geo == {
-            "x.0": geojson_point,
-            "x.1": geojson_linestring,
-            "x.2": geojson_polygon,
-            "x.3": geojson_holed_polygon,
+            "single.x.0.geojson": geojson_point,
+            "single.x.1.geojson": geojson_linestring,
+            "single.x.2.geojson": geojson_polygon,
+            "single.x.3.geojson": geojson_holed_polygon,
         }
 
 

@@ -61,10 +61,6 @@ DATA_TEMPLATE = {
                 # this makes it easy to search based on a record's geo data without
                 # caring which fields are being used
                 fields.GEO_ALL: {"type": "geo_shape"},
-                # detected geo field values are stored in this object. Turn off
-                # subobjects so that we can use dots without creating a complex object
-                # and to make the mapping definition easier.
-                fields.GEO: {"type": "object", "subobjects": False},
                 # detected list field values are stored in this object. Turn off
                 # subobjects so that we can use dots without creating a complex object
                 # and to make the mapping definition easier.
@@ -73,7 +69,7 @@ DATA_TEMPLATE = {
             "dynamic_templates": [
                 {
                     "geo_field": {
-                        "path_match": f"{fields.GEO}.*",
+                        "path_match": f"{fields.GEO}.*.geojson",
                         "mapping": {
                             "type": "geo_shape",
                         },

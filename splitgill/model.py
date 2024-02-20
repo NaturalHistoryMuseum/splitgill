@@ -174,9 +174,7 @@ class GeoFieldHint:
 
     @cached_property
     def path(self) -> str:
-        return fields.geo_compound_path(
-            self.lat_field, self.lon_field, self.radius_field, full=False
-        )
+        return fields.geo_make_name(self.lat_field, self.lon_field, self.radius_field)
 
 
 # set frozen=True to make the objects immutable and provide hashing (which we need for

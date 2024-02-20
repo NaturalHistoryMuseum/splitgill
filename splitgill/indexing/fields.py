@@ -58,24 +58,17 @@ def geo_make_name(latitude: str, longitude: str, radius: Optional[str] = None) -
     return path
 
 
-def geo_compound_path(
-    latitude: str, longitude: str, radius: Optional[str] = None, full: bool = True
-) -> str:
+def geo_compound_path(field: str, full: bool = True) -> str:
     """
-    Given the field names of the latitude, longitude, and optional radius in a record,
-    return the path to the GeoJSON shape formed from their values is stored under in the
-    geo object, including the compound prefix, and optionally the geo root name.
+    Given the field name of a compound geo path, return the path to the GeoJSON shape in
+    the geo.* object. This will always include the "compound" prefix and geojson suffix,
+    and optionally the geo root name.
 
-    This function differs from the geo_make_name function (which it uses!) as it always
-    include the "compound" prefix, and optionally includes the geo root prefix.
-
-    :param latitude: the name (including dots if needed) of the latitude field
-    :param longitude: the name (including dots if needed) of the longitude field
-    :param radius: the name (including dots if needed) of the radius field
+    :param field: the name (including dots if needed) of the field
     :param full: whether to prepend the geo root name to the path or not (default: True)
     :return: the path
     """
-    path = f"compound.{geo_make_name(latitude, longitude, radius)}"
+    path = f"compound.{field}.geojson"
     if full:
         return f"{GEO}.{path}"
     else:
@@ -84,15 +77,15 @@ def geo_compound_path(
 
 def geo_single_path(field: str, full: bool = True) -> str:
     """
-    Given a field containing a GeoJSON shape in the data, return the path to the shape
-    in the geo object. The returned path will always include the "single" prefix, but
-    will also optionally include the geo root name too.
+    Given the field name of a geojson field, return the path to the GeoJSON shape in the
+    geo.* object. This will always include the "single" prefix and geojson suffix, and
+    optionally the geo root name.
 
     :param field: the name (including dots if needed) of the field
     :param full: whether to prepend the geo root name to the path or not (default: True)
     :return: the path
     """
-    path = f"single.{field}"
+    path = f"single.{field}.geojson"
     if full:
         return f"{GEO}.{path}"
     else:

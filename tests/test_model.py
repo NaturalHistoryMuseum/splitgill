@@ -62,14 +62,13 @@ class TestMongoRecord:
 
 class TestGeoFieldHint:
     def test_geo_path_with_radius(self):
-        assert GeoFieldHint(
-            "latitude", "longitude", "radius"
-        ).path == geo_compound_path("latitude", "longitude", "radius", full=False)
+        assert (
+            GeoFieldHint("latitude", "longitude", "radius").path
+            == "latitude/longitude/radius"
+        )
 
     def test_geo_path_without_radius(self):
-        assert GeoFieldHint("latitude", "longitude").path == geo_compound_path(
-            "latitude", "longitude", full=False
-        )
+        assert GeoFieldHint("latitude", "longitude").path == "latitude/longitude"
 
     def test_hash(self):
         hints = set()

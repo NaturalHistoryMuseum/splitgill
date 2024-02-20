@@ -7,7 +7,7 @@ from typing import Union, Deque, Tuple, Optional, NamedTuple
 from cytoolz.dicttoolz import get_in
 from fastnumbers import try_float
 
-from splitgill.indexing.fields import DataType
+from splitgill.indexing.fields import DataType, geo_compound_path, geo_single_path
 from splitgill.indexing.geo import as_geojson, match_hints
 from splitgill.model import ParsingOptions
 from splitgill.utils import to_timestamp
@@ -81,7 +81,10 @@ def parse_for_index(data: dict, options: ParsingOptions) -> ParsedData:
     # having a record which is just completely GeoJSON as this would add an awkwardness
     # to downstream processing based on the parsed geo data (e.g. maps). We check for
     # GeoJSON in the container queue loop below only.
-    geo = dict(match_hints(data, options.geo_hints))
+    geo = {
+        geo_compound_path(path, full=False): geojson
+        for path, geojson in match_hints(data, options.geo_hints)
+    }
 
     # parse the top-level data dict straight away. There are two reasons to do this,
     # firstly, most data dicts that come through here are just flat with no nested
@@ -105,10 +108,10 @@ def parse_for_index(data: dict, options: ParsingOptions) -> ParsedData:
         if isinstance(container, dict):
             # check if the container is valid geojson
             if (geojson := as_geojson(container)) is not None:
-                geo[dot_path] = geojson
+                geo[geo_single_path(dot_path, full=False)] = geojson
             # check if the container contains any fields that match the geo hints
             geo.update(
-                (f"{dot_path}.{path}", geojson)
+                (geo_compound_path(f"{dot_path}.{path}", full=False), geojson)
                 for path, geojson in match_hints(container, options.geo_hints)
             )
             # set the parsed container in the parsed dict

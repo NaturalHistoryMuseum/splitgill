@@ -75,27 +75,28 @@ def test_geo_make_name():
 
 
 def test_compound_path():
-    assert geo_compound_path("lat", "lon", "rad", True) == "geo.compound.lat/lon/rad"
-    assert geo_compound_path("lat", "lon", "rad", False) == "compound.lat/lon/rad"
+    assert geo_compound_path("lat/lon/rad", True) == "geo.compound.lat/lon/rad.geojson"
+    assert geo_compound_path("lat/lon/rad", False) == "compound.lat/lon/rad.geojson"
     assert (
-        geo_compound_path(
-            "nested.field.lat", "nested.field.lon", "nested.field.rad", True
-        )
-        == "geo.compound.nested.field.lat/nested.field.lon/nested.field.rad"
+        geo_compound_path("nested.field.lat/lon/rad", True)
+        == "geo.compound.nested.field.lat/lon/rad.geojson"
     )
     assert (
-        geo_compound_path(
-            "nested.field.lat", "nested.field.lon", "nested.field.rad", False
-        )
-        == "compound.nested.field.lat/nested.field.lon/nested.field.rad"
+        geo_compound_path("nested.field.lat/lon/rad", False)
+        == "compound.nested.field.lat/lon/rad.geojson"
     )
 
 
 def test_single_path():
-    assert geo_single_path("lat", True) == f"{GEO}.single.lat"
-    assert geo_single_path("nested.field.lat", True) == f"{GEO}.single.nested.field.lat"
-    assert geo_single_path("lat", False) == "single.lat"
-    assert geo_single_path("nested.field.lat", False) == "single.nested.field.lat"
+    assert geo_single_path("lat", True) == f"{GEO}.single.lat.geojson"
+    assert (
+        geo_single_path("nested.field.lat", True)
+        == f"{GEO}.single.nested.field.lat.geojson"
+    )
+    assert geo_single_path("lat", False) == "single.lat.geojson"
+    assert (
+        geo_single_path("nested.field.lat", False) == "single.nested.field.lat.geojson"
+    )
 
 
 def test_lists():
