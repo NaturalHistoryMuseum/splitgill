@@ -30,23 +30,23 @@ DATA_TEMPLATE = {
             },
         },
         "mappings": {
-            # "_source": {
-            #     # these fields are stored and will be returned in search results
-            #     "includes": [
-            #         fields.ID,
-            #         fields.VERSION,
-            #         fields.NEXT,
-            #         fields.DATA,
-            #     ],
-            #     # these fields are not stored, only indexed
-            #     "excludes": [
-            #         fields.ALL,
-            #         fields.VERSIONS,
-            #         fields.PARSED,
-            #         fields.GEO,
-            #         fields.LISTS,
-            #     ],
-            # },
+            "_source": {
+                # these fields are stored and will be returned in search results
+                "includes": [
+                    fields.ID,
+                    fields.VERSION,
+                    fields.NEXT,
+                    fields.DATA,
+                ],
+                # these fields are not stored, only indexed
+                "excludes": [
+                    fields.ALL,
+                    fields.VERSIONS,
+                    fields.PARSED,
+                    fields.GEO,
+                    fields.LISTS,
+                ],
+            },
             "properties": {
                 fields.ID: {"type": "keyword"},
                 fields.VERSION: {"type": "date", "format": "epoch_millis"},
