@@ -121,7 +121,7 @@ def generate_index_ops(
     do_version_check = current is not None
 
     for record in records:
-        if do_version_check and record.version < current:
+        if do_version_check and record.version <= current:
             # nothing to do for this record, move on
             continue
 
@@ -149,7 +149,7 @@ def generate_index_ops(
                 )
 
             # if the version is below the current version in Elasticsearch, we're done
-            if do_version_check and version < current:
+            if do_version_check and version <= current:
                 break
 
             # update the next version to the version we just handled

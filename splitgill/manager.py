@@ -350,7 +350,7 @@ class SplitgillDatabase:
         since = self.get_elasticsearch_version()
         if since is not None:
             # find all the updated records that haven't had the update synced yet
-            find_filter = {"version": {"$gte": since}}
+            find_filter = {"version": {"$gt": since}}
         else:
             # find all the committed records as elasticsearch has nothing
             find_filter = {"version": {"$ne": None}}
