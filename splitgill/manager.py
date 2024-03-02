@@ -163,7 +163,12 @@ class SplitgillDatabase:
             return version
         return None
 
-    def add(self, records: Iterable[Record], commit=True) -> Optional[int]:
+    def add(
+        self,
+        records: Iterable[Record],
+        commit=True,
+        modified_field: Optional[str] = None,
+    ) -> Optional[int]:
         """
         Adds the given records to the database. This only adds the records to the
         MongoDB data collection, it doesn't trigger the indexing of this new data into
@@ -180,6 +185,15 @@ class SplitgillDatabase:
                         safe to pass a very large stream of records
         :param commit: whether to commit the data added with a new version after writing
                        the records. Default: True.
+        :param modified_field: a field name which if the only changes in the record data
+                               are in this field means the changes will be ignored. As
+                               you can probably guess from the name, the root reason for
+                               this parameter existing is to avoid committing a new
+                               version of a record when all that has happened is the
+                               record has been touched and the modified field's date
+                               value updated even though the rest of the record remains
+                               the same. Default: None, meaning all fields are checked
+                               for changes.
         :return: returns the new version if a commit happened, otherwise None. If a
                  commit was requested but nothing was changed, None is returned.
         """
@@ -189,7 +203,9 @@ class SplitgillDatabase:
             [IndexModel([("id", ASCENDING)]), IndexModel([("version", DESCENDING)])]
         )
 
-        for ops in partition(generate_ops(self.data_collection, records), OPS_SIZE):
+        for ops in partition(
+            generate_ops(self.data_collection, records, modified_field), OPS_SIZE
+        ):
             self.data_collection.bulk_write(ops)
 
         if commit:

@@ -14,7 +14,9 @@ FIND_SIZE = 100
 
 
 def generate_ops(
-    data_collection: Collection, records: Iterable[Record]
+    data_collection: Collection,
+    records: Iterable[Record],
+    modified_field: Optional[str] = None,
 ) -> Iterable[MongoBulkOp]:
     """
     Yields MongoDB bulk operations to insert or modify records in the given collection
@@ -44,6 +46,12 @@ def generate_ops(
 
     :param data_collection: the data collection containing any existing records
     :param records: the records to generate insert/update ops for
+    :param modified_field: optional field containing a modified date. If this parameter
+                           is specified, the check to see if there are any changes
+                           between the old and new versions of the data will ignore this
+                           field (if there are other fields that have changed, then a
+                           full diff is generated with these fields included). Defaults
+                           to None, indicating no modified field should be used.
     :return: yields bulk Mongo ops
     """
     # TODO: refactor this, it's a bit messy
@@ -78,7 +86,7 @@ def generate_ops(
                     if not record.data:
                         # the uncommitted record is being deleted, so delete it!
                         yield DeleteOne({"id": record.id})
-                    elif existing_record.data != new_data:
+                    elif any(diff(new_data, existing_record.data)):
                         # the current record has one uncommitted version of the data and
                         # no previous versions, just replace its data with the new data
                         yield UpdateOne({"id": record.id}, {"$set": {"data": new_data}})
@@ -89,7 +97,28 @@ def generate_ops(
                     # the record's data and stash the UpdateOp
                     revert_update_op = revert_record(existing_record)
 
-            changes = list(diff(new_data, existing_record.data))
+            if (
+                modified_field is not None
+                and modified_field in new_data
+                and modified_field in existing_record.data
+            ):
+                # pop the modified values
+                new_value = new_data.pop(modified_field)
+                existing_value = existing_record.data.pop(modified_field)
+                # check if there are any other changes
+                other_changes = any(diff(new_data, existing_record.data))
+                # put the values back
+                new_data[modified_field] = new_value
+                existing_record.data[modified_field] = existing_value
+                if other_changes:
+                    # generate a full diff
+                    changes = list(diff(new_data, existing_record.data))
+                else:
+                    # indicate that there are no changes between the new and old data
+                    changes = []
+            else:
+                changes = list(diff(new_data, existing_record.data))
+
             if changes:
                 # the existing record has been updated, yield the op necessary to
                 # update it in mongo

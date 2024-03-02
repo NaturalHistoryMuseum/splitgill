@@ -154,3 +154,47 @@ class TestGenerateOps:
         assert data_collection.find_one({"id": "1"})["data"] == {"x": 4}
         assert data_collection.find_one({"id": "1"})["version"] == 6
         assert "diffs" not in data_collection.find_one({"id": "1"})
+
+    def test_modified_is_ignored_when_provided(self, data_collection: Collection):
+        # add some records
+        old_version = 4
+        old_records = [
+            Record("1", {"x": 1, "modified": "2024-02-22T15:11:03+00:00"}),
+            Record("2", {"x": 2, "modified": "2021-02-22T15:12:07+00:00"}),
+            Record("3", {"x": 3, "modified": "2021-02-22T15:27:32+00:00"}),
+        ]
+        data_collection.bulk_write(list(generate_ops(data_collection, old_records)))
+        commit_helper(data_collection, old_version)
+        assert data_collection.count_documents({}) == len(old_records)
+
+        # update some of them
+        new_records = [
+            # no update to record 1 (modified is different, but other data is the same)
+            Record("1", {"x": 1, "modified": "2024-02-22T16:11:03+00:00"}),
+            # updates to records 2 and 3 though (both modified and x have changed)
+            Record("2", {"x": 10, "modified": "2024-02-22T16:11:03+00:00"}),
+            Record("3", {"x": 185, "modified": "2024-02-22T16:11:03+00:00"}),
+        ]
+        ops = list(generate_ops(data_collection, new_records, "modified"))
+        data_collection.bulk_write(ops)
+
+        # number of records shouldn't have changed
+        assert data_collection.count_documents({}) == len(old_records)
+        # all the ops should be UpdateOnes
+        assert all(isinstance(op, UpdateOne) for op in ops)
+        # there should be 2 changed records
+        assert data_collection.count_documents({"version": None}) == 2
+
+        for new_record, old_record in zip(new_records[1:], old_records[1:]):
+            # sanity check
+            assert new_record.id == old_record.id
+            doc = data_collection.find_one({"id": new_record.id})
+            assert doc["version"] is None
+            assert doc["data"] == prepare_data(new_record.data)
+            # to compare the diff we have to convert the tuples into lists
+            assert doc["diffs"][str(old_version)] == [
+                [list(diff_op.path), diff_op.ops]
+                for diff_op in diff(
+                    prepare_data(new_record.data), prepare_data(old_record.data)
+                )
+            ]
