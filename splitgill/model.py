@@ -231,3 +231,26 @@ class ParsingOptions:
             doc["keyword_length"],
             doc["float_format"],
         )
+
+
+@dataclass
+class AddResult:
+    """
+    A dataclass containing information about the new data added to MongoDB.
+    """
+
+    # the version the new data was added at (if the data was not committed or no new
+    # data was added, then this will be None)
+    version: Optional[int]
+    # the number of bulk operations that were performed in total
+    ops: int
+    # the number of insert operations performed
+    inserted: int
+    # the number of update operations performed
+    updated: int
+    # the number of delete operations performed
+    deleted: int
+
+    @property
+    def has_version(self) -> bool:
+        return self.version is not None

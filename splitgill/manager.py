@@ -20,7 +20,7 @@ from splitgill.indexing.index import (
 from splitgill.indexing.options import ParsingOptionsRange
 from splitgill.indexing.templates import DATA_TEMPLATE
 from splitgill.ingest import generate_ops, generate_rollback_ops
-from splitgill.model import Record, MongoRecord, ParsingOptions
+from splitgill.model import Record, MongoRecord, ParsingOptions, AddResult
 from splitgill.profiles import Profile, build_profile
 from splitgill.utils import partition, now
 
@@ -168,7 +168,7 @@ class SplitgillDatabase:
         records: Iterable[Record],
         commit=True,
         modified_field: Optional[str] = None,
-    ) -> Optional[int]:
+    ) -> AddResult:
         """
         Adds the given records to the database. This only adds the records to the
         MongoDB data collection, it doesn't trigger the indexing of this new data into
@@ -194,23 +194,33 @@ class SplitgillDatabase:
                                value updated even though the rest of the record remains
                                the same. Default: None, meaning all fields are checked
                                for changes.
-        :return: returns the new version if a commit happened, otherwise None. If a
-                 commit was requested but nothing was changed, None is returned.
+        :return: returns a AddToMongoResult object
         """
-        # TODO: return some stats about the add
         # this does nothing if the indexes already exist
         self.data_collection.create_indexes(
             [IndexModel([("id", ASCENDING)]), IndexModel([("version", DESCENDING)])]
         )
 
+        ops = 0
+        inserted = 0
+        updated = 0
+        deleted = 0
+
         for ops in partition(
             generate_ops(self.data_collection, records, modified_field), OPS_SIZE
         ):
-            self.data_collection.bulk_write(ops)
+            ops += len(ops)
+            bulk_result = self.data_collection.bulk_write(ops)
+            inserted += bulk_result.inserted_count
+            updated += bulk_result.upserted_count
+            deleted += bulk_result.deleted_count
 
         if commit:
-            return self.commit()
-        return None
+            version = self.commit()
+        else:
+            version = None
+
+        return AddResult(version, ops, inserted, updated, deleted)
 
     def update_options(self, options: ParsingOptions, commit=True) -> Optional[int]:
         """
