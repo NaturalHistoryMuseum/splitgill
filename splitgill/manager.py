@@ -20,7 +20,7 @@ from splitgill.indexing.index import (
 from splitgill.indexing.options import ParsingOptionsRange
 from splitgill.indexing.templates import DATA_TEMPLATE
 from splitgill.ingest import generate_ops, generate_rollback_ops
-from splitgill.model import Record, MongoRecord, ParsingOptions, AddResult
+from splitgill.model import Record, MongoRecord, ParsingOptions, IngestResult
 from splitgill.profiles import Profile, build_profile
 from splitgill.utils import partition, now
 
@@ -163,16 +163,17 @@ class SplitgillDatabase:
             return version
         return None
 
-    def add(
+    def ingest(
         self,
         records: Iterable[Record],
         commit=True,
         modified_field: Optional[str] = None,
-    ) -> AddResult:
+    ) -> IngestResult:
         """
-        Adds the given records to the database. This only adds the records to the
+        Ingests the given records to the database. This only adds the records to the
         MongoDB data collection, it doesn't trigger the indexing of this new data into
-        the Elasticsearch cluster. All data will be added with a None version.
+        the Elasticsearch cluster. All data will be added with a None version unless the
+        commit parameter is True in which case a version will be assigned.
 
         Use the commit keyword argument to either close the "transaction" after writing
         these records or leave it open. By default, the "transaction" is committed
@@ -185,23 +186,23 @@ class SplitgillDatabase:
                         safe to pass a very large stream of records
         :param commit: whether to commit the data added with a new version after writing
                        the records. Default: True.
-        :param modified_field: a field name which if the only changes in the record data
-                               are in this field means the changes will be ignored. As
-                               you can probably guess from the name, the root reason for
-                               this parameter existing is to avoid committing a new
+        :param modified_field: a field name which, if the only changes in the record
+                               data are in this field means the changes will be ignored.
+                               As you can probably guess from the name, the root reason
+                               for this parameter existing is to avoid committing a new
                                version of a record when all that has happened is the
                                record has been touched and the modified field's date
                                value updated even though the rest of the record remains
                                the same. Default: None, meaning all fields are checked
                                for changes.
-        :return: returns a AddToMongoResult object
+        :return: returns a IngestResult object
         """
         # this does nothing if the indexes already exist
         self.data_collection.create_indexes(
             [IndexModel([("id", ASCENDING)]), IndexModel([("version", DESCENDING)])]
         )
 
-        result = AddResult()
+        result = IngestResult()
 
         for ops in partition(
             generate_ops(self.data_collection, records, modified_field), OPS_SIZE

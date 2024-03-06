@@ -37,7 +37,7 @@ class TestSplitgillDatabaseGetCommittedVersion:
             Record.new({"x": 89}),
             Record.new({"x": 5}),
         ]
-        database.add(records, commit=False)
+        database.ingest(records, commit=False)
         assert database.get_committed_version() is None
 
     @freeze_time("2012-01-14 12:00:01")
@@ -48,7 +48,7 @@ class TestSplitgillDatabaseGetCommittedVersion:
             Record.new({"x": 89}),
             Record.new({"x": 5}),
         ]
-        database.add(records, commit=True)
+        database.ingest(records, commit=True)
         assert database.get_committed_version() == 1326542401000
 
     @freeze_time("2012-01-14 12:00:01")
@@ -60,7 +60,7 @@ class TestSplitgillDatabaseGetCommittedVersion:
             Record.new({"x": 89}),
             Record.new({"x": 5}),
         ]
-        database.add(records, commit=True)
+        database.ingest(records, commit=True)
         assert database.get_committed_version() == version
         more_records = [
             # this one is new
@@ -68,7 +68,7 @@ class TestSplitgillDatabaseGetCommittedVersion:
             # this one is an update to one of the ones above
             Record(records[0].id, {"x": 100}),
         ]
-        database.add(more_records, commit=False)
+        database.ingest(more_records, commit=False)
         assert database.get_committed_version() == version
 
     def test_uncommitted_options(self, splitgill: SplitgillClient):
@@ -105,7 +105,7 @@ class TestSplitgillDatabaseGetCommittedVersion:
             Record.new({"x": 89}),
             Record.new({"x": 5}),
         ]
-        database.add(records, commit=False)
+        database.ingest(records, commit=False)
         options = ParsingOptionsBuilder().with_defaults().build()
         database.update_options(options, commit=False)
 
@@ -117,7 +117,7 @@ class TestSplitgillDatabaseGetCommittedVersion:
         # update the records
         with freeze_time("2012-01-14 12:00:05"):
             new_records = [Record.new({"x": 4})]
-            database.add(new_records, commit=True)
+            database.ingest(new_records, commit=True)
         assert database.get_committed_version() == 1326542405000
 
         # update the options
@@ -185,7 +185,7 @@ class TestCommit:
     @freeze_time("2012-01-14 12:00:01")
     def test_new_records(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
-        database.add([Record.new({"x": 5})], commit=False)
+        database.ingest([Record.new({"x": 5})], commit=False)
         assert database.commit() == 1326542401000
 
     @freeze_time("2012-01-14 12:00:01")
@@ -199,7 +199,7 @@ class TestCommit:
     @freeze_time("2012-01-14 12:00:01")
     def test_both(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
-        database.add([Record.new({"x": 5})], commit=False)
+        database.ingest([Record.new({"x": 5})], commit=False)
         database.update_options(
             ParsingOptionsBuilder().with_defaults().build(), commit=False
         )
@@ -209,7 +209,7 @@ class TestCommit:
 class TestAdd:
     def test_no_records(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
-        database.add([])
+        database.ingest([])
         assert database.get_committed_version() is None
 
     @freeze_time("2012-01-14 12:00:01")
@@ -218,7 +218,7 @@ class TestAdd:
         count = 103
         record_iter = (Record.new({"x": i}) for i in range(count))
 
-        database.add(record_iter, commit=True)
+        database.ingest(record_iter, commit=True)
 
         assert database.data_collection.count_documents({}) == count
         assert database.get_committed_version() == 1326542401000
@@ -227,14 +227,14 @@ class TestAdd:
     def test_commit_and_is_default(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
 
-        database.add([Record.new({"x": 10})])
+        database.ingest([Record.new({"x": 10})])
 
         assert database.get_committed_version() == 1326542401000
 
     def test_no_commit(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
 
-        database.add([Record.new({"x": 10})], commit=False)
+        database.ingest([Record.new({"x": 10})], commit=False)
 
         assert database.get_committed_version() is None
 
@@ -244,7 +244,7 @@ class TestAdd:
         database.data_collection.bulk_write = MagicMock(side_effect=Exception("oh no!"))
 
         with pytest.raises(Exception, match="oh no!"):
-            database.add([Record.new({"x": 10})], commit=True)
+            database.ingest([Record.new({"x": 10})], commit=True)
 
         assert database.get_committed_version() is None
 
@@ -262,7 +262,7 @@ class TestGetAllIndices:
 
         # add a record from 2015
         with freeze_time(date_2015):
-            database.add(
+            database.ingest(
                 [
                     Record.new({"x": 6}),
                 ],
@@ -271,7 +271,7 @@ class TestGetAllIndices:
 
         # add a record from 2021
         with freeze_time(date_2021):
-            database.add(
+            database.ingest(
                 [
                     Record.new({"x": 5}),
                 ],
@@ -300,7 +300,7 @@ class TestSync:
         version_time = datetime(2020, 7, 2)
 
         with freeze_time(version_time):
-            database.add(
+            database.ingest(
                 [
                     Record.new({"x": 5}),
                     Record.new({"x": 10}),
@@ -327,7 +327,7 @@ class TestSync:
         version_time = datetime(2020, 7, 2)
 
         with freeze_time(version_time):
-            database.add(
+            database.ingest(
                 [
                     Record.new({"x": 5}),
                     Record.new({"x": 10}),
@@ -363,7 +363,7 @@ class TestSync:
 
         # add some records at a specific version
         with freeze_time(version_1_time):
-            database.add(version_1_records, commit=True)
+            database.ingest(version_1_records, commit=True)
 
         database.sync()
         assert splitgill.elasticsearch.count(index=latest_index)["count"] == 4
@@ -380,7 +380,7 @@ class TestSync:
 
         # update the records
         with freeze_time(version_2_time):
-            database.add(version_2_records, commit=True)
+            database.ingest(version_2_records, commit=True)
 
         database.sync()
 
@@ -402,7 +402,7 @@ class TestSync:
 
         # add some records at a specific version
         with freeze_time(version_1_time):
-            database.add(version_1_records, commit=True)
+            database.ingest(version_1_records, commit=True)
 
         database.sync()
         assert splitgill.elasticsearch.count(index=latest_index)["count"] == 4
@@ -419,7 +419,7 @@ class TestSync:
 
         # update the records
         with freeze_time(version_2_time):
-            database.add(version_2_records, commit=True)
+            database.ingest(version_2_records, commit=True)
 
         database.sync()
 
@@ -439,7 +439,7 @@ class TestSync:
     def test_sync_delete_non_existent(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
 
-        database.add(
+        database.ingest(
             [
                 Record.new({"x": 5}),
                 Record.new({"x": 10}),
@@ -480,7 +480,7 @@ class TestSync:
                 Record.new({"x": 15}),
                 Record.new({"x": 8}),
             ]
-            database.add(records)
+            database.ingest(records)
 
             with pytest.raises(Exception, match="Something went wrong... on purpose!"):
                 # add them one at a time so that some docs actually get to elasticsearch
@@ -542,7 +542,7 @@ class TestSync:
                 Record.new({"x": 15}),
                 Record.new({"x": 8}),
             ]
-            database.add(records)
+            database.ingest(records)
 
             with pytest.raises(Exception, match="Something went wrong... on purpose!"):
                 # add them one at a time so that some docs actually get to elasticsearch

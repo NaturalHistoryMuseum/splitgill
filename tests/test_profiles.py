@@ -21,7 +21,7 @@ def add_data(
     :param records: the records to add
     :return: the version the records were added at as a timestamp
     """
-    database.add(records, commit=False)
+    database.ingest(records, commit=False)
     database.update_options(
         # just use this date format to keep things under control in terms of what gets
         # parsed as a date and what doesn't

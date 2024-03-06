@@ -235,9 +235,9 @@ class ParsingOptions:
 
 
 @dataclass
-class AddResult:
+class IngestResult:
     """
-    A dataclass containing information about the new data added to MongoDB.
+    A dataclass containing information about the new data ingested into MongoDB.
     """
 
     # the version the new data was added at (if the data was not committed or no new
