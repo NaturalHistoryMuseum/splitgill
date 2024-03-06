@@ -251,7 +251,13 @@ class AddResult:
     deleted: int = 0
 
     @property
-    def has_version(self) -> bool:
+    def was_committed(self) -> bool:
+        """
+        Returns True if the data was committed, False if not. This is determined by
+        whether a version is available.
+
+        :return: True if the data was committed, False if not
+        """
         return self.version is not None
 
     def update(self, bulk_result: BulkWriteResult):
