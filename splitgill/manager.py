@@ -201,26 +201,18 @@ class SplitgillDatabase:
             [IndexModel([("id", ASCENDING)]), IndexModel([("version", DESCENDING)])]
         )
 
-        ops = 0
-        inserted = 0
-        updated = 0
-        deleted = 0
+        result = AddResult()
 
         for ops in partition(
             generate_ops(self.data_collection, records, modified_field), OPS_SIZE
         ):
-            ops += len(ops)
             bulk_result = self.data_collection.bulk_write(ops)
-            inserted += bulk_result.inserted_count
-            updated += bulk_result.upserted_count
-            deleted += bulk_result.deleted_count
+            result.update(bulk_result)
 
         if commit:
-            version = self.commit()
-        else:
-            version = None
+            result.version = self.commit()
 
-        return AddResult(version, ops, inserted, updated, deleted)
+        return result
 
     def update_options(self, options: ParsingOptions, commit=True) -> Optional[int]:
         """

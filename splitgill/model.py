@@ -4,6 +4,7 @@ from typing import Dict, Iterable, NamedTuple, List, Optional, FrozenSet, Union
 from uuid import uuid4
 
 from bson import ObjectId
+from pymongo.results import BulkWriteResult
 
 from splitgill.indexing import fields
 from splitgill.diffing import patch, DiffOp
@@ -241,16 +242,24 @@ class AddResult:
 
     # the version the new data was added at (if the data was not committed or no new
     # data was added, then this will be None)
-    version: Optional[int]
-    # the number of bulk operations that were performed in total
-    ops: int
+    version: Optional[int] = None
     # the number of insert operations performed
-    inserted: int
+    inserted: int = 0
     # the number of update operations performed
-    updated: int
+    updated: int = 0
     # the number of delete operations performed
-    deleted: int
+    deleted: int = 0
 
     @property
     def has_version(self) -> bool:
         return self.version is not None
+
+    def update(self, bulk_result: BulkWriteResult):
+        """
+        Update the counts with the counts in the bulk result object.
+
+        :param bulk_result: a BulkWriteResult object
+        """
+        self.inserted += bulk_result.inserted_count
+        self.updated += bulk_result.upserted_count
+        self.deleted += bulk_result.deleted_count
