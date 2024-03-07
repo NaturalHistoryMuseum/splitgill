@@ -69,7 +69,7 @@ def generate_ops(
                 continue
 
             # prepare the record's data, we will use this as both the record's new data
-            # that we actually store in Mongo and also to diff against the existing data
+            # that we actually store in Mongo and also to diff against any existing data
             new_data = prepare_data(record.data)
 
             if record_id not in existing:
@@ -90,7 +90,7 @@ def generate_ops(
                         # the current record has one uncommitted version of the data and
                         # no previous versions, just replace its data with the new data
                         yield UpdateOne({"id": record.id}, {"$set": {"data": new_data}})
-                    # no diff needs to be generated, so move on
+                    # the existing and new data are the same, nothing to do
                     continue
                 else:
                     # revert the local object version back to the previous version of
