@@ -223,6 +223,41 @@ class TestIngest:
         assert database.data_collection.count_documents({}) == count
         assert database.get_committed_version() == 1326542401000
 
+    def test_same_record(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        record = Record("r1", {"x": 5, "y": False, "z": [1, 2, 3]})
+
+        database.ingest([record], commit=True)
+        added_record = database.data_collection.find_one({"id": "r1"})
+        assert added_record["data"] == record.data
+        assert "diffs" not in added_record
+
+        # add the same record again
+        database.ingest([record], commit=True)
+        added_record_again = database.data_collection.find_one({"id": "r1"})
+        assert added_record == added_record_again
+
+    def test_same_record_tuples_and_lists(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        record = Record("r1", {"x": (1, 2, 3)})
+        clean_data = {"x": [1, 2, 3]}
+
+        database.ingest([record], commit=True)
+        added_record = database.data_collection.find_one({"id": "r1"})
+        assert added_record["data"] == clean_data
+        assert "diffs" not in added_record
+
+        # add the same record again
+        database.ingest([record], commit=True)
+        added_record_again = database.data_collection.find_one({"id": "r1"})
+        assert added_record == added_record_again
+
+        # add the same record again with a list instead of a tuple this time
+        record.data = clean_data
+        database.ingest([record], commit=True)
+        added_record_again = database.data_collection.find_one({"id": "r1"})
+        assert added_record == added_record_again
+
     @freeze_time("2012-01-14 12:00:01")
     def test_commit_and_is_default(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
