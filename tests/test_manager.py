@@ -206,7 +206,7 @@ class TestCommit:
         assert database.commit() == 1326542401000
 
 
-class TestAdd:
+class TestIngest:
     def test_no_records(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
         database.ingest([])
