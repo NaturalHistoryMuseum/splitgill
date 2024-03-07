@@ -5,7 +5,7 @@ from pymongo import InsertOne, UpdateOne
 from pymongo.collection import Collection
 
 from splitgill.diffing import prepare_data, diff
-from splitgill.ingest import generate_ops, FIND_SIZE
+from splitgill.ingest import generate_ops
 from splitgill.model import Record
 
 
@@ -98,7 +98,7 @@ class TestGenerateOps:
             ]
 
     def test_lots_of_records(self, data_collection: Collection):
-        records = [create_random_record() for _ in range(FIND_SIZE * 5)]
+        records = [create_random_record() for _ in range(5000)]
 
         ops = list(generate_ops(data_collection, records))
 

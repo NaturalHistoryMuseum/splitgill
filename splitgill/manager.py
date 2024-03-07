@@ -27,7 +27,6 @@ from splitgill.utils import partition, now
 MONGO_DATABASE_NAME = "sg"
 OPTIONS_COLLECTION_NAME = "options"
 PROFILES_INDEX_NAME = "profiles"
-OPS_SIZE = 500
 
 
 class SplitgillClient:
@@ -203,9 +202,12 @@ class SplitgillDatabase:
         )
 
         result = IngestResult()
+        # this is used for the find size and the bulk ops partition size which both need
+        # to be the same to ensure we can handle duplicates in the record stream
+        size = 200
 
         for ops in partition(
-            generate_ops(self.data_collection, records, modified_field), OPS_SIZE
+            generate_ops(self.data_collection, records, modified_field, size), size
         ):
             bulk_result = self.data_collection.bulk_write(ops)
             result.update(bulk_result)
@@ -268,7 +270,7 @@ class SplitgillDatabase:
         there is, may take a bit of time to run.
         """
         if self.has_uncommitted_records():
-            for ops in partition(generate_rollback_ops(self.data_collection), OPS_SIZE):
+            for ops in partition(generate_rollback_ops(self.data_collection), 200):
                 self.data_collection.bulk_write(ops)
 
     def has_uncommitted_records(self) -> bool:
