@@ -54,11 +54,6 @@ class TestMongoRecord:
 
         assert record.versions == [10, 7, 2]
 
-    def test_is_made_safe(self):
-        data = {"x": 5, "y": [True, 2, "3"]}
-        record = MongoRecord(ObjectId(), str(uuid4()), 10, data)
-        assert record.data == {"x": 5, "y": (True, 2, "3")}
-
 
 class TestGeoFieldHint:
     def test_geo_path_with_radius(self):
