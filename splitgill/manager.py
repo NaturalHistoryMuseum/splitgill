@@ -252,14 +252,16 @@ class SplitgillDatabase:
             return self.commit()
         return None
 
-    def rollback_options(self):
+    def rollback_options(self) -> int:
         """
         Remove any uncommitted option changes.
 
         There should only ever be one, but this deletes them all ensuring everything is
         clean and tidy.
+
+        :return: the number of documents deleted
         """
-        self.options_collection.delete_many({"version": None})
+        return self.options_collection.delete_many({"version": None}).deleted_count
 
     def rollback_records(self):
         """
