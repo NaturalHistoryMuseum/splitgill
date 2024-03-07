@@ -64,6 +64,21 @@ def generate_ops(
             for doc in data_collection.find({"id": {"$in": list(records_by_id)}})
         }
 
+        # shortcut if no records exist
+        if not existing:
+            yield from (
+                InsertOne(
+                    {
+                        "id": record.id,
+                        "data": prepare_data(record.data),
+                        "version": None,
+                    }
+                )
+                for record in records_by_id.values()
+                if not record.is_delete
+            )
+            continue
+
         for record_id, record in records_by_id.items():
             # a delete of a non-existent record, ignore
             if record.is_delete and record_id not in existing:
