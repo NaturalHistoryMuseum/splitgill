@@ -10,13 +10,12 @@ from splitgill.utils import partition
 
 MongoBulkOp = Union[InsertOne, UpdateOne, DeleteOne]
 
-FIND_SIZE = 100
-
 
 def generate_ops(
     data_collection: Collection,
     records: Iterable[Record],
     modified_field: Optional[str] = None,
+    find_size: int = 100,
 ) -> Iterable[MongoBulkOp]:
     """
     Yields MongoDB bulk operations to insert or modify records in the given collection
@@ -52,10 +51,12 @@ def generate_ops(
                            field (if there are other fields that have changed, then a
                            full diff is generated with these fields included). Defaults
                            to None, indicating no modified field should be used.
+    :param find_size: the number of records look up at a time. This corresponds directly
+                      to the size of the $in query ID list. Defaults to 100.
     :return: yields bulk Mongo ops
     """
     # TODO: refactor this, it's a bit messy
-    for chunk in partition(records, FIND_SIZE):
+    for chunk in partition(records, find_size):
         records_by_id = {record.id: record for record in chunk}
         # find if any of the records to be added/updated already exist in the collection
         existing = {
