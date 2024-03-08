@@ -352,27 +352,18 @@ class SplitgillDatabase:
         :param chunk_size: the number of docs to send to Elasticsearch in each bulk
                            request
         """
-        # we're gonna use this all over the place so cache it into a variable
         client = self._client.elasticsearch
-        # choose which bulk function we're using based on the parallel parameter
         bulk_function = parallel_bulk if parallel else streaming_bulk
 
         client.indices.put_index_template(name="data-template", body=DATA_TEMPLATE)
-
-        # grab a list of all the indices we may update during this operation
         indices = self.get_all_indices()
-
-        # create all the indices so we can apply optimal indexing settings to them and
-        # refresh them at the end to make the new data visible
         for index in indices:
             if not client.indices.exists(index=index):
                 client.indices.create(index=index)
 
-        # set up a generator of all the records with a version newer than the last time
-        # version that has been synced
         since = self.get_elasticsearch_version()
         if since is not None:
-            # find all the updated records that haven't had the update synced yet
+            # find all the updated records that haven't had their updates synced yet
             find_filter = {"version": {"$gt": since}}
         else:
             # find all the committed records as elasticsearch has nothing
@@ -387,19 +378,15 @@ class SplitgillDatabase:
 
         # we don't care about the results so just throw them away into a 0-sized
         # deque (errors will be raised directly)
-        try:
-            deque(
-                bulk_function(
-                    client,
-                    generate_index_ops(self.name, docs, since, self.get_options()),
-                    raise_on_error=True,
-                    chunk_size=chunk_size,
-                ),
-                maxlen=0,
-            )
-        except Exception as e:
-            print(e)
-            raise e
+        deque(
+            bulk_function(
+                client,
+                generate_index_ops(self.name, docs, since, self.get_options()),
+                raise_on_error=True,
+                chunk_size=chunk_size,
+            ),
+            maxlen=0,
+        )
 
         # refresh all indices to make the changes visible all at once
         client.indices.refresh(index=indices)
@@ -415,7 +402,6 @@ class SplitgillDatabase:
             if not any(client.search(index=index, size=1)["hits"]["hits"]):
                 client.indices.delete(index=index)
 
-        # update the profiles as needed
         self._client.profile_manager.update_profiles(self)
 
     def search(self, latest: bool) -> Search:
