@@ -2,6 +2,8 @@ from datetime import datetime
 from functools import lru_cache
 from typing import Optional, Iterable
 
+import math
+
 from splitgill.indexing import fields
 from splitgill.indexing.options import ParsingOptionsRange
 from splitgill.indexing.parser import parse_for_index
@@ -97,31 +99,30 @@ def create_index_op(
 def generate_index_ops(
     name: str,
     records: Iterable[MongoRecord],
-    current: Optional[int],
+    start: Optional[int],
     options: ParsingOptionsRange,
 ) -> Iterable[dict]:
     """
-    Yields operations to run against Elasticsearch in order to update the indices in the
-    cluster for the given database name with the data in the given records. The current
-    parameter should hold the value of the current version in the cluster for this
-    database. Ops will be yielded that update the cluster from this current version to
-    the latest version available for each record.
+    Yields bulk index operations to run against Elasticsearch to update the indices of
+    the given database name with the data in the given records. The start parameter
+    specifies the version from which the index operations should begin (exclusive).
+    Typically, therefore, start = the latest version in elasticsearch for this database.
+
+    If the start parameter is None, all versions of the records will yield operations.
 
     :param name: the name of the database
     :param records: the records to update from
-    :param current: the latest version in Elasticsearch, None if there isn't any data in
-                    elasticsearch
+    :param start: the exclusive start version to produce index operations from, None if
+                  all versions should be indexed
     :param options: ParsingOptionsRange object so that we can get the right parsing
                     options for indexing
     :return: yields ops as dicts
     """
     latest_index = get_latest_index_id(name)
-    # only check the version of the record against the current version of elasticsearch
-    # if there is something to compare against
-    do_version_check = current is not None
+    start = -math.inf if start is None else start
 
     for record in records:
-        if do_version_check and record.version <= current:
+        if record.version <= start:
             # nothing to do for this record, move on
             continue
 
@@ -148,8 +149,8 @@ def generate_index_ops(
                     index, record.id, data, version, options.get(version), next_version
                 )
 
-            # if the version is below the current version in Elasticsearch, we're done
-            if do_version_check and version <= current:
+            # if the version is below the start version, we're done
+            if version <= start:
                 break
 
             # update the next version to the version we just handled
