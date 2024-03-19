@@ -2,7 +2,6 @@ from uuid import uuid4
 
 from bson import ObjectId
 
-from splitgill.indexing.fields import geo_compound_path
 from splitgill.diffing import diff
 from splitgill.model import (
     MongoRecord,
@@ -43,7 +42,7 @@ class TestMongoRecord:
         for actual, expected in zip(record.iter(), data):
             assert expected == actual
 
-    def test_versions(self):
+    def test_get_versions(self):
         data = [
             VersionedData(10, {"a": "1", "b": "2"}),
             VersionedData(7, {"a": "4", "b": "1"}),
@@ -52,7 +51,9 @@ class TestMongoRecord:
 
         record = create_mongo_record(data[0].version, data[0].data, *data[1:])
 
-        assert record.versions == [10, 7, 2]
+        assert record.get_versions(desc=True) == [10, 7, 2]
+        assert record.get_versions(desc=False) == [2, 7, 10]
+        assert record.get_versions() == [2, 7, 10]
 
 
 class TestGeoFieldHint:

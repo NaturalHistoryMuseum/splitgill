@@ -4,8 +4,9 @@ from unittest.mock import patch, MagicMock
 import pytest
 from freezegun import freeze_time
 
+from indexing.parser import parse_for_index
 from splitgill.indexing import fields
-from splitgill.indexing.index import get_data_index_id, create_index_op
+from splitgill.indexing.index import get_data_index_id
 from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.manager import (
     SplitgillClient,
@@ -495,18 +496,18 @@ class TestSync:
     def test_incomplete_is_not_searchable(self, splitgill: SplitgillClient):
         called = 0
 
-        def mock_create_index_op(*args, **kwargs):
-            # call the actual create_index_op function 3 times and then on the 4th go
+        def mock_parse_for_index(*args, **kwargs):
+            # call the actual parse_for_index function 3 times and then on the 4th go
             # around, raise an exception
             nonlocal called
             called += 1
             if called < 4:
-                return create_index_op(*args, **kwargs)
+                return parse_for_index(*args, **kwargs)
             else:
                 raise Exception("Something went wrong... on purpose!")
 
         with patch(
-            "splitgill.indexing.index.create_index_op", side_effect=mock_create_index_op
+            "splitgill.indexing.index.parse_for_index", side_effect=mock_parse_for_index
         ):
             database = SplitgillDatabase("test", splitgill)
             records = [
@@ -557,18 +558,18 @@ class TestSync:
     ):
         called = 0
 
-        def mock_create_index_op(*args, **kwargs):
-            # call the actual create_index_op function 3 times and then on the 4th go
+        def mock_parse_for_index(*args, **kwargs):
+            # call the actual parse_for_index function 3 times and then on the 4th go
             # around, raise an exception
             nonlocal called
             called += 1
             if called < 4:
-                return create_index_op(*args, **kwargs)
+                return parse_for_index(*args, **kwargs)
             else:
                 raise Exception("Something went wrong... on purpose!")
 
         with patch(
-            "splitgill.indexing.index.create_index_op", side_effect=mock_create_index_op
+            "splitgill.indexing.index.parse_for_index", side_effect=mock_parse_for_index
         ):
             database = SplitgillDatabase("test", splitgill)
             records = [
@@ -586,7 +587,7 @@ class TestSync:
         splitgill.elasticsearch.indices.refresh(index=database.latest_index_name)
         doc_count = splitgill.elasticsearch.count(index=database.latest_index_name)
         # check that the number of docs available for search is more than 0 but fewer
-        # than 4. Ideally this would be 3 because we allow 3 create_index_op calls to
+        # than 4. Ideally this would be 3 because we allow 3 parse_for_index calls to
         # complete and then raise an exception, however, the way that chunks are sent to
         # elasticsearch means that it's not 3, it's actually 2. The _ActionChunker class
         # in the elasticsearch library doesn't send the first op immediately even though

@@ -1,22 +1,21 @@
+from collections import defaultdict
 from datetime import datetime
+from itertools import chain
+from typing import Dict, Optional
 
-from bson import ObjectId
-from cytoolz.itertoolz import sliding_window
+from freezegun import freeze_time
 
-from splitgill.diffing import diff
 from splitgill.indexing import fields
 from splitgill.indexing.index import (
     get_data_index_id,
     get_latest_index_id,
-    create_index_op,
     generate_index_ops,
     get_index_wildcard,
 )
-from splitgill.indexing.options import ParsingOptionsBuilder, ParsingOptionsRange
+from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.indexing.parser import parse_for_index
-from splitgill.manager import SplitgillClient
-from splitgill.model import MongoRecord, VersionedData
-from splitgill.utils import to_timestamp
+from splitgill.manager import SplitgillClient, SplitgillDatabase
+from splitgill.model import Record, ParsingOptions
 
 
 def test_get_data_index_id():
@@ -34,220 +33,363 @@ def test_get_wildcard_index():
     assert get_index_wildcard("test") == "data-test-*"
 
 
-class TestCreateIndexOp:
-    def test_latest_op(self):
-        index_name = get_latest_index_id("test")
-        data = {"x": "beans"}
-        record_id = "xyz"
-        version = 1691359001000
-        options = ParsingOptionsBuilder().build()
-        parsed_data = parse_for_index(data, options)
+def setup_scenario(
+    splitgill: SplitgillClient,
+    records: Dict[str, Dict[int, dict]],
+    options: Dict[int, ParsingOptions],
+    database_name="test",
+) -> SplitgillDatabase:
+    database = SplitgillDatabase(database_name, splitgill)
 
-        op = create_index_op(
-            index_name, record_id, data, version, options, next_version=None
-        )
+    versioned_data = defaultdict(list)
+    for record_id, record_data in records.items():
+        for version, data in record_data.items():
+            versioned_data[version].append(Record(record_id, data))
+    versions = set(chain(versioned_data, options))
 
-        assert op["_op_type"] == "index"
-        assert op["_index"] == index_name
-        assert op["_id"] == record_id
-        assert op[fields.ID] == record_id
-        assert op[fields.DATA] == data
-        assert op[fields.PARSED] == parsed_data.parsed
-        assert op[fields.GEO] == parsed_data.geo
-        assert op[fields.LISTS] == parsed_data.lists
-        assert op[fields.VERSION] == version
-        assert op[fields.VERSIONS] == {
-            "gte": version,
-            # no lt
-        }
-        assert fields.NEXT not in op
-        assert fields.GEO_ALL not in op
+    for version in sorted(versions):
+        records_to_add = versioned_data.get(version)
+        if records_to_add:
+            database.ingest(records_to_add, commit=False)
 
-    def test_old_op(self):
-        data = {"x": "beans"}
-        record_id = "xyz"
-        version = 1691359001000
-        next_version = 1692568619000
-        index_name = get_data_index_id("test", version)
-        options = ParsingOptionsBuilder().build()
-        parsed_data = parse_for_index(data, options)
+        options_to_update = options.get(version)
+        if options_to_update:
+            database.update_options(options_to_update, commit=False)
 
-        op = create_index_op(
-            index_name, record_id, data, version, options, next_version=next_version
-        )
+        with freeze_time(datetime.fromtimestamp(version / 1000)):
+            database.commit()
 
-        assert op["_op_type"] == "index"
-        assert op["_index"] == index_name
-        assert op["_id"] == f"{record_id}:{version}"
-        assert op[fields.ID] == record_id
-        assert op[fields.DATA] == data
-        assert op[fields.PARSED] == parsed_data.parsed
-        assert op[fields.GEO] == parsed_data.geo
-        assert op[fields.LISTS] == parsed_data.lists
-        assert op[fields.VERSION] == version
+    return database
+
+
+def check_delete_op(op: dict, record_id: str, name: Optional[str] = "test"):
+    assert op["_op_type"] == "delete"
+    assert op["_index"] == get_latest_index_id(name)
+    assert op["_id"] == record_id
+
+
+def check_op(
+    op: dict,
+    record_id: str,
+    version: int,
+    data: dict,
+    options: ParsingOptions,
+    next_version: Optional[int] = None,
+    name: Optional[str] = "test",
+):
+    assert op["_op_type"] == "index"
+    if next_version is not None:
         assert op[fields.NEXT] == next_version
-        assert op[fields.VERSIONS] == {"gte": version, "lt": next_version}
-        assert fields.GEO_ALL not in op
+        assert op[fields.VERSIONS]["lt"] == next_version
+        assert op["_id"] == f"{record_id}:{version}"
+        assert op["_index"] == get_data_index_id(name, version)
+    else:
+        assert fields.NEXT not in op
+        assert op["_id"] == record_id
+        assert op["_index"] == get_latest_index_id(name)
 
-    def test_meta_geo_is_filled(self):
-        index_name = get_latest_index_id("test")
-        data = {
-            "x": "beans",
-            "lat": 4,
-            "lon": 10,
-            "location": {"type": "Point", "coordinates": [100.4, 0.1]},
-        }
-        record_id = "xyz"
-        version = 1691359001000
-        options = ParsingOptionsBuilder().with_geo_hint("lat", "lon").build()
+    assert op[fields.ID] == record_id
+    assert op[fields.VERSION] == version
+    assert op[fields.VERSIONS]["gte"] == version
 
-        op = create_index_op(
-            index_name, record_id, data, version, options, next_version=None
-        )
+    parsed = parse_for_index(data, options)
+    assert op[fields.DATA] == parsed.data
+    assert op[fields.PARSED] == parsed.parsed
+    assert op[fields.GEO] == parsed.geo
+    assert op[fields.LISTS] == parsed.lists
 
+    if parsed.geo:
         assert op[fields.GEO_ALL]["type"] == "GeometryCollection"
-        # there is no specific ordering for this so test using contains and assert size
-        geometries = op[fields.GEO_ALL]["geometries"]
-        assert len(geometries) == 2
-        assert {"type": "Point", "coordinates": (10.0, 4.0)} in geometries
-        assert {"type": "Point", "coordinates": (100.4, 0.1)} in geometries
+        assert op[fields.GEO_ALL]["geometries"] == list(parsed.geo.values())
 
 
 class TestGenerateIndexOps:
-    def test_old_version(self, splitgill: SplitgillClient):
-        # this shouldn't really happen because the records passed to the generate
-        # function should come from the database and should have been found using the
-        # current value compared to the record version, but just to be safe, the check
-        # is included in the code, so we should test it works at least!
-        records = [
-            MongoRecord(_id=ObjectId(), id="record-1", version=10, data={"x": "5"})
-        ]
-        options = ParsingOptionsRange({0: ParsingOptionsBuilder().build()})
-        assert not list(generate_index_ops("test", records, 11, options))
-
-    def test_updates(self, splitgill: SplitgillClient):
-        # make a bunch of data at different versions
-        data = [
-            VersionedData(to_timestamp(datetime(year, 1, 1)), {"x": f"{year} beans"})
-            for year in range(2015, 2024)
-        ]
-
-        record = MongoRecord(
-            _id=ObjectId(),
-            id="record-1",
-            version=data[-1].version,
-            data=data[-1].data,
-            diffs={
-                str(old.version): list(diff(new.data, old.data))
-                for old, new in sliding_window(2, data)
-            },
+    def test_after_beyond_data_version(self, splitgill: SplitgillClient):
+        # this shouldn't happen, but might as well check it!
+        database = setup_scenario(
+            splitgill,
+            records={"r1": {10: {"x": 5}}},
+            options={8: ParsingOptionsBuilder().build()},
         )
-        options = ParsingOptionsRange({0: ParsingOptionsBuilder().build()})
 
-        # test all data
-        ops = list(generate_index_ops("test", [record], 0, options))
-        assert len(ops) == len(data)
-        # check the first op, this will always be the op to update the latest index
-        assert ops[0] == create_index_op(
-            get_latest_index_id("test"),
-            record.id,
-            data[-1].data,
-            data[-1].version,
-            options.latest,
-        )
-        # check the other ops which update the old indices
-        for i, op in enumerate(reversed(ops[1:])):
-            assert op == create_index_op(
-                get_data_index_id("test", data[i].version),
-                record.id,
-                data[i].data,
-                data[i].version,
-                options.latest,
-                data[i + 1].version,
+        after = 11
+        assert not list(
+            generate_index_ops(
+                database.name, database.iter_records(), database.get_options(), after
             )
-
-        # now test not all the data
-        ops = list(generate_index_ops("test", [record], data[4].version + 1, options))
-        assert len(ops) == len(data) - 4
-        # first op out should still be the latest index replace op
-        assert ops[0] == create_index_op(
-            get_latest_index_id("test"),
-            record.id,
-            data[-1].data,
-            data[-1].version,
-            options.latest,
-        )
-        # the last op out should be one adding the previous latest version to the old
-        # indices. To explain a bit more, because we've passed data[4].version as the
-        # current version in elasticsearch, this implies that data[4] is the current
-        # latest version. This means it is not present in the old indices and therefore
-        # when it is replaced as the latest version in the latest index, it's data needs
-        # to be shunted to the old indices. This last op does that.
-        assert ops[-1] == create_index_op(
-            get_data_index_id("test", data[4].version),
-            record.id,
-            data[4].data,
-            data[4].version,
-            options.latest,
-            data[5].version,
         )
 
-    def test_some_deletes(self, splitgill: SplitgillClient):
-        data = [
-            VersionedData(to_timestamp(datetime(2015, 1, 1)), {"x": f"{2015} beans"}),
-            VersionedData(to_timestamp(datetime(2016, 1, 1)), {"x": f"{2016} beans"}),
-            # delete
-            VersionedData(to_timestamp(datetime(2017, 1, 1)), {}),
-            VersionedData(to_timestamp(datetime(2018, 1, 1)), {"x": f"{2018} beans"}),
-            # delete
-            VersionedData(to_timestamp(datetime(2019, 1, 1)), {}),
-        ]
-
-        record = MongoRecord(
-            _id=ObjectId(),
-            id="record-1",
-            version=data[-1].version,
-            data=data[-1].data,
-            diffs={
-                str(old.version): list(diff(new.data, old.data))
-                for old, new in sliding_window(2, data)
+    def test_after_beyond_options_version(self, splitgill: SplitgillClient):
+        # this shouldn't happen, but might as well check it!
+        database = setup_scenario(
+            splitgill,
+            records={"r1": {10: {"x": 5}}},
+            options={
+                8: ParsingOptionsBuilder().build(),
+                12: ParsingOptionsBuilder().with_keyword_length(4).build(),
             },
         )
-        options = ParsingOptionsRange({0: ParsingOptionsBuilder().build()})
 
-        ops = list(generate_index_ops("test", [record], 0, options))
+        after = 13
+        assert not list(
+            generate_index_ops(
+                database.name, database.iter_records(), database.get_options(), after
+            )
+        )
 
-        assert len(ops) == 4
-        # first op should be the delete from the latest index
-        assert ops[0] == {
-            "_op_type": "delete",
-            "_index": get_latest_index_id("test"),
-            "_id": record.id,
+    """
+    that excel scenario DONE
+    deletes DONE
+    check after works DONE
+    one data with many options
+    one option with many data
+    """
+
+    def test_mix(self, splitgill: SplitgillClient):
+        builder = ParsingOptionsBuilder()
+        data = {
+            2: {"x": 5.4},
+            4: {"x": 3.8},
+            8: {"x": 1.4},
+            9: {"x": 9.6},
         }
-        # second op should be to index the previous version into the a data index
-        assert ops[1] == create_index_op(
-            get_data_index_id("test", data[-2].version),
-            record.id,
-            data[-2].data,
-            data[-2].version,
-            options.latest,
-            data[-1].version,
+        options = {
+            1: builder.with_float_format("{0:.4f}").build(),
+            5: builder.with_float_format("{0:.2f}").build(),
+            7: builder.with_float_format("{0:.6f}").build(),
+            10: builder.with_float_format("{0:.10f}").build(),
+        }
+        database = setup_scenario(splitgill, {"r1": data}, options)
+
+        ops = list(
+            generate_index_ops(
+                database.name, database.iter_records(), database.get_options(), None
+            )
         )
-        # third op should the 2016 record as the 2017 is a delete
-        assert ops[2] == create_index_op(
-            get_data_index_id("test", data[1].version),
-            record.id,
-            data[1].data,
-            data[1].version,
-            options.latest,
-            data[2].version,
+        assert len(ops) == 7
+        check_op(ops[0], "r1", 10, data[9], options[10])
+        check_op(ops[1], "r1", 9, data[9], options[7], next_version=10)
+        check_op(ops[2], "r1", 8, data[8], options[7], next_version=9)
+        check_op(ops[3], "r1", 7, data[4], options[7], next_version=8)
+        check_op(ops[4], "r1", 5, data[4], options[5], next_version=7)
+        check_op(ops[5], "r1", 4, data[4], options[1], next_version=5)
+        check_op(ops[6], "r1", 2, data[2], options[1], next_version=4)
+
+    def test_delete(self, splitgill: SplitgillClient):
+        builder = ParsingOptionsBuilder()
+        data = {
+            2: {"x": 5.4},
+            4: {},
+            8: {"x": 1.4},
+            9: {},
+        }
+        options = {
+            1: builder.with_float_format("{0:.4f}").build(),
+            5: builder.with_float_format("{0:.2f}").build(),
+            7: builder.with_float_format("{0:.6f}").build(),
+            10: builder.with_float_format("{0:.10f}").build(),
+        }
+        database = setup_scenario(splitgill, {"r1": data}, options)
+
+        ops = list(
+            generate_index_ops(
+                database.name, database.iter_records(), database.get_options(), None
+            )
         )
-        # fourth op should the 2015 record
-        assert ops[3] == create_index_op(
-            get_data_index_id("test", data[0].version),
-            record.id,
-            data[0].data,
-            data[0].version,
-            options.latest,
-            data[1].version,
+        # we're expecting this set of pairs:
+        # 2|1, 4|1(D), 4|5(D), 4|7(D), 8|7, 9|7(D), 9|10(D)
+        # so the deletes are ignored (except for the next versions they set) and that
+        # means we only get 3 ops
+        assert len(ops) == 3
+        check_delete_op(ops[0], "r1")
+        check_op(ops[1], "r1", 8, data[8], options[7], next_version=9)
+        check_op(ops[2], "r1", 2, data[2], options[1], next_version=4)
+
+    def test_after_between_versions(self, splitgill: SplitgillClient):
+        builder = ParsingOptionsBuilder()
+        data = {
+            2: {"x": 5.4},
+            4: {"x": 2.7},
+            8: {"x": 1.4},
+            9: {"x": 0.1},
+        }
+        options = {
+            1: builder.with_float_format("{0:.4f}").build(),
+            5: builder.with_float_format("{0:.2f}").build(),
+            7: builder.with_float_format("{0:.6f}").build(),
+            10: builder.with_float_format("{0:.10f}").build(),
+        }
+        database = setup_scenario(splitgill, {"r1": data}, options)
+
+        # set after to 6 as we have no data nor options versions at 6
+        ops = list(
+            generate_index_ops(
+                database.name, database.iter_records(), database.get_options(), 6
+            )
         )
+        assert len(ops) == 5
+        check_op(ops[0], "r1", 10, data[9], options[10])
+        check_op(ops[1], "r1", 9, data[9], options[7], next_version=10)
+        check_op(ops[2], "r1", 8, data[8], options[7], next_version=9)
+        check_op(ops[3], "r1", 7, data[4], options[7], next_version=8)
+        check_op(ops[4], "r1", 5, data[4], options[5], next_version=7)
+
+    def test_after_at_both_versions(self, splitgill: SplitgillClient):
+        builder = ParsingOptionsBuilder()
+        data = {
+            2: {"x": 5.4},
+            5: {"x": 2.7},
+            8: {"x": 1.4},
+            9: {"x": 0.1},
+        }
+        options = {
+            1: builder.with_float_format("{0:.4f}").build(),
+            5: builder.with_float_format("{0:.2f}").build(),
+            7: builder.with_float_format("{0:.6f}").build(),
+            10: builder.with_float_format("{0:.10f}").build(),
+        }
+        database = setup_scenario(splitgill, {"r1": data}, options)
+
+        # set after to 5 which we have a version of data and options at
+        ops = list(
+            generate_index_ops(
+                database.name, database.iter_records(), database.get_options(), 5
+            )
+        )
+        assert len(ops) == 5
+        check_op(ops[0], "r1", 10, data[9], options[10])
+        check_op(ops[1], "r1", 9, data[9], options[7], next_version=10)
+        check_op(ops[2], "r1", 8, data[8], options[7], next_version=9)
+        check_op(ops[3], "r1", 7, data[5], options[7], next_version=8)
+        check_op(ops[4], "r1", 5, data[5], options[5], next_version=7)
+
+    def test_after_new_data(self, splitgill: SplitgillClient):
+        builder = ParsingOptionsBuilder()
+        data = {
+            2: {"x": 5.4},
+            4: {"x": 2.7},
+            8: {"x": 1.4},
+            9: {"x": 0.1},
+        }
+        options = {
+            1: builder.with_float_format("{0:.4f}").build(),
+            5: builder.with_float_format("{0:.2f}").build(),
+            7: builder.with_float_format("{0:.6f}").build(),
+        }
+        database = setup_scenario(splitgill, {"r1": data}, options)
+
+        # set after to 8, this should just mean version 9 of the data is found as new
+        ops = list(
+            generate_index_ops(
+                database.name, database.iter_records(), database.get_options(), 8
+            )
+        )
+        # should get 2 ops, one to update the latest index and one pushing the old
+        # latest down to the non-latest data indices
+        assert len(ops) == 2
+        check_op(ops[0], "r1", 9, data[9], options[7])
+        check_op(ops[1], "r1", 8, data[8], options[7], next_version=9)
+
+    def test_after_new_options(self, splitgill: SplitgillClient):
+        builder = ParsingOptionsBuilder()
+        data = {
+            2: {"x": 5.4},
+            4: {"x": 2.7},
+            8: {"x": 1.4},
+            9: {"x": 0.1},
+        }
+        options = {
+            1: builder.with_float_format("{0:.4f}").build(),
+            5: builder.with_float_format("{0:.2f}").build(),
+            7: builder.with_float_format("{0:.6f}").build(),
+            10: builder.with_float_format("{0:.3f}").build(),
+        }
+        database = setup_scenario(splitgill, {"r1": data}, options)
+
+        # set after to 9, this should just mean version 10 of the options is found as
+        # new
+        ops = list(
+            generate_index_ops(
+                database.name, database.iter_records(), database.get_options(), 9
+            )
+        )
+        # should get 2 ops, one to update the latest index and one pushing the old
+        # latest down to the non-latest data indices
+        assert len(ops) == 2
+        check_op(ops[0], "r1", 10, data[9], options[10])
+        check_op(ops[1], "r1", 9, data[9], options[7], next_version=10)
+
+    def test_after_new_both(self, splitgill: SplitgillClient):
+        builder = ParsingOptionsBuilder()
+        data = {
+            2: {"x": 5.4},
+            4: {"x": 2.7},
+            8: {"x": 1.4},
+            9: {"x": 0.1},
+        }
+        options = {
+            1: builder.with_float_format("{0:.4f}").build(),
+            5: builder.with_float_format("{0:.2f}").build(),
+            7: builder.with_float_format("{0:.6f}").build(),
+            9: builder.with_float_format("{0:.3f}").build(),
+        }
+        database = setup_scenario(splitgill, {"r1": data}, options)
+
+        # set after to 8, this should just mean version 10 of the options and data is
+        # found as new
+        ops = list(
+            generate_index_ops(
+                database.name, database.iter_records(), database.get_options(), 8
+            )
+        )
+        # should get 2 ops, one to update the latest index and one pushing the old
+        # latest down to the non-latest data indices
+        assert len(ops) == 2
+        check_op(ops[0], "r1", 9, data[9], options[9])
+        check_op(ops[1], "r1", 8, data[8], options[7], next_version=9)
+
+    def test_just_latest(self, splitgill: SplitgillClient):
+        builder = ParsingOptionsBuilder()
+        data = {
+            1: {"x": 5.4},
+        }
+        options = {
+            1: builder.build(),
+        }
+        database = setup_scenario(splitgill, {"r1": data}, options)
+
+        ops = list(
+            generate_index_ops(
+                database.name, database.iter_records(), database.get_options(), None
+            )
+        )
+        assert len(ops) == 1
+        check_op(ops[0], "r1", 1, data[1], options[1])
+
+    def test_meta_geo_is_filled(self, splitgill: SplitgillClient):
+        data = {
+            1: {
+                "x": "beans",
+                "lat": 4,
+                "lon": 10,
+                "location": {"type": "Point", "coordinates": [100.4, 0.1]},
+            }
+        }
+        options = {1: ParsingOptionsBuilder().with_geo_hint("lat", "lon").build()}
+
+        database = setup_scenario(splitgill, {"r1": data}, options)
+
+        ops = list(
+            generate_index_ops(
+                database.name, database.iter_records(), database.get_options(), None
+            )
+        )
+
+        assert len(ops) == 1
+        check_op(ops[0], "r1", 1, data[1], options[1])
+
+        # do some bonus checks
+        geometries = ops[0][fields.GEO_ALL]["geometries"]
+        assert len(geometries) == 2
+        assert {"type": "Point", "coordinates": (10.0, 4.0)} in geometries
+        assert {"type": "Point", "coordinates": (100.4, 0.1)} in geometries

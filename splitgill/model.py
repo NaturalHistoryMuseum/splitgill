@@ -1,13 +1,14 @@
 from dataclasses import dataclass, field, astuple
 from functools import cached_property
-from typing import Dict, Iterable, NamedTuple, List, Optional, FrozenSet, Union
+from itertools import chain
+from typing import Dict, Iterable, NamedTuple, List, Optional, FrozenSet
 from uuid import uuid4
 
 from bson import ObjectId
 from pymongo.results import BulkWriteResult
 
-from splitgill.indexing import fields
 from splitgill.diffing import patch, DiffOp
+from splitgill.indexing import fields
 
 
 @dataclass
@@ -81,16 +82,18 @@ class MongoRecord:
         """
         return bool(self.diffs)
 
-    @property
-    def versions(self) -> List[Optional[int]]:
+    def get_versions(self, desc=False) -> List[int]:
         """
-        Returns a list of the record's versions in descending order.
+        Returns a list of the record's versions in ascending order. If desc is True, the
+        versions are returned in descending order. If the current version is None, it is
+        not included.
 
         :return: the record's versions
         """
-        versions = sorted(map(int, self.diffs.keys()), reverse=True)
-        versions.insert(0, self.version)
-        return versions
+        versions = map(int, self.diffs)
+        if self.version is not None:
+            versions = chain(versions, (self.version,))
+        return sorted(versions, reverse=desc)
 
     def iter(self) -> Iterable[VersionedData]:
         """
@@ -102,14 +105,11 @@ class MongoRecord:
                  version order
         """
         yield VersionedData(self.version, self.data)
-
         base = self.data
-        for version_str, diff in sorted(
-            self.diffs.items(), key=lambda item: int(item[0]), reverse=True
-        ):
-            data = patch(base, diff)
+        for version in sorted(map(int, self.diffs), reverse=True):
+            data = patch(base, self.diffs[str(version)])
             # convert the string versions to ints on the way out the door
-            yield VersionedData(int(version_str), data)
+            yield VersionedData(version, data)
             base = data
 
 

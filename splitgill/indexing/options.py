@@ -1,5 +1,4 @@
-from bisect import bisect
-from typing import Optional, Set, Dict
+from typing import Optional, Set
 
 from splitgill.model import ParsingOptions, GeoFieldHint
 
@@ -241,54 +240,3 @@ class ParsingOptionsBuilder:
         """
         self.with_float_format("{0:.15g}")
         return self
-
-
-# the default parsing options. This is an empty set of options and should really never
-# change.
-DEFAULT_PARSING_OPTIONS = ParsingOptionsBuilder().build()
-
-
-class ParsingOptionsRange:
-    """
-    A class providing easy access to a set of parsing options based on the version they
-    are valid for.
-
-    Each option set has a specific version when it was introduced and, if a newer
-    version exists, a version when it becomes invalid. If there is no newer version of
-    the options then it is the latest and current version.
-    """
-
-    def __init__(self, options: Dict[int, ParsingOptions]):
-        """
-        :param options: the options as a dict of version => options pairs
-        """
-        if options:
-            self.versions, self.values = zip(*sorted(options.items()))
-        else:
-            self.versions = tuple()
-            self.values = tuple()
-
-    @property
-    def latest(self) -> ParsingOptions:
-        """
-        Retrieves the latest options object from this range or returns the default empty
-        parsing options if no options exist.
-
-        :return: a ParsingOptions object
-        """
-        return self.values[-1] if self.values else DEFAULT_PARSING_OPTIONS
-
-    # TODO: cache?
-    def get(self, version: int) -> ParsingOptions:
-        """
-        Efficiently retrieves the parsing options valid at the given version. If no
-        values exist, returns the default empty parsing options.
-
-        :param version: the version of the parsing options to get
-        :return: a ParsingOptions object
-        """
-        index = bisect(self.versions, version)
-        if index == 0:
-            return DEFAULT_PARSING_OPTIONS
-        else:
-            return self.values[index - 1]

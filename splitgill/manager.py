@@ -1,6 +1,6 @@
 from collections import deque
 from dataclasses import asdict
-from typing import Optional, Iterable, List
+from typing import Optional, Iterable, List, Dict
 
 from cytoolz.dicttoolz import get_in
 from elasticsearch import Elasticsearch
@@ -17,7 +17,7 @@ from splitgill.indexing.index import (
     get_data_index_id,
     get_index_wildcard,
 )
-from splitgill.indexing.options import ParsingOptionsRange
+from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.indexing.templates import DATA_TEMPLATE
 from splitgill.ingest import generate_ops, generate_rollback_ops
 from splitgill.model import Record, MongoRecord, ParsingOptions, IngestResult
@@ -135,6 +135,24 @@ class SplitgillDatabase:
         # convert it back to an int to avoid returning a float and causing confusion
         return int(version)
 
+    def has_data(self) -> bool:
+        """
+        Returns True if there is at least one committed record in this database,
+        otherwise returns False. Note that this ignored options.
+
+        :return: True if there is data, False if not
+        """
+        return self.data_collection.find_one({"version": {"$ne": None}}) is not None
+
+    def has_options(self) -> bool:
+        """
+        Returns True if there is at least one committed options in this database,
+        otherwise returns False. Note that this ignored data.
+
+        :return: True if there is options, False if not
+        """
+        return self.options_collection.find_one({"version": {"$ne": None}}) is not None
+
     def commit(self) -> Optional[int]:
         """
         Commits the currently uncommitted data and options changes for this database.
@@ -147,20 +165,22 @@ class SplitgillDatabase:
         # TODO: locking?
         # TODO: global now?
         # TODO: transaction/rollback? Can't do this without replicasets so who knows?
+        if not self.has_uncommitted_data() and not self.has_uncommitted_options():
+            # nothing to commit, so nothing to do
+            return None
+
+        if not self.has_options() and not self.has_uncommitted_options():
+            # no existing options and no options to be committed, create a default
+            self.update_options(ParsingOptionsBuilder().build(), commit=False)
+
         version = now()
 
         # update the uncommitted data and options in a transaction
-        count = 0
         for collection in [self.data_collection, self.options_collection]:
-            result = collection.update_many(
-                filter={"version": None},
-                update={"$set": {"version": version}},
+            collection.update_many(
+                filter={"version": None}, update={"$set": {"version": version}}
             )
-            count += result.modified_count
-        # if nothing was updated, we had nothing to commit so no new version was created
-        if count:
-            return version
-        return None
+        return version
 
     def ingest(
         self,
@@ -229,7 +249,11 @@ class SplitgillDatabase:
         """
         # get the latest options that have been committed (get_options ignores
         # uncommitted options)
-        latest_options = self.get_options().latest
+        all_options = self.get_options()
+        if all_options:
+            latest_options = all_options[max(all_options)]
+        else:
+            latest_options = None
 
         if self.has_uncommitted_options():
             self.rollback_options()
@@ -271,11 +295,11 @@ class SplitgillDatabase:
         to perform the rollback and therefore, depending on how much uncommitted data
         there is, may take a bit of time to run.
         """
-        if self.has_uncommitted_records():
+        if self.has_uncommitted_data():
             for ops in partition(generate_rollback_ops(self.data_collection), 200):
                 self.data_collection.bulk_write(ops)
 
-    def has_uncommitted_records(self) -> bool:
+    def has_uncommitted_data(self) -> bool:
         """
         Check if there are any uncommitted records stored against this database.
 
@@ -291,20 +315,31 @@ class SplitgillDatabase:
         """
         return self.options_collection.find_one({"version": None}) is not None
 
-    def get_options(self) -> ParsingOptionsRange:
+    def get_options(self, include_uncommitted=False) -> Dict[int, ParsingOptions]:
         """
-        Retrieve all the parsing options ever configured for this database. The options
-        are returned in a wrapping class to provide easy access by version. Only
-        committed options are returned.
+        Retrieve all the parsing options configured for this database in a dict mapping
+        int versions to ParsingOptions objects. Use the include_uncommitted parameter to
+        indicate whether to include the uncommitted options or not.
 
-        :return: a ParsingOptionsRange object
+        :return: a dict of versions and options
         """
-        return ParsingOptionsRange(
-            {
-                doc["version"]: ParsingOptions.from_doc(doc["options"])
-                for doc in self.options_collection.find({"name": self.name})
-                if doc["version"] is not None
-            }
+        return {
+            doc["version"]: ParsingOptions.from_doc(doc["options"])
+            for doc in self.options_collection.find({"name": self.name})
+            if include_uncommitted or doc["version"] is not None
+        }
+
+    def iter_records(self, **find_kwargs) -> Iterable[MongoRecord]:
+        """
+        Yields MongoRecord objects matching the given find kwargs. As you can probably
+        guess, the find_kwargs argument is just passed directly to PyMongo's find
+        method.
+
+        :param find_kwargs: args to pass to the data collection's find method
+        :return: yields matching MongoRecord objects
+        """
+        yield from (
+            MongoRecord(**doc) for doc in self.data_collection.find(**find_kwargs)
         )
 
     def get_all_indices(self) -> List[str]:
@@ -331,8 +366,8 @@ class SplitgillDatabase:
 
     def sync(self, parallel: bool = True, chunk_size: int = 500):
         """
-        Synchronise the data in MongoDB with the data in Elasticsearch by updating the
-        latest and old data indices as required.
+        Synchronise the data/options in MongoDB with the data in Elasticsearch by
+        updating the latest and old data indices as required.
 
         To find the data that needs to be updated, the current version of the data in
         MongoDB is compared to the current version of the data in Elasticsearch, and the
@@ -352,6 +387,28 @@ class SplitgillDatabase:
         :param chunk_size: the number of docs to send to Elasticsearch in each bulk
                            request
         """
+        if not self.has_data():
+            return
+
+        all_options = self.get_options(include_uncommitted=False)
+        last_sync = self.get_elasticsearch_version()
+        if last_sync is None:
+            # elasticsearch has nothing so find all committed records
+            find_filter = {"version": {"$ne": None}}
+        else:
+            committed_version = self.get_committed_version()
+            if last_sync >= committed_version:
+                # elasticsearch and mongo are in sync (use >= rather than == just in case
+                # some bizarro-ness has occurred)
+                return
+            if any(version > last_sync for version in all_options):
+                # there's an options change ahead, this means we need to check all
+                # records again, so filter out committed records only
+                find_filter = {"version": {"$ne": None}}
+            else:
+                # find all the updated records that haven't had their updates synced yet
+                find_filter = {"version": {"$gt": last_sync}}
+
         client = self._client.elasticsearch
         bulk_function = parallel_bulk if parallel else streaming_bulk
 
@@ -360,15 +417,6 @@ class SplitgillDatabase:
         for index in indices:
             if not client.indices.exists(index=index):
                 client.indices.create(index=index)
-
-        since = self.get_elasticsearch_version()
-        if since is not None:
-            # find all the updated records that haven't had their updates synced yet
-            find_filter = {"version": {"$gt": since}}
-        else:
-            # find all the committed records as elasticsearch has nothing
-            find_filter = {"version": {"$ne": None}}
-        docs = (MongoRecord(**doc) for doc in self.data_collection.find(find_filter))
 
         # apply optimal indexing settings to all the indices we may update
         client.indices.put_settings(
@@ -381,7 +429,12 @@ class SplitgillDatabase:
         deque(
             bulk_function(
                 client,
-                generate_index_ops(self.name, docs, since, self.get_options()),
+                generate_index_ops(
+                    self.name,
+                    self.iter_records(filter=find_filter),
+                    all_options,
+                    last_sync,
+                ),
                 raise_on_error=True,
                 chunk_size=chunk_size,
             ),
