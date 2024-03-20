@@ -15,7 +15,7 @@ from splitgill.utils import to_timestamp
 
 class TestSplitgillClient:
     def test_database(self, splitgill: SplitgillClient):
-        assert splitgill.get_database().name == MONGO_DATABASE_NAME
+        assert splitgill.get_mongo_database().name == MONGO_DATABASE_NAME
 
     def test_get_data_collection(self, splitgill: SplitgillClient):
         name = "test"

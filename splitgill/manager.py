@@ -36,7 +36,7 @@ class SplitgillClient:
         self.elasticsearch = elasticsearch
         self.profile_manager = ProfileManager(elasticsearch)
 
-    def get_database(self) -> Database:
+    def get_mongo_database(self) -> Database:
         """
         Returns the MongoDB database in use.
 
@@ -50,7 +50,7 @@ class SplitgillClient:
 
         :return: a pymongo Collection object
         """
-        return self.get_database().get_collection(OPTIONS_COLLECTION_NAME)
+        return self.get_mongo_database().get_collection(OPTIONS_COLLECTION_NAME)
 
     def get_data_collection(self, name: str) -> Collection:
         """
@@ -59,7 +59,7 @@ class SplitgillClient:
         :param name: the name of the Splitgill database
         :return: a pymongo Collection object
         """
-        return self.get_database().get_collection(f"data-{name}")
+        return self.get_mongo_database().get_collection(f"data-{name}")
 
 
 class SplitgillDatabase:
