@@ -10,6 +10,7 @@ from pymongo import MongoClient, IndexModel, ASCENDING, DESCENDING
 from pymongo.collection import Collection
 from pymongo.database import Database
 
+from search import create_version_query
 from splitgill.indexing import fields
 from splitgill.indexing.index import generate_index_ops, IndexNames
 from splitgill.indexing.options import ParsingOptionsBuilder
@@ -434,22 +435,37 @@ class SplitgillDatabase:
 
         self._client.profile_manager.update_profiles(self)
 
-    def search(self, latest: bool) -> Search:
+    def search(self, latest: bool, version: Optional[int] = None) -> Search:
         """
         Creates a Search DSL object to use on this database's indexed data. This Search
-        object will be setup with the appropriate index depending on the given latest
-        parameter and the Elasticsearch client object in use on this database.
+        object will be setup with the appropriate index, version filter depending on the
+        given parameters, and the Elasticsearch client object in use on this database.
+
+        If the latest parameter is True, the index on the search object will be set to
+        the latest index. If the latest parameter is False, the index on the search
+        object will be set to a wildcard on all the database's data indices. If latest
+        is False and a version is provided, a filter will be added on this version. In
+        combination these parameters therefore allow you to specify whether to:
+
+            - search on the latest data (latest=True)
+            - all versions of the data (latest=False, version=None) - this is useful for
+              aggregations
+            - a specific version of the data (latest=False, version=#)
 
         :param latest: whether to search the latest data or all data, this impacts the
                        indexes that are added to the returned Search object
+        :param version: the version to search at, or None to specify no version filter
+                        (defaults to None)
         :return: a Search DSL object
         """
-        # TODO: add more precise versioning options (latest, none, a specific version)
+        search = Search(using=self._client.elasticsearch)
         if latest:
-            index = self.indices.latest
+            search = search.index(self.indices.latest)
         else:
-            index = self.indices.wildcard
-        return Search(using=self._client.elasticsearch, index=index)
+            search = search.index(self.indices.wildcard)
+            if version is not None:
+                search = search.filter(create_version_query(version))
+        return search
 
     def get_available_versions(self) -> List[int]:
         """

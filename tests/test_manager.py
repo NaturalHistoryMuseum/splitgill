@@ -5,6 +5,7 @@ import pytest
 from freezegun import freeze_time
 
 from indexing.parser import parse_for_index
+from search import create_version_query
 from splitgill.indexing import fields
 from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.manager import SplitgillClient, MONGO_DATABASE_NAME, SplitgillDatabase
@@ -548,3 +549,29 @@ class TestSync:
         # doc has made it and fewer than 4 (even this is a bit dubious but it's pretty
         # solid).
         assert 0 < doc_count["count"] < 4
+
+
+def test_search(splitgill: SplitgillClient):
+    database = SplitgillDatabase("test", splitgill)
+
+    client = splitgill.elasticsearch
+    latest = [database.indices.latest]
+    wildcard = [database.indices.wildcard]
+
+    assert database.search(latest=True, version=None)._index == latest
+    assert database.search(latest=True, version=None)._using == client
+    assert not database.search(latest=True, version=None).to_dict()
+    # check that version=5 is ignored when latest=True
+    assert database.search(latest=True, version=5)._index == latest
+    assert database.search(latest=True, version=5)._using == client
+    assert not database.search(latest=True, version=5).to_dict()
+
+    assert database.search(latest=False, version=None)._index == wildcard
+    assert database.search(latest=False, version=None)._using == client
+    assert not database.search(latest=False, version=None).to_dict()
+
+    assert database.search(latest=False, version=5)._index == wildcard
+    assert database.search(latest=False, version=5)._using == client
+    assert database.search(latest=False, version=5).to_dict() == {
+        "query": {"bool": {"filter": [create_version_query(5).to_dict()]}}
+    }
