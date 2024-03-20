@@ -477,7 +477,7 @@ class SplitgillDatabase:
         versions = set()
         after = None
         while True:
-            search = self.search(latest=False)[:0]
+            search = self.search(latest=False, version=None)[:0]
             search.aggs.bucket(
                 "versions",
                 "composite",
