@@ -12,6 +12,7 @@ from splitgill.manager import (
     MONGO_DATABASE_NAME,
     SplitgillDatabase,
     OPTIONS_COLLECTION_NAME,
+    SearchVersion,
 )
 from splitgill.model import Record
 from splitgill.search import create_version_query
@@ -576,18 +577,18 @@ class TestSync:
         database.ingest(records, commit=True)
 
         database.sync(parallel=False, resync=False)
-        assert database.search(latest=True).count() == len(records)
+        assert database.search().count() == len(records)
 
         # delete a couple of documents to cause mayhem
-        database.search(latest=True).params(refresh=True).filter(
+        database.search().params(refresh=True).filter(
             "terms", **{fields.ID: [records[1].id, records[4].id]}
         ).delete()
         # check we deleted them
-        assert database.search(latest=True).count() == len(records) - 2
+        assert database.search().count() == len(records) - 2
 
         # sync them back in
         database.sync(parallel=False, resync=True)
-        assert database.search(latest=True).count() == len(records)
+        assert database.search().count() == len(records)
 
 
 def test_search(splitgill: SplitgillClient):
@@ -597,20 +598,17 @@ def test_search(splitgill: SplitgillClient):
     latest = [database.indices.latest]
     wildcard = [database.indices.wildcard]
 
-    assert database.search(latest=True, version=None)._index == latest
-    assert database.search(latest=True, version=None)._using == client
-    assert not database.search(latest=True, version=None).to_dict()
-    # check that version=5 is ignored when latest=True
-    assert database.search(latest=True, version=5)._index == latest
-    assert database.search(latest=True, version=5)._using == client
-    assert not database.search(latest=True, version=5).to_dict()
+    assert database.search()._index == latest
+    assert database.search(version=SearchVersion.latest)._index == latest
+    assert database.search(version=SearchVersion.latest)._using == client
+    assert not database.search(version=SearchVersion.latest).to_dict()
 
-    assert database.search(latest=False, version=None)._index == wildcard
-    assert database.search(latest=False, version=None)._using == client
-    assert not database.search(latest=False, version=None).to_dict()
+    assert database.search(version=SearchVersion.all)._index == wildcard
+    assert database.search(version=SearchVersion.all)._using == client
+    assert not database.search(version=SearchVersion.all).to_dict()
 
-    assert database.search(latest=False, version=5)._index == wildcard
-    assert database.search(latest=False, version=5)._using == client
-    assert database.search(latest=False, version=5).to_dict() == {
+    assert database.search(version=5)._index == wildcard
+    assert database.search(version=5)._using == client
+    assert database.search(version=5).to_dict() == {
         "query": {"bool": {"filter": [create_version_query(5).to_dict()]}}
     }

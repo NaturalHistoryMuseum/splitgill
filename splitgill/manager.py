@@ -1,6 +1,7 @@
 from collections import deque
 from dataclasses import asdict
-from typing import Optional, Iterable, List, Dict
+from enum import Enum
+from typing import Optional, Iterable, List, Dict, Union
 
 from cytoolz.dicttoolz import get_in
 from elasticsearch import Elasticsearch
@@ -69,6 +70,18 @@ class SplitgillClient:
         :return: a pymongo Collection object
         """
         return self.get_mongo_database().get_collection(f"data-{name}")
+
+
+class SearchVersion(Enum):
+    """
+    Indicator for the SplitgillDatabase.search method as to which version of the data
+    you would like to search.
+    """
+
+    # searches the latest data
+    latest = "latest"
+    # searches all data
+    all = "all"
 
 
 class SplitgillDatabase:
@@ -447,36 +460,35 @@ class SplitgillDatabase:
 
         self._client.profile_manager.update_profiles(self)
 
-    def search(self, latest: bool, version: Optional[int] = None) -> Search:
+    def search(
+        self, version: Union[SearchVersion, int] = SearchVersion.latest
+    ) -> Search:
         """
         Creates a Search DSL object to use on this database's indexed data. This Search
-        object will be setup with the appropriate index, version filter depending on the
-        given parameters, and the Elasticsearch client object in use on this database.
+        object will be setup with the appropriate index and version filter depending on
+        the given version parameter, and the Elasticsearch client object in use on this
+        database.
 
-        If the latest parameter is True, the index on the search object will be set to
-        the latest index. If the latest parameter is False, the index on the search
-        object will be set to a wildcard on all the database's data indices. If latest
-        is False and a version is provided, a filter will be added on this version. In
-        combination these parameters therefore allow you to specify whether to:
-
-            - search on the latest data (latest=True)
-            - all versions of the data (latest=False, version=None) - this is useful for
-              aggregations
-            - a specific version of the data (latest=False, version=#)
-
-        :param latest: whether to search the latest data or all data, this impacts the
-                       indexes that are added to the returned Search object
-        :param version: the version to search at, or None to specify no version filter
-                        (defaults to None)
+        :param version: the version to search at, this should either be a SearchVersion
+                        enum option or an int. SearchVersion.latest will result in a
+                        search on the latest index with no version filter thus searching
+                        the latest data. SearchVersion.all will result in a search on
+                        all indices using a wildcard and no version filter. Passing an
+                        int version will search at the given timestamp. The default is
+                        SearchVersion.latest.
         :return: a Search DSL object
         """
         search = Search(using=self._client.elasticsearch)
-        if latest:
-            search = search.index(self.indices.latest)
-        else:
+
+        if isinstance(version, int):
             search = search.index(self.indices.wildcard)
-            if version is not None:
-                search = search.filter(create_version_query(version))
+            search = search.filter(create_version_query(version))
+        else:
+            if version == SearchVersion.latest:
+                search = search.index(self.indices.latest)
+            elif version == SearchVersion.all:
+                search = search.index(self.indices.wildcard)
+
         return search
 
     def get_available_versions(self) -> List[int]:
@@ -489,7 +501,7 @@ class SplitgillDatabase:
         versions = set()
         after = None
         while True:
-            search = self.search(latest=False, version=None)[:0]
+            search = self.search(version=SearchVersion.all)[:0]
             search.aggs.bucket(
                 "versions",
                 "composite",
