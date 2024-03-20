@@ -28,8 +28,8 @@ def mongo_database(mongo_client: MongoClient) -> Database:
 
 
 @pytest.fixture
-def data_collection(mongo_database: Database) -> Collection:
-    yield mongo_database["data"]
+def mongo_collection(mongo_database: Database) -> Collection:
+    yield mongo_database["test"]
 
 
 @pytest.fixture
