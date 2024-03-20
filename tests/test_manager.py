@@ -564,6 +564,31 @@ class TestSync:
         # solid).
         assert 0 < doc_count["count"] < 4
 
+    def test_resync(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        records = [
+            Record.new({"x": 5}),
+            Record.new({"x": 10}),
+            Record.new({"x": 15}),
+            Record.new({"x": -1}),
+            Record.new({"x": 1098}),
+        ]
+        database.ingest(records, commit=True)
+
+        database.sync(parallel=False, resync=False)
+        assert database.search(latest=True).count() == len(records)
+
+        # delete a couple of documents to cause mayhem
+        database.search(latest=True).params(refresh=True).filter(
+            "terms", **{fields.ID: [records[1].id, records[4].id]}
+        ).delete()
+        # check we deleted them
+        assert database.search(latest=True).count() == len(records) - 2
+
+        # sync them back in
+        database.sync(parallel=False, resync=True)
+        assert database.search(latest=True).count() == len(records)
+
 
 def test_search(splitgill: SplitgillClient):
     database = SplitgillDatabase("test", splitgill)

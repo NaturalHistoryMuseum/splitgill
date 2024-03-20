@@ -352,7 +352,7 @@ class SplitgillDatabase:
             MongoRecord(**doc) for doc in self.data_collection.find(**find_kwargs)
         )
 
-    def sync(self, parallel: bool = True, chunk_size: int = 500):
+    def sync(self, parallel: bool = True, chunk_size: int = 500, resync: bool = False):
         """
         Synchronise the data/options in MongoDB with the data in Elasticsearch by
         updating the latest and old data indices as required.
@@ -374,12 +374,15 @@ class SplitgillDatabase:
                          otherwise use a single thread if False
         :param chunk_size: the number of docs to send to Elasticsearch in each bulk
                            request
+        :param resync: whether to resync all records with Elasticsearch regardless of
+                       the currently synced version. This won't delete any data first
+                       and just replaces documents in Elasticsearch as needed.
         """
         if not self.has_data():
             return
 
         all_options = self.get_options(include_uncommitted=False)
-        last_sync = self.get_elasticsearch_version()
+        last_sync = self.get_elasticsearch_version() if not resync else None
         if last_sync is None:
             # elasticsearch has nothing so find all committed records
             find_filter = {"version": {"$ne": None}}
