@@ -7,7 +7,12 @@ from freezegun import freeze_time
 from splitgill.indexing import fields
 from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.indexing.parser import parse_for_index
-from splitgill.manager import SplitgillClient, MONGO_DATABASE_NAME, SplitgillDatabase
+from splitgill.manager import (
+    SplitgillClient,
+    MONGO_DATABASE_NAME,
+    SplitgillDatabase,
+    OPTIONS_COLLECTION_NAME,
+)
 from splitgill.model import Record
 from splitgill.search import create_version_query
 from splitgill.utils import to_timestamp
@@ -20,6 +25,9 @@ class TestSplitgillClient:
     def test_get_data_collection(self, splitgill: SplitgillClient):
         name = "test"
         assert splitgill.get_data_collection(name).name == f"data-{name}"
+
+    def test_get_options_collection(self, splitgill: SplitgillClient):
+        assert splitgill.get_options_collection().name == OPTIONS_COLLECTION_NAME
 
 
 class TestSplitgillDatabaseGetCommittedVersion:
