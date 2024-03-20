@@ -5,8 +5,8 @@ from typing import Iterable, Tuple, Dict, List, Any
 from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search
 
-from indexing.index import IndexNames
 from splitgill.indexing.fields import VERSION, DataType
+from splitgill.indexing.index import IndexNames
 from splitgill.search import (
     create_version_query,
     boolean,

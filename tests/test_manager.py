@@ -4,12 +4,12 @@ from unittest.mock import patch, MagicMock
 import pytest
 from freezegun import freeze_time
 
-from indexing.parser import parse_for_index
-from search import create_version_query
 from splitgill.indexing import fields
 from splitgill.indexing.options import ParsingOptionsBuilder
+from splitgill.indexing.parser import parse_for_index
 from splitgill.manager import SplitgillClient, MONGO_DATABASE_NAME, SplitgillDatabase
 from splitgill.model import Record
+from splitgill.search import create_version_query
 from splitgill.utils import to_timestamp
 
 

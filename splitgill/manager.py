@@ -10,7 +10,6 @@ from pymongo import MongoClient, IndexModel, ASCENDING, DESCENDING
 from pymongo.collection import Collection
 from pymongo.database import Database
 
-from search import create_version_query
 from splitgill.indexing import fields
 from splitgill.indexing.index import generate_index_ops, IndexNames
 from splitgill.indexing.options import ParsingOptionsBuilder
@@ -18,6 +17,7 @@ from splitgill.indexing.templates import DATA_TEMPLATE
 from splitgill.ingest import generate_ops, generate_rollback_ops
 from splitgill.model import Record, MongoRecord, ParsingOptions, IngestResult
 from splitgill.profiles import Profile, build_profile
+from splitgill.search import create_version_query
 from splitgill.utils import partition, now
 
 MONGO_DATABASE_NAME = "sg"
