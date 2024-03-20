@@ -127,7 +127,7 @@ class TestGenerateIndexOps:
         after = 11
         assert not list(
             generate_index_ops(
-                database.name, database.iter_records(), database.get_options(), after
+                database.indices, database.iter_records(), database.get_options(), after
             )
         )
 
@@ -145,17 +145,9 @@ class TestGenerateIndexOps:
         after = 13
         assert not list(
             generate_index_ops(
-                database.name, database.iter_records(), database.get_options(), after
+                database.indices, database.iter_records(), database.get_options(), after
             )
         )
-
-    """
-    that excel scenario DONE
-    deletes DONE
-    check after works DONE
-    one data with many options
-    one option with many data
-    """
 
     def test_mix(self, splitgill: SplitgillClient):
         builder = ParsingOptionsBuilder()
