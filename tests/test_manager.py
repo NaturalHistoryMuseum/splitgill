@@ -2,6 +2,7 @@ from datetime import datetime
 from unittest.mock import patch, MagicMock
 
 import pytest
+from elasticsearch_dsl import Search
 from freezegun import freeze_time
 
 from splitgill.indexing import fields
@@ -323,9 +324,7 @@ class TestSync:
 
         assert splitgill.elasticsearch.indices.exists(index=database.indices.latest)
         assert not splitgill.elasticsearch.indices.exists(index=database.indices.all)
-        assert (
-            splitgill.elasticsearch.count(index=database.indices.latest)["count"] == 4
-        )
+        assert database.search().count() == 4
 
     def test_everything_to_sync(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
@@ -347,9 +346,7 @@ class TestSync:
 
         assert splitgill.elasticsearch.indices.exists(index=database.indices.latest)
         assert not splitgill.elasticsearch.indices.exists(index=database.indices.all)
-        assert (
-            splitgill.elasticsearch.count(index=database.indices.latest)["count"] == 4
-        )
+        assert database.search().count() == 4
 
     def test_one_sync_then_another(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
@@ -383,11 +380,11 @@ class TestSync:
         with freeze_time(version_2_time):
             database.ingest(version_2_records, commit=True)
         database.sync()
+        assert database.search().count() == 6
         assert (
-            splitgill.elasticsearch.count(index=database.indices.latest)["count"] == 6
-        )
-        assert (
-            splitgill.elasticsearch.count(index=database.indices.get_arc("r1"))["count"]
+            Search(
+                using=splitgill.elasticsearch, index=database.indices.get_arc("r1")
+            ).count()
             == 1
         )
 
@@ -406,9 +403,7 @@ class TestSync:
         with freeze_time(version_1_time):
             database.ingest(version_1_records, commit=True)
         database.sync()
-        assert (
-            splitgill.elasticsearch.count(index=database.indices.latest)["count"] == 5
-        )
+        assert database.search().count() == 5
         assert not splitgill.elasticsearch.indices.exists(index=database.indices.all)
 
         # the next day...
@@ -423,11 +418,11 @@ class TestSync:
         with freeze_time(version_2_time):
             database.ingest(version_2_records, commit=True)
         database.sync()
+        assert database.search().count() == 5
         assert (
-            splitgill.elasticsearch.count(index=database.indices.latest)["count"] == 5
-        )
-        assert (
-            splitgill.elasticsearch.count(index=database.indices.get_arc("r2"))["count"]
+            Search(
+                using=splitgill.elasticsearch, index=database.indices.get_arc("r2")
+            ).count()
             == 1
         )
 
@@ -457,9 +452,7 @@ class TestSync:
 
         database.sync()
 
-        assert (
-            splitgill.elasticsearch.count(index=database.indices.latest)["count"] == 3
-        )
+        assert database.search().count() == 3
 
     def test_incomplete_is_not_searchable(self, splitgill: SplitgillClient):
         called = 0
@@ -492,9 +485,8 @@ class TestSync:
 
         # an error occurred which should have prevented a refresh from being triggered
         # so the doc count should still be 0
-        assert (
-            splitgill.elasticsearch.count(index=database.indices.latest)["count"] == 0
-        )
+        assert database.search().count() == 0
+
         # check that the refresh interval has been left as -1
         assert (
             splitgill.elasticsearch.indices.get_settings(index=database.indices.latest)[
@@ -507,9 +499,8 @@ class TestSync:
         database.sync()
 
         # now a refresh should have been triggered and the doc count should be 4
-        assert (
-            splitgill.elasticsearch.count(index=database.indices.latest)["count"] == 4
-        )
+        assert database.search().count() == 4
+
         # and the refresh should have been reset (it either won't be in the settings or
         # it will be set to something other than -1, hence the get usage)
         assert (
@@ -551,7 +542,6 @@ class TestSync:
                 database.sync(chunk_size=1, parallel=False)
 
         splitgill.elasticsearch.indices.refresh(index=database.indices.latest)
-        doc_count = splitgill.elasticsearch.count(index=database.indices.latest)
         # check that the number of docs available for search is more than 0 but fewer
         # than 4. Ideally this would be 3 because we allow 3 parse_for_index calls to
         # complete and then raise an exception, however, the way that chunks are sent to
@@ -563,7 +553,7 @@ class TestSync:
         # it always being this way is foolish, therefore we just check that more than 1
         # doc has made it and fewer than 4 (even this is a bit dubious but it's pretty
         # solid).
-        assert 0 < doc_count["count"] < 4
+        assert 0 < database.search().count() < 4
 
     def test_resync(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
