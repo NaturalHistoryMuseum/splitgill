@@ -29,6 +29,12 @@ class TestSplitgillClient:
     def test_get_options_collection(self, splitgill: SplitgillClient):
         assert splitgill.get_options_collection().name == OPTIONS_COLLECTION_NAME
 
+    def test_get_database(self, splitgill: SplitgillClient):
+        name = "test"
+        assert (
+            splitgill.get_database(name).name == SplitgillDatabase(name, splitgill).name
+        )
+
 
 class TestSplitgillDatabaseGetCommittedVersion:
     def test_no_data_no_options(self, splitgill: SplitgillClient):
