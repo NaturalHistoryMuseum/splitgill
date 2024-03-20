@@ -48,7 +48,7 @@ def now() -> int:
     """
     Get the current datetime as a timestamp.
     """
-    return to_timestamp(datetime.utcnow())
+    return to_timestamp(datetime.now(tz=UTC))
 
 
 def partition(iterable: Iterable, size: int) -> Iterable[list]:
