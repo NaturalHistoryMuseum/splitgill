@@ -195,27 +195,29 @@ class SplitgillDatabase:
         If no changes were made, None is returned, otherwise the new version is
         returned.
 
+        If a commit is already ongoing this will raise an AlreadyLocked exception.
+
         :return: the new version or None if no uncommitted changes were found
         """
-        # TODO: locking?
         # TODO: global now?
         # TODO: transaction/rollback? Can't do this without replicasets so who knows?
-        if not self.has_uncommitted_data() and not self.has_uncommitted_options():
-            # nothing to commit, so nothing to do
-            return None
+        with self.locker.lock(self.name, stage="commit"):
+            if not self.has_uncommitted_data() and not self.has_uncommitted_options():
+                # nothing to commit, so nothing to do
+                return None
 
-        if not self.has_options() and not self.has_uncommitted_options():
-            # no existing options and no options to be committed, create a default
-            self.update_options(ParsingOptionsBuilder().build(), commit=False)
+            if not self.has_options() and not self.has_uncommitted_options():
+                # no existing options and no options to be committed, create a default
+                self.update_options(ParsingOptionsBuilder().build(), commit=False)
 
-        version = now()
+            version = now()
 
-        # update the uncommitted data and options in a transaction
-        for collection in [self.data_collection, self.options_collection]:
-            collection.update_many(
-                filter={"version": None}, update={"$set": {"version": version}}
-            )
-        return version
+            # update the uncommitted data and options in a transaction
+            for collection in [self.data_collection, self.options_collection]:
+                collection.update_many(
+                    filter={"version": None}, update={"$set": {"version": version}}
+                )
+            return version
 
     def ingest(
         self,
