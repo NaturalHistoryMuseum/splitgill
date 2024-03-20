@@ -11,6 +11,7 @@ from splitgill.diffing import (
     patch,
     DictComparison,
     ListComparison,
+    prepare_field_name,
 )
 
 
@@ -50,6 +51,9 @@ class TestPrepare:
         assert prepare_data({"x": "4"}) == {"x": prepare_data("4")}
         assert prepare_data({3: True}) == {"3": prepare_data(True)}
         assert prepare_data({4: {6: 1}}) == {"4": {"6": prepare_data(1)}}
+        assert prepare_data({"x.y": "4"}) == {"x_y": prepare_data("4")}
+        assert prepare_data({"x\ny": "4"}) == {"xy": prepare_data("4")}
+        assert prepare_data({"x\ny.n  ": "4"}) == {"xy_n": prepare_data("4")}
 
     def test_list(self):
         assert prepare_data([]) == []
@@ -105,6 +109,19 @@ class TestPrepare:
             },
             "b": [{"x": 1}, {"x": "4.2"}],
         }
+
+
+def test_prepare_field_name():
+    # not a str
+    assert prepare_field_name(5) == "5"
+    # a dot!
+    assert prepare_field_name("x.y") == "x_y"
+    # padded with whitespace
+    assert prepare_field_name(" x   ") == "x"
+    # lots of dots
+    assert prepare_field_name(".x.y.z.1.2.") == "_x_y_z_1_2_"
+    # a mix of horrors
+    assert prepare_field_name("\nx.\ty\r  \x07fowien") == "x_y  fowien"
 
 
 class TestDiff:

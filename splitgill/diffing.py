@@ -22,8 +22,12 @@ import regex as rx
 
 # this regex matches invalid characters which we would like to remove from all string
 # values as they are ingested into the system. It matches unicode control characters
-# (i.e. category C*) but not \n, \r, or \t.
-invalid_char_regex = rx.compile(r"[^\P{C}\n\r\t]")
+# (i.e. category C*) but not \n, \r, or \t).
+invalid_value_char_regex = rx.compile(r"[^\P{C}\n\r\t]")
+# this regex matches invalid characters which we would like to remove from all field
+# names as they are ingested into the system. It matches all unicode control characters,
+# so it's a bit stricter than the value regex which allows new lines and tabs
+invalid_key_char_regex = rx.compile(r"[^\P{C}]")
 
 
 def prepare_data(value: Any) -> Union[str, dict, list, int, float, bool, None]:
@@ -47,12 +51,13 @@ def prepare_data(value: Any) -> Union[str, dict, list, int, float, bool, None]:
         return None
     if isinstance(value, str):
         # replace any invalid characters in the string with the empty string
-        return invalid_char_regex.sub("", value)
+        return invalid_value_char_regex.sub("", value)
     if isinstance(value, (int, float, bool)):
         return value
     if isinstance(value, dict):
-        # mongodb doesn't allow non-string keys so we need to convert them here
-        return {str(key): prepare_data(value) for key, value in value.items()}
+        return {
+            prepare_field_name(key): prepare_data(value) for key, value in value.items()
+        }
     if isinstance(value, (list, set, tuple)):
         return list(map(prepare_data, value))
     if isinstance(value, datetime):
@@ -61,6 +66,20 @@ def prepare_data(value: Any) -> Union[str, dict, list, int, float, bool, None]:
         return value.isoformat()
     # fallback
     return str(value)
+
+
+def prepare_field_name(name: Any) -> str:
+    """
+    Cleans up a field name for ingestion into the system. There are a few steps to this:
+
+        - convert the name to a str, MongoDB only accepts str keys in objects
+        - remove any control characters from the str
+        - replace . with _ as Elasticsearch doesn't like dots in keys
+
+    :param name: the field name
+    :return: a clean str field name
+    """
+    return invalid_key_char_regex.sub("", str(name)).replace(".", "_").strip()
 
 
 class DiffOp(NamedTuple):
