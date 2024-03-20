@@ -1,6 +1,7 @@
 import platform
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from typing import Optional
 
 from pymongo.collection import Collection
 from pymongo.errors import DuplicateKeyError
@@ -29,11 +30,14 @@ class LockManager:
         # does nothing if this already exists
         self.lock_collection.create_index("lock_id", unique=True)
 
-    def acquire(self, lock_id: str, raise_on_fail: bool = False) -> bool:
+    def acquire(self, lock_id: str, raise_on_fail: bool = False, **kwargs) -> bool:
         """
         Acquire the lock with the given lock_id. If the lock can't be acquired, False is
         returned, if it can True is returned. If raise_on_fail is set to True, a
         AlreadyLocked exception is raised if the lock can't be acquired.
+
+        Any additional keyword arguments provided are stored in the lock collection with
+        the core lock metadata.
 
         :param lock_id: the ID of the lock to acquire
         :param raise_on_fail: if True, raises an AlreadyLocked exception if the lock
@@ -41,13 +45,14 @@ class LockManager:
         :return: True if the lock was acquired, False if not
         """
         try:
-            self.lock_collection.insert_one(
-                {
-                    "lock_id": lock_id,
-                    "lock_at": datetime.now(timezone.utc),
-                    "locked_by": platform.node(),
-                }
-            )
+            doc = {
+                "lock_id": lock_id,
+                "locked_at": datetime.now(timezone.utc),
+                "locked_by": platform.node(),
+            }
+            if kwargs:
+                doc["data"] = kwargs
+            self.lock_collection.insert_one(doc)
         except DuplicateKeyError:
             if raise_on_fail:
                 raise AlreadyLocked(lock_id)
@@ -70,17 +75,30 @@ class LockManager:
         :param lock_id: the ID of the lock to check
         :return: True if the lock is currently acquired, False if not
         """
-        return self.lock_collection.find_one({"lock_id": lock_id}) is not None
+        return self.get_metadata(lock_id) is not None
+
+    def get_metadata(self, lock_id: str) -> Optional[dict]:
+        """
+        Returns the doc stored in the lock collection for the given lock ID, if there is
+        one.
+
+        :param lock_id:
+        :return:
+        """
+        return self.lock_collection.find_one({"lock_id": lock_id})
 
     @contextmanager
-    def lock(self, lock_id: str):
+    def lock(self, lock_id: str, **kwargs):
         """
         Context manager to safely acquire and release a lock with the given lock ID. If
         the lock is already acquired, raises an AlreadyLocked exception.
 
+        Any additional keyword arguments provided are stored in the lock collection with
+        the core lock metadata.
+
         :param lock_id: ID of the lock to acquire and release
         """
-        self.acquire(lock_id, raise_on_fail=True)
+        self.acquire(lock_id, raise_on_fail=True, **kwargs)
         try:
             yield
         finally:
