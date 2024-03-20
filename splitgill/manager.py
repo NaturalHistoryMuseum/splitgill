@@ -16,6 +16,7 @@ from splitgill.indexing.index import generate_index_ops, IndexNames
 from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.indexing.templates import DATA_TEMPLATE
 from splitgill.ingest import generate_ops, generate_rollback_ops
+from splitgill.locking import LockManager
 from splitgill.model import Record, MongoRecord, ParsingOptions, IngestResult
 from splitgill.profiles import Profile, build_profile
 from splitgill.search import create_version_query
@@ -24,6 +25,7 @@ from splitgill.utils import partition, now
 MONGO_DATABASE_NAME = "sg"
 OPTIONS_COLLECTION_NAME = "options"
 PROFILES_INDEX_NAME = "profiles"
+LOCKS_COLLECTION_NAME = "locks"
 
 
 class SplitgillClient:
@@ -36,6 +38,7 @@ class SplitgillClient:
         self.mongo = mongo
         self.elasticsearch = elasticsearch
         self.profile_manager = ProfileManager(elasticsearch)
+        self.lock_manager = LockManager(self.get_lock_collection())
 
     def get_database(self, name: str) -> "SplitgillDatabase":
         """
@@ -70,6 +73,14 @@ class SplitgillClient:
         :return: a pymongo Collection object
         """
         return self.get_mongo_database().get_collection(f"data-{name}")
+
+    def get_lock_collection(self) -> Collection:
+        """
+        Returns the locks collection.
+
+        :return: a pymongo Collection object
+        """
+        return self.get_mongo_database().get_collection(LOCKS_COLLECTION_NAME)
 
 
 class SearchVersion(Enum):
@@ -106,6 +117,7 @@ class SplitgillDatabase:
         self.options_collection = self._client.get_options_collection()
         # index names
         self.indices = IndexNames(self.name)
+        self.locker = self._client.lock_manager
 
     def get_committed_version(self) -> Optional[int]:
         """
