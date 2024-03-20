@@ -1,5 +1,3 @@
-from datetime import datetime
-from functools import lru_cache
 from typing import Optional, Iterable, Dict
 
 import math
@@ -19,41 +17,72 @@ from splitgill.indexing.parser import parse_for_index
 from splitgill.model import MongoRecord, ParsingOptions
 
 
-@lru_cache
-def get_data_index_id(name: str, version: int) -> str:
+class IndexNames:
     """
-    Given a name and a version, return the name of the index non-latest data for this
-    version should be added to.
+    A class holding index names and index wildcard patterns for the various index names
+    used to store the data from the given named database in Elasticsearch.
 
-    :param name: the Splitgill database name
-    :param version: the version
-    :return: the name of the index to use for data at this version
+    For each database, the following index names are valid:
+
+        - data-database_name-latest
+        - data-database_name-arc-000
+        - data-database_name-arc-001
+        - data-database_name-arc-002
+        - data-database_name-arc-003
+        - data-database_name-arc-004
+
+    This means you can use:
+
+        - data-database_name-* for all data in database_name
+        - data-database_name-latest for the latest data in database_name
+        - data-database_name-arc-* for all archived data in database_name
+        - data-* for all data in all indices
+        - data-*-latest for all latest data
+        - data-*-arc for all archived data
+
+    This class creates these names and stores them in attributes for easy and consistent
+    access.
     """
-    return f"data-{name}-{datetime.fromtimestamp(version / 1000).year}"
 
+    def __init__(self, name: str):
+        self.name = name
+        # this shouldn't be changed without thought in case it breaks stuff. It should
+        # be safe to increase this number without causing problems as long as nothing
+        # downstream is assuming the location of documents based on the previous count,
+        # but lowering it will break stuff as we'll end up ignoring previously used arc
+        # indices without reallocating the documents
+        self.arc_count = 5
+        # the base name of all indices for this database
+        self.base = f"data-{name}"
+        # the latest index name
+        self.latest = f"{self.base}-latest"
+        # the archive indices base name
+        self.arc_base = f"{self.base}-arc"
+        # the names of the archive indices
+        self.arcs = tuple(
+            f"{self.arc_base}-{i % self.arc_count:03}" for i in range(self.arc_count)
+        )
+        # wildcard name to catch all data indices (so both latest and all arcs)
+        self.wildcard = f"{self.base}-*"
+        # wildcard name to catch all arc indices
+        self.arc_wildcard = f"{self.arc_base}-*"
+        # a tuple of all index names
+        self.all = (self.latest, *self.arcs)
 
-def get_latest_index_id(name: str) -> str:
-    """
-    Given a name, return the name of the latest data index for this database.
+    def get_arc(self, record_id: str) -> str:
+        """
+        Returns the name of the archive index that should contain the data for this
+        record ID. This function is designed to spread data around across the data
+        archive indices evenly, but keep all data for each record in the same index.
 
-    :param name: the Splitgill database name
-    :return: the name of the latest data index for this database
-    """
-    return f"data-{name}-latest"
-
-
-def get_index_wildcard(name: str) -> str:
-    """
-    Given a database name, return a wildcard that covers all indices for the database.
-
-    :param name: the Splitgill database name
-    :return: the wildcard name
-    """
-    return f"data-{name}-*"
+        :param record_id: the record ID
+        :return: the index name
+        """
+        return self.arcs[sum(map(ord, record_id)) % self.arc_count]
 
 
 def generate_index_ops(
-    name: str,
+    indices: IndexNames,
     records: Iterable[MongoRecord],
     all_options: Dict[int, ParsingOptions],
     after: Optional[int],
@@ -74,7 +103,7 @@ def generate_index_ops(
     The bulk ops are yielded in reverse version order for each record with the op on the
     latest index coming first and then the other index's ops following.
 
-    :param name: the name of the database
+    :param indices: an IndexNames object for the database
     :param records: the records to update from
     :param after: the exclusive start version to produce index operations from, None if
                   all versions should be indexed
@@ -91,7 +120,7 @@ def generate_index_ops(
     # cache the latest option version
     latest_option_version = max(all_options)
     # and cache the latest index name
-    latest_index = get_latest_index_id(name)
+    latest_index = indices.latest
     # if after is not provided, using -inf ensures that all versions will be yielded
     if after is None:
         after = -math.inf
@@ -110,6 +139,7 @@ def generate_index_ops(
         version = max(data_version, options_version)
         next_version = None
         last_parsed = None
+        data_arc_index = indices.get_arc(record.id)
 
         while True:
             if not data:
@@ -135,7 +165,7 @@ def generate_index_ops(
                     if next_version is None:
                         index_name = latest_index
                     else:
-                        index_name = get_data_index_id(name, version)
+                        index_name = data_arc_index
                     op = {
                         "_op_type": "index",
                         "_index": index_name,

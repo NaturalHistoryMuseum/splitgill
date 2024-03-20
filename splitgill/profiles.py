@@ -5,8 +5,8 @@ from typing import Iterable, Tuple, Dict, List, Any
 from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search
 
+from indexing.index import IndexNames
 from splitgill.indexing.fields import VERSION, DataType
-from splitgill.indexing.index import get_index_wildcard
 from splitgill.search import (
     create_version_query,
     boolean,
@@ -134,18 +134,20 @@ class Profile:
         )
 
 
-def build_profile(elasticsearch: Elasticsearch, name: str, version: int) -> Profile:
+def build_profile(
+    elasticsearch: Elasticsearch, indices: IndexNames, version: int
+) -> Profile:
     """
     Build a profile for the given database name at the given version, using the given
     Elasticsearch client.
 
     :param elasticsearch: an elasticsearch client object
-    :param name: the name of the database to profile
+    :param indices: an IndexNames object for the database
     :param version: the version of the data to profile
     :return: a Profile object
     """
     # TODO: geo
-    search = Search(using=elasticsearch, index=get_index_wildcard(name))
+    search = Search(using=elasticsearch, index=indices.wildcard)
 
     # count how many records there are total
     total = search.filter(create_version_query(version)).count()
@@ -153,7 +155,7 @@ def build_profile(elasticsearch: Elasticsearch, name: str, version: int) -> Prof
     # added or changed)
     changes = search.filter("term", **{VERSION: version}).count()
 
-    mappings = elasticsearch.indices.get_mapping(index=get_index_wildcard(name))
+    mappings = elasticsearch.indices.get_mapping(index=indices.wildcard)
     value_paths = set()
     parent_paths = set()
     for mapping in mappings.values():
@@ -223,7 +225,9 @@ def build_profile(elasticsearch: Elasticsearch, name: str, version: int) -> Prof
             field.count = count
             field.lists_count = lists_count
 
-    return Profile(name, version, total, changes, len(fields), sorted(fields.values()))
+    return Profile(
+        indices.name, version, total, changes, len(fields), sorted(fields.values())
+    )
 
 
 def _extract_fields(

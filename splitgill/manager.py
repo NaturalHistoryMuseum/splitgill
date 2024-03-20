@@ -11,12 +11,7 @@ from pymongo.collection import Collection
 from pymongo.database import Database
 
 from splitgill.indexing import fields
-from splitgill.indexing.index import (
-    generate_index_ops,
-    get_latest_index_id,
-    get_data_index_id,
-    get_index_wildcard,
-)
+from splitgill.indexing.index import generate_index_ops, IndexNames
 from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.indexing.templates import DATA_TEMPLATE
 from splitgill.ingest import generate_ops, generate_rollback_ops
@@ -83,9 +78,11 @@ class SplitgillDatabase:
         """
         self.name = name
         self._client = client
+        # Mongo collection objects
         self.data_collection = self._client.get_data_collection(self.name)
         self.options_collection = self._client.get_options_collection()
-        self.latest_index_name = get_latest_index_id(self.name)
+        # index names
+        self.indices = IndexNames(self.name)
 
     def get_committed_version(self) -> Optional[int]:
         """
@@ -123,8 +120,11 @@ class SplitgillDatabase:
         result = self._client.elasticsearch.search(
             aggs={"max_version": {"max": {"field": fields.VERSION}}},
             size=0,
-            # search all data indices for this database
-            index=f"data-{self.name}-*",
+            # search all data indices for this database (really the most recent version
+            # will always be in the latest index, but using a wildcard on all indices
+            # means we can avoid doing a check that the latest index exists first and
+            # just go for it).
+            index=self.indices.wildcard,
         )
 
         version = get_in(("aggregations", "max_version", "value"), result, None)
@@ -342,28 +342,6 @@ class SplitgillDatabase:
             MongoRecord(**doc) for doc in self.data_collection.find(**find_kwargs)
         )
 
-    def get_all_indices(self) -> List[str]:
-        """
-        Returns a list of all index possible index names for the data in this database.
-        Some of these indices may not actually be in use in Elasticsearch depending on
-        the sync state, but this list contains all the possible names given the range of
-        versions in the current data in MongoDB.
-
-        :return: a list of index names, in age order (latest, then decreasing years)
-        """
-        indices = [self.latest_index_name]
-        indices.extend(
-            # sort in descending order
-            sorted(
-                {
-                    get_data_index_id(self.name, version)
-                    for version in self.data_collection.distinct("version")
-                },
-                reverse=True,
-            )
-        )
-        return indices
-
     def sync(self, parallel: bool = True, chunk_size: int = 500):
         """
         Synchronise the data/options in MongoDB with the data in Elasticsearch by
@@ -413,15 +391,14 @@ class SplitgillDatabase:
         bulk_function = parallel_bulk if parallel else streaming_bulk
 
         client.indices.put_index_template(name="data-template", body=DATA_TEMPLATE)
-        indices = self.get_all_indices()
-        for index in indices:
+        for index in self.indices.all:
             if not client.indices.exists(index=index):
                 client.indices.create(index=index)
 
         # apply optimal indexing settings to all the indices we may update
         client.indices.put_settings(
             body={"index": {"refresh_interval": -1, "number_of_replicas": 0}},
-            index=indices,
+            index=self.indices.all,
         )
 
         # we don't care about the results so just throw them away into a 0-sized
@@ -430,7 +407,7 @@ class SplitgillDatabase:
             bulk_function(
                 client,
                 generate_index_ops(
-                    self.name,
+                    self.indices,
                     self.iter_records(filter=find_filter),
                     all_options,
                     last_sync,
@@ -442,16 +419,16 @@ class SplitgillDatabase:
         )
 
         # refresh all indices to make the changes visible all at once
-        client.indices.refresh(index=indices)
+        client.indices.refresh(index=self.indices.all)
 
         # reset the settings we changed (None forces them to revert to defaults)
         client.indices.put_settings(
             body={"index": {"refresh_interval": None, "number_of_replicas": None}},
-            index=indices,
+            index=self.indices.all,
         )
 
         # do a bit of a tidy up by deleting any indexes without docs
-        for index in indices:
+        for index in self.indices.all:
             if not any(client.search(index=index, size=1)["hits"]["hits"]):
                 client.indices.delete(index=index)
 
@@ -469,9 +446,9 @@ class SplitgillDatabase:
         """
         # TODO: add more precise versioning options (latest, none, a specific version)
         if latest:
-            index = self.latest_index_name
+            index = self.indices.latest
         else:
-            index = get_index_wildcard(self.name)
+            index = self.indices.wildcard
         return Search(using=self._client.elasticsearch, index=index)
 
     def get_available_versions(self) -> List[int]:
@@ -641,7 +618,7 @@ class ProfileManager:
             if version in profiled_versions:
                 continue
             # no profile available for this version, build it
-            profile = build_profile(self._elasticsearch, database.name, version)
+            profile = build_profile(self._elasticsearch, database.indices, version)
 
             # create a doc from the profile and then add some extras
             doc = {**asdict(profile), "name": database.name, "version": version}

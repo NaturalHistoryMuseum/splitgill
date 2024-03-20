@@ -6,31 +6,43 @@ from typing import Dict, Optional
 from freezegun import freeze_time
 
 from splitgill.indexing import fields
-from splitgill.indexing.index import (
-    get_data_index_id,
-    get_latest_index_id,
-    generate_index_ops,
-    get_index_wildcard,
-)
+from splitgill.indexing.index import generate_index_ops, IndexNames
 from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.indexing.parser import parse_for_index
 from splitgill.manager import SplitgillClient, SplitgillDatabase
 from splitgill.model import Record, ParsingOptions
 
 
-def test_get_data_index_id():
-    assert get_data_index_id("test", 1691340859000) == "data-test-2023"
-    assert get_data_index_id("test", 1659804859000) == "data-test-2022"
-    assert get_data_index_id("test", 1617692059000) == "data-test-2021"
-    assert get_data_index_id("test", 1577840461000) == "data-test-2020"
+def test_index_names():
+    indices = IndexNames("test")
 
-
-def test_get_latest_index_id():
-    assert get_latest_index_id("test") == "data-test-latest"
-
-
-def test_get_wildcard_index():
-    assert get_index_wildcard("test") == "data-test-*"
+    assert indices.name == "test"
+    assert indices.arc_count == 5
+    assert indices.base == "data-test"
+    assert indices.latest == "data-test-latest"
+    assert indices.arc_base == "data-test-arc"
+    assert indices.wildcard == "data-test-*"
+    assert indices.arc_wildcard == "data-test-arc-*"
+    assert indices.arcs == (
+        "data-test-arc-000",
+        "data-test-arc-001",
+        "data-test-arc-002",
+        "data-test-arc-003",
+        "data-test-arc-004",
+    )
+    assert indices.all == (
+        "data-test-latest",
+        "data-test-arc-000",
+        "data-test-arc-001",
+        "data-test-arc-002",
+        "data-test-arc-003",
+        "data-test-arc-004",
+    )
+    assert indices.get_arc("record-1") == "data-test-arc-003"
+    assert indices.get_arc("record-2") == "data-test-arc-004"
+    assert indices.get_arc("record-3") == "data-test-arc-000"
+    assert indices.get_arc("record-4") == "data-test-arc-001"
+    assert indices.get_arc("record-5") == "data-test-arc-002"
 
 
 def setup_scenario(
@@ -64,7 +76,7 @@ def setup_scenario(
 
 def check_delete_op(op: dict, record_id: str, name: Optional[str] = "test"):
     assert op["_op_type"] == "delete"
-    assert op["_index"] == get_latest_index_id(name)
+    assert op["_index"] == IndexNames(name).latest
     assert op["_id"] == record_id
 
 
@@ -82,11 +94,11 @@ def check_op(
         assert op[fields.NEXT] == next_version
         assert op[fields.VERSIONS]["lt"] == next_version
         assert op["_id"] == f"{record_id}:{version}"
-        assert op["_index"] == get_data_index_id(name, version)
+        assert op["_index"] == IndexNames(name).get_arc(record_id)
     else:
         assert fields.NEXT not in op
         assert op["_id"] == record_id
-        assert op["_index"] == get_latest_index_id(name)
+        assert op["_index"] == IndexNames(name).latest
 
     assert op[fields.ID] == record_id
     assert op[fields.VERSION] == version
@@ -163,7 +175,7 @@ class TestGenerateIndexOps:
 
         ops = list(
             generate_index_ops(
-                database.name, database.iter_records(), database.get_options(), None
+                database.indices, database.iter_records(), database.get_options(), None
             )
         )
         assert len(ops) == 7
@@ -193,7 +205,7 @@ class TestGenerateIndexOps:
 
         ops = list(
             generate_index_ops(
-                database.name, database.iter_records(), database.get_options(), None
+                database.indices, database.iter_records(), database.get_options(), None
             )
         )
         # we're expecting this set of pairs:
@@ -224,7 +236,7 @@ class TestGenerateIndexOps:
         # set after to 6 as we have no data nor options versions at 6
         ops = list(
             generate_index_ops(
-                database.name, database.iter_records(), database.get_options(), 6
+                database.indices, database.iter_records(), database.get_options(), 6
             )
         )
         assert len(ops) == 5
@@ -253,7 +265,7 @@ class TestGenerateIndexOps:
         # set after to 5 which we have a version of data and options at
         ops = list(
             generate_index_ops(
-                database.name, database.iter_records(), database.get_options(), 5
+                database.indices, database.iter_records(), database.get_options(), 5
             )
         )
         assert len(ops) == 5
@@ -281,7 +293,7 @@ class TestGenerateIndexOps:
         # set after to 8, this should just mean version 9 of the data is found as new
         ops = list(
             generate_index_ops(
-                database.name, database.iter_records(), database.get_options(), 8
+                database.indices, database.iter_records(), database.get_options(), 8
             )
         )
         # should get 2 ops, one to update the latest index and one pushing the old
@@ -310,7 +322,7 @@ class TestGenerateIndexOps:
         # new
         ops = list(
             generate_index_ops(
-                database.name, database.iter_records(), database.get_options(), 9
+                database.indices, database.iter_records(), database.get_options(), 9
             )
         )
         # should get 2 ops, one to update the latest index and one pushing the old
@@ -339,7 +351,7 @@ class TestGenerateIndexOps:
         # found as new
         ops = list(
             generate_index_ops(
-                database.name, database.iter_records(), database.get_options(), 8
+                database.indices, database.iter_records(), database.get_options(), 8
             )
         )
         # should get 2 ops, one to update the latest index and one pushing the old
@@ -360,7 +372,7 @@ class TestGenerateIndexOps:
 
         ops = list(
             generate_index_ops(
-                database.name, database.iter_records(), database.get_options(), None
+                database.indices, database.iter_records(), database.get_options(), None
             )
         )
         assert len(ops) == 1
@@ -381,7 +393,7 @@ class TestGenerateIndexOps:
 
         ops = list(
             generate_index_ops(
-                database.name, database.iter_records(), database.get_options(), None
+                database.indices, database.iter_records(), database.get_options(), None
             )
         )
 
