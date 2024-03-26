@@ -1,7 +1,9 @@
 from contextlib import suppress
+from typing import List
 
 import pytest
-from elasticsearch import Elasticsearch
+from elastic_transport import NodeConfig
+from elasticsearch import Elasticsearch, AsyncElasticsearch
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
@@ -33,14 +35,31 @@ def mongo_collection(mongo_database: Database) -> Collection:
 
 
 @pytest.fixture
-def elasticsearch_client() -> Elasticsearch:
-    with Elasticsearch("http://es:9200") as es:
-        yield es
+def es_node_configs() -> List[NodeConfig]:
+    node_configs = [NodeConfig("http", "es", 9200)]
+
+    yield node_configs
+
+    with Elasticsearch(node_configs) as es:
         es.indices.delete(index="*")
         index_templates = es.indices.get_index_template(name="*")
-        for index_template in index_templates['index_templates']:
+        for index_template in index_templates["index_templates"]:
             with suppress(Exception):
                 es.indices.delete_index_template(name=index_template["name"])
+
+
+@pytest.fixture
+def elasticsearch_client(es_node_configs: List[NodeConfig]) -> Elasticsearch:
+    with Elasticsearch(es_node_configs) as es:
+        yield es
+
+
+@pytest.fixture
+async def async_elasticsearch_client(
+    es_node_configs: List[NodeConfig],
+) -> AsyncElasticsearch:
+    async with AsyncElasticsearch(es_node_configs) as es:
+        yield es
 
 
 @pytest.fixture

@@ -20,7 +20,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "elasticsearch>=8.10.1",
+    "elasticsearch[async]>=8.10.1",
     "elasticsearch-dsl>=8.9.0",
     "pymongo>=4.4.1",
     "cytoolz>=0.12.2",
@@ -31,6 +31,7 @@ dependencies = [
     "pyproj>=3.5.0",
     "shapely>=2.0.1",
     "regex>=2023.10.3",
+    "orjson>=3.9.15",
 ]
 
 [project.optional-dependencies]
@@ -40,6 +41,7 @@ test = [
     "pytest-cov",
     "coveralls",
     "freezegun",
+    "pytest-asyncio",
 ]
 docs = [
     "mkdocs",

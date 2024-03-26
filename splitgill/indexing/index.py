@@ -1,6 +1,9 @@
+import abc
+from dataclasses import dataclass
 from typing import Optional, Iterable, Dict
 
 import math
+import orjson
 
 from splitgill.indexing.fields import (
     ID,
@@ -81,12 +84,58 @@ class IndexNames:
         return self.arcs[sum(map(ord, record_id)) % self.arc_count]
 
 
+class BulkOp(abc.ABC):
+    """
+    Abstract class (really this is an interface) representing a bulk Elasticsearch
+    operation.
+    """
+
+    def serialise(self) -> str:
+        """
+        Serialise the op ready to send to Elasticsearch.
+
+        :return: a utf-8 encoded str
+        """
+        ...
+
+
+@dataclass
+class IndexOp(BulkOp):
+    """
+    An index bulk operation.
+    """
+
+    index: str
+    doc_id: str
+    document: dict
+
+    def serialise(self) -> str:
+        # index ops are 2 lines, first the action metadata and then the document. For
+        # speed, build the JSON metadata line directly as a str
+        metadata = f'{{"index":{{"_index":"{self.index}","_id":"{self.doc_id}"}}}}'
+        return f"{metadata}\n{orjson.dumps(self.document).decode('utf8')}"
+
+
+@dataclass
+class DeleteOp(BulkOp):
+    """
+    An delete bulk operation.
+    """
+
+    index: str
+    doc_id: str
+
+    def serialise(self) -> str:
+        # delete ops are only one line of JSON, for speed build it directly as a str
+        return f'{{"delete":{{"_index":"{self.index}","_id":"{self.doc_id}"}}}}'
+
+
 def generate_index_ops(
     indices: IndexNames,
     records: Iterable[MongoRecord],
     all_options: Dict[int, ParsingOptions],
     after: Optional[int],
-) -> Iterable[dict]:
+) -> Iterable[BulkOp]:
     """
     Yield bulk index operations to run on Elasticsearch to update the indices of the
     given database name with the data in the given records using the given options. The
@@ -110,7 +159,7 @@ def generate_index_ops(
     :param all_options: dict of versions to ParsingOptions objects, this should be all
                         parsing option versions, not just the ones that apply after the
                         after parameter (if it's even provided)
-    :return: yields ops as dicts
+    :return: yields BulkOp objects
     """
     # pre-sort the options in reverse version order
     sorted_options = [
@@ -147,11 +196,7 @@ def generate_index_ops(
                 # this is a delete! If this is the latest version then we delete the
                 # record's document in the latest index, otherwise do nothing
                 if next_version is None:
-                    yield {
-                        "_op_type": "delete",
-                        "_index": latest_index,
-                        "_id": record.id,
-                    }
+                    yield DeleteOp(latest_index, record.id)
             else:
                 parsed = parse_for_index(data, options)
                 # only yield an op if there is a change. Every data version should
@@ -162,13 +207,7 @@ def generate_index_ops(
                 # floats)
                 if parsed != last_parsed:
                     last_parsed = parsed
-                    if next_version is None:
-                        index_name = latest_index
-                    else:
-                        index_name = data_arc_index
-                    op = {
-                        "_op_type": "index",
-                        "_index": index_name,
+                    document = {
                         ID: record.id,
                         VERSION: version,
                         VERSIONS: {"gte": version},
@@ -179,17 +218,19 @@ def generate_index_ops(
                     }
                     if parsed.geo:
                         # create a collection using the individual geo GeoJSON values
-                        op[GEO_ALL] = {
+                        document[GEO_ALL] = {
                             "type": "GeometryCollection",
                             "geometries": list(parsed.geo.values()),
                         }
                     if next_version is None:
-                        op["_id"] = record.id
+                        index_name = latest_index
+                        doc_id = record.id
                     else:
-                        op["_id"] = f"{record.id}:{version}"
-                        op[NEXT] = next_version
-                        op[VERSIONS]["lt"] = next_version
-                    yield op
+                        document[NEXT] = next_version
+                        document[VERSIONS]["lt"] = next_version
+                        index_name = data_arc_index
+                        doc_id = f"{record.id}:{version}"
+                    yield IndexOp(index_name, doc_id, document)
 
             # update state variables
             if version == data_version:

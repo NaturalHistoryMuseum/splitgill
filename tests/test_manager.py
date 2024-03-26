@@ -300,53 +300,24 @@ class TestIngest:
 class TestSync:
     def test_nothing_to_sync(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
-        database.sync()
+        result = database.sync()
 
         assert not splitgill.elasticsearch.indices.exists(index=database.indices.latest)
+        assert result.total == 0
 
-    def test_everything_to_sync_single_threaded(self, splitgill: SplitgillClient):
+    def test_everything_to_sync_many_workers(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
 
-        version_time = datetime(2020, 7, 2)
+        records = [Record.new({"x": i}) for i in range(1000)]
+        database.ingest(records, commit=True)
 
-        with freeze_time(version_time):
-            database.ingest(
-                [
-                    Record.new({"x": 5}),
-                    Record.new({"x": 10}),
-                    Record.new({"x": 15}),
-                    Record.new({"x": -1}),
-                ],
-                commit=True,
-            )
+        # these are silly numbers, but it'll make sure it works at least!
+        result = database.sync(worker_count=9, chunk_size=17)
 
-        database.sync(parallel=False)
-
+        assert result.indexed == len(records)
         assert splitgill.elasticsearch.indices.exists(index=database.indices.latest)
         assert not splitgill.elasticsearch.indices.exists(index=database.indices.all)
-        assert database.search().count() == 4
-
-    def test_everything_to_sync(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-
-        version_time = datetime(2020, 7, 2)
-
-        with freeze_time(version_time):
-            database.ingest(
-                [
-                    Record.new({"x": 5}),
-                    Record.new({"x": 10}),
-                    Record.new({"x": 15}),
-                    Record.new({"x": -1}),
-                ],
-                commit=True,
-            )
-
-        database.sync()
-
-        assert splitgill.elasticsearch.indices.exists(index=database.indices.latest)
-        assert not splitgill.elasticsearch.indices.exists(index=database.indices.all)
-        assert database.search().count() == 4
+        assert database.search().count() == len(records)
 
     def test_one_sync_then_another(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
@@ -539,21 +510,13 @@ class TestSync:
 
             with pytest.raises(Exception, match="Something went wrong... on purpose!"):
                 # add them one at a time so that some docs actually get to elasticsearch
-                database.sync(chunk_size=1, parallel=False)
+                database.sync(worker_count=1, chunk_size=1, buffer_multiplier=1)
 
         splitgill.elasticsearch.indices.refresh(index=database.indices.latest)
-        # check that the number of docs available for search is more than 0 but fewer
-        # than 4. Ideally this would be 3 because we allow 3 parse_for_index calls to
-        # complete and then raise an exception, however, the way that chunks are sent to
-        # elasticsearch means that it's not 3, it's actually 2. The _ActionChunker class
-        # in the elasticsearch library doesn't send the first op immediately even though
-        # the chunk size is 1 and only sends it after creating the next op so it ends up
-        # only sending 2 ops even though it's generate 4. As you can see from that
-        # explanation this is an elasticsearch library internal and therefore relying on
-        # it always being this way is foolish, therefore we just check that more than 1
-        # doc has made it and fewer than 4 (even this is a bit dubious but it's pretty
-        # solid).
-        assert 0 < database.search().count() < 4
+        # we expect this to be 3, but we can't be sure because the exception we raise
+        # might happen before, during, or after each bulk op request has been processed
+        # by elasticsearch. It should definitely be less than 4!
+        assert database.search().count() < 4
 
     def test_resync(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
@@ -566,7 +529,7 @@ class TestSync:
         ]
         database.ingest(records, commit=True)
 
-        database.sync(parallel=False, resync=False)
+        database.sync(resync=False)
         assert database.search().count() == len(records)
 
         # delete a couple of documents to cause mayhem
@@ -577,7 +540,7 @@ class TestSync:
         assert database.search().count() == len(records) - 2
 
         # sync them back in
-        database.sync(parallel=False, resync=True)
+        database.sync(resync=True)
         assert database.search().count() == len(records)
 
 

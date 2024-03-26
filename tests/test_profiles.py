@@ -32,7 +32,7 @@ def add_data(
     with freeze_time(version):
         version = database.commit()
     # sync the index, this will also update the profile
-    database.sync(parallel=False)
+    database.sync()
     # return the new version
     return version
 

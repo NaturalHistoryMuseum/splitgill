@@ -1,19 +1,18 @@
-from collections import deque
 from dataclasses import asdict
 from enum import Enum
 from typing import Optional, Iterable, List, Dict, Union
 
 from cytoolz.dicttoolz import get_in
 from elasticsearch import Elasticsearch
-from elasticsearch.helpers import parallel_bulk, streaming_bulk
 from elasticsearch_dsl import Search, A
 from pymongo import MongoClient, IndexModel, ASCENDING, DESCENDING
 from pymongo.collection import Collection
 from pymongo.database import Database
 
 from splitgill.indexing import fields
-from splitgill.indexing.index import generate_index_ops, IndexNames
+from splitgill.indexing.index import IndexNames, generate_index_ops
 from splitgill.indexing.options import ParsingOptionsBuilder
+from splitgill.indexing.syncing import write_ops, WriteResult
 from splitgill.indexing.templates import DATA_TEMPLATE
 from splitgill.ingest import generate_ops, generate_rollback_ops
 from splitgill.locking import LockManager
@@ -379,7 +378,13 @@ class SplitgillDatabase:
             MongoRecord(**doc) for doc in self.data_collection.find(**find_kwargs)
         )
 
-    def sync(self, parallel: bool = True, chunk_size: int = 500, resync: bool = False):
+    def sync(
+        self,
+        worker_count: int = 2,
+        chunk_size: int = 100,
+        buffer_multiplier: int = 2,
+        resync: bool = False,
+    ) -> WriteResult:
         """
         Synchronise the data/options in MongoDB with the data in Elasticsearch by
         updating the latest and old data indices as required.
@@ -397,16 +402,24 @@ class SplitgillDatabase:
         and a refresh is called. This means that if this function returns successfully,
         the data updated by it will be immediately available for searches.
 
-        :param parallel: send the data to Elasticsearch using multiple threads if True,
-                         otherwise use a single thread if False
+        :param worker_count: the number of workers to use to send the data to
+                             Elasticsearch. These aren't threads, we use asyncio to
+                             share
         :param chunk_size: the number of docs to send to Elasticsearch in each bulk
                            request
+        :param buffer_multiplier: chunks of ops are buffered in a queue which has a
+                              maximum size set at worker_count * buffer_multiplier,
+                              hence this parameter can be used to control this buffer
+                              size. The size of this buffer impacts memory usage and
+                              also reduces the time workers spend doing nothing.
+                              Defaults to 2.
         :param resync: whether to resync all records with Elasticsearch regardless of
                        the currently synced version. This won't delete any data first
                        and just replaces documents in Elasticsearch as needed.
+        :return: a WriteResult object
         """
         if not self.has_data():
-            return
+            return WriteResult()
 
         all_options = self.get_options(include_uncommitted=False)
         last_sync = self.get_elasticsearch_version() if not resync else None
@@ -418,7 +431,7 @@ class SplitgillDatabase:
             if last_sync >= committed_version:
                 # elasticsearch and mongo are in sync (use >= rather than == just in case
                 # some bizarro-ness has occurred)
-                return
+                return WriteResult()
             if any(version > last_sync for version in all_options):
                 # there's an options change ahead, this means we need to check all
                 # records again, so filter out committed records only
@@ -428,7 +441,6 @@ class SplitgillDatabase:
                 find_filter = {"version": {"$gt": last_sync}}
 
         client = self._client.elasticsearch
-        bulk_function = parallel_bulk if parallel else streaming_bulk
 
         client.indices.put_index_template(name="data-template", body=DATA_TEMPLATE)
         for index in self.indices.all:
@@ -441,21 +453,17 @@ class SplitgillDatabase:
             index=self.indices.all,
         )
 
-        # we don't care about the results so just throw them away into a 0-sized
-        # deque (errors will be raised directly)
-        deque(
-            bulk_function(
-                client,
-                generate_index_ops(
-                    self.indices,
-                    self.iter_records(filter=find_filter),
-                    all_options,
-                    last_sync,
-                ),
-                raise_on_error=True,
-                chunk_size=chunk_size,
+        result = write_ops(
+            client,
+            generate_index_ops(
+                self.indices,
+                self.iter_records(filter=find_filter),
+                all_options,
+                last_sync,
             ),
-            maxlen=0,
+            chunk_size=chunk_size,
+            worker_count=worker_count,
+            buffer_multiplier=buffer_multiplier,
         )
 
         # refresh all indices to make the changes visible all at once
@@ -473,6 +481,8 @@ class SplitgillDatabase:
                 client.indices.delete(index=index)
 
         self._client.profile_manager.update_profiles(self)
+
+        return result
 
     def search(
         self, version: Union[SearchVersion, int] = SearchVersion.latest

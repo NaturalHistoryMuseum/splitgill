@@ -1,3 +1,4 @@
+import json
 from collections import defaultdict
 from datetime import datetime
 from itertools import chain
@@ -6,7 +7,13 @@ from typing import Dict, Optional
 from freezegun import freeze_time
 
 from splitgill.indexing import fields
-from splitgill.indexing.index import generate_index_ops, IndexNames
+from splitgill.indexing.index import (
+    generate_index_ops,
+    IndexNames,
+    BulkOp,
+    IndexOp,
+    DeleteOp,
+)
 from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.indexing.parser import parse_for_index
 from splitgill.manager import SplitgillClient, SplitgillDatabase
@@ -74,14 +81,14 @@ def setup_scenario(
     return database
 
 
-def check_delete_op(op: dict, record_id: str, name: Optional[str] = "test"):
-    assert op["_op_type"] == "delete"
-    assert op["_index"] == IndexNames(name).latest
-    assert op["_id"] == record_id
+def check_delete_op(op: BulkOp, record_id: str, name: Optional[str] = "test"):
+    assert isinstance(op, DeleteOp)
+    assert op.index == IndexNames(name).latest
+    assert op.doc_id == record_id
 
 
 def check_op(
-    op: dict,
+    op: BulkOp,
     record_id: str,
     version: int,
     data: dict,
@@ -89,30 +96,30 @@ def check_op(
     next_version: Optional[int] = None,
     name: Optional[str] = "test",
 ):
-    assert op["_op_type"] == "index"
+    assert isinstance(op, IndexOp)
     if next_version is not None:
-        assert op[fields.NEXT] == next_version
-        assert op[fields.VERSIONS]["lt"] == next_version
-        assert op["_id"] == f"{record_id}:{version}"
-        assert op["_index"] == IndexNames(name).get_arc(record_id)
+        assert op.document[fields.NEXT] == next_version
+        assert op.document[fields.VERSIONS]["lt"] == next_version
+        assert op.doc_id == f"{record_id}:{version}"
+        assert op.index == IndexNames(name).get_arc(record_id)
     else:
-        assert fields.NEXT not in op
-        assert op["_id"] == record_id
-        assert op["_index"] == IndexNames(name).latest
+        assert fields.NEXT not in op.document
+        assert op.doc_id == record_id
+        assert op.index == IndexNames(name).latest
 
-    assert op[fields.ID] == record_id
-    assert op[fields.VERSION] == version
-    assert op[fields.VERSIONS]["gte"] == version
+    assert op.document[fields.ID] == record_id
+    assert op.document[fields.VERSION] == version
+    assert op.document[fields.VERSIONS]["gte"] == version
 
     parsed = parse_for_index(data, options)
-    assert op[fields.DATA] == parsed.data
-    assert op[fields.PARSED] == parsed.parsed
-    assert op[fields.GEO] == parsed.geo
-    assert op[fields.LISTS] == parsed.lists
+    assert op.document[fields.DATA] == parsed.data
+    assert op.document[fields.PARSED] == parsed.parsed
+    assert op.document[fields.GEO] == parsed.geo
+    assert op.document[fields.LISTS] == parsed.lists
 
     if parsed.geo:
-        assert op[fields.GEO_ALL]["type"] == "GeometryCollection"
-        assert op[fields.GEO_ALL]["geometries"] == list(parsed.geo.values())
+        assert op.document[fields.GEO_ALL]["type"] == "GeometryCollection"
+        assert op.document[fields.GEO_ALL]["geometries"] == list(parsed.geo.values())
 
 
 class TestGenerateIndexOps:
@@ -393,7 +400,25 @@ class TestGenerateIndexOps:
         check_op(ops[0], "r1", 1, data[1], options[1])
 
         # do some bonus checks
-        geometries = ops[0][fields.GEO_ALL]["geometries"]
+        geometries = ops[0].document[fields.GEO_ALL]["geometries"]
         assert len(geometries) == 2
         assert {"type": "Point", "coordinates": (10.0, 4.0)} in geometries
         assert {"type": "Point", "coordinates": (100.4, 0.1)} in geometries
+
+
+def test_delete_op():
+    op = DeleteOp("test-index", "record-1")
+    assert op.serialise() == json.dumps(
+        {"delete": {"_index": "test-index", "_id": "record-1"}}, separators=(",", ":")
+    )
+
+
+def test_index_op():
+    op = IndexOp("test-index", "record-1", {"x": "beans", "y": "beans", "z": 4.689221})
+    metadata = json.dumps(
+        {"index": {"_index": "test-index", "_id": "record-1"}}, separators=(",", ":")
+    )
+    data = json.dumps(
+        {"x": "beans", "y": "beans", "z": 4.689221}, separators=(",", ":")
+    )
+    assert op.serialise() == f"{metadata}\n{data}"
