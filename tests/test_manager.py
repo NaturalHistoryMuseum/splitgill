@@ -8,6 +8,7 @@ from freezegun import freeze_time
 from splitgill.indexing import fields
 from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.indexing.parser import parse_for_index
+from splitgill.indexing.syncing import BulkOptions
 from splitgill.manager import (
     SplitgillClient,
     MONGO_DATABASE_NAME,
@@ -312,7 +313,7 @@ class TestSync:
         database.ingest(records, commit=True)
 
         # these are silly numbers, but it'll make sure it works at least!
-        result = database.sync(worker_count=9, chunk_size=17)
+        result = database.sync(BulkOptions(worker_count=9, chunk_size=17))
 
         assert result.indexed == len(records)
         assert splitgill.elasticsearch.indices.exists(index=database.indices.latest)
@@ -452,7 +453,7 @@ class TestSync:
 
             with pytest.raises(Exception, match="Something went wrong... on purpose!"):
                 # add them one at a time so that some docs actually get to elasticsearch
-                database.sync(chunk_size=1)
+                database.sync(BulkOptions(chunk_size=1))
 
         # an error occurred which should have prevented a refresh from being triggered
         # so the doc count should still be 0
@@ -510,7 +511,9 @@ class TestSync:
 
             with pytest.raises(Exception, match="Something went wrong... on purpose!"):
                 # add them one at a time so that some docs actually get to elasticsearch
-                database.sync(worker_count=1, chunk_size=1, buffer_multiplier=1)
+                database.sync(
+                    BulkOptions(worker_count=1, chunk_size=1, buffer_multiplier=1)
+                )
 
         splitgill.elasticsearch.indices.refresh(index=database.indices.latest)
         # we expect this to be 3, but we can't be sure because the exception we raise

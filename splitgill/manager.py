@@ -12,7 +12,7 @@ from pymongo.database import Database
 from splitgill.indexing import fields
 from splitgill.indexing.index import IndexNames, generate_index_ops
 from splitgill.indexing.options import ParsingOptionsBuilder
-from splitgill.indexing.syncing import write_ops, WriteResult
+from splitgill.indexing.syncing import write_ops, WriteResult, BulkOptions
 from splitgill.indexing.templates import DATA_TEMPLATE
 from splitgill.ingest import generate_ops, generate_rollback_ops
 from splitgill.locking import LockManager
@@ -379,11 +379,7 @@ class SplitgillDatabase:
         )
 
     def sync(
-        self,
-        worker_count: int = 2,
-        chunk_size: int = 100,
-        buffer_multiplier: int = 2,
-        resync: bool = False,
+        self, bulk_options: Optional[BulkOptions] = None, resync: bool = False
     ) -> WriteResult:
         """
         Synchronise the data/options in MongoDB with the data in Elasticsearch by
@@ -402,17 +398,8 @@ class SplitgillDatabase:
         and a refresh is called. This means that if this function returns successfully,
         the data updated by it will be immediately available for searches.
 
-        :param worker_count: the number of workers to use to send the data to
-                             Elasticsearch. These aren't threads, we use asyncio to
-                             share
-        :param chunk_size: the number of docs to send to Elasticsearch in each bulk
-                           request
-        :param buffer_multiplier: chunks of ops are buffered in a queue which has a
-                              maximum size set at worker_count * buffer_multiplier,
-                              hence this parameter can be used to control this buffer
-                              size. The size of this buffer impacts memory usage and
-                              also reduces the time workers spend doing nothing.
-                              Defaults to 2.
+        :param bulk_options: options determining how the bulk operations are sent to
+                             Elasticsearch
         :param resync: whether to resync all records with Elasticsearch regardless of
                        the currently synced version. This won't delete any data first
                        and just replaces documents in Elasticsearch as needed.
@@ -461,9 +448,7 @@ class SplitgillDatabase:
                 all_options,
                 last_sync,
             ),
-            chunk_size=chunk_size,
-            worker_count=worker_count,
-            buffer_multiplier=buffer_multiplier,
+            bulk_options,
         )
 
         # refresh all indices to make the changes visible all at once

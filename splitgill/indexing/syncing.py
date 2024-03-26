@@ -1,4 +1,5 @@
 from asyncio import Queue, run, sleep, create_task, gather, Task
+from dataclasses import dataclass
 from typing import Iterable, List, Set, Tuple, Optional
 
 from elastic_transport import NodeConfig, ConnectionTimeout
@@ -6,6 +7,27 @@ from elasticsearch import Elasticsearch, AsyncElasticsearch
 
 from splitgill.indexing.index import BulkOp
 from splitgill.utils import partition
+
+
+@dataclass
+class BulkOptions:
+    """
+    Options for writing bulk operations to Elasticsearch.
+    """
+
+    # the number of ops to send to Elasticsearch in one bulk request
+    chunk_size: int = 100
+    # the number of concurrent workers to use to send the requests
+    worker_count: int = 2
+    # chunks of ops are buffered in a queue which has a maximum size set at
+    # worker_count * buffer_multiplier, hence, this parameter can be used to control
+    # this buffer size. The size of this buffer impacts memory usage and also reduces
+    # the time workers spend doing nothing
+    buffer_multiplier: int = 3
+
+    @property
+    def op_buffer_size(self) -> int:
+        return self.worker_count * self.buffer_multiplier
 
 
 class BulkOpException(Exception):
@@ -37,11 +59,7 @@ class WriteResult:
 
 
 def write_ops(
-    client: Elasticsearch,
-    op_stream: Iterable[BulkOp],
-    chunk_size: int = 100,
-    worker_count: int = 3,
-    buffer_multiplier: int = 2,
+    client: Elasticsearch, op_stream: Iterable[BulkOp], options: BulkOptions
 ) -> WriteResult:
     """
     Write the given iterable of bulk index operations to Elasticsearch.
@@ -51,33 +69,17 @@ def write_ops(
                    pull the hosts from this Elasticsearch client to create the
                    AsyncElasticsearch object
     :param op_stream: an iterable of BulkOp objects
-    :param chunk_size: the number of ops to send to Elasticsearch in one request
-    :param worker_count: the number of concurrent workers to use to send the requests
-    :param buffer_multiplier: chunks of ops are buffered in a queue which has a maximum
-                              size set at worker_count * buffer_multiplier, hence this
-                              parameter can be used to control this buffer size. The
-                              size of this buffer impacts memory usage and also reduces
-                              the time workers spend doing nothing. Defaults to 2.
+    :param options: options determining how we do the bulk write
     :return: a WriteResult object
     """
     node_configs = [node.config for node in client.transport.node_pool.all()]
-    return run(
-        write_ops_async(
-            node_configs,
-            op_stream,
-            chunk_size,
-            worker_count,
-            buffer_multiplier,
-        )
-    )
+    if options is None:
+        options = BulkOptions()
+    return run(write_ops_async(node_configs, op_stream, options))
 
 
 async def write_ops_async(
-    hosts: List[NodeConfig],
-    op_stream: Iterable[BulkOp],
-    chunk_size: int,
-    worker_count: int,
-    buffer_multiplier: int,
+    hosts: List[NodeConfig], op_stream: Iterable[BulkOp], options: BulkOptions
 ) -> WriteResult:
     """
     Writes the given iterable of bulk index operations to Elasticsearch using a set of
@@ -85,23 +87,19 @@ async def write_ops_async(
 
     :param hosts: a list of elasticsearch node configurations
     :param op_stream: an iterable of BulkOp objects
-    :param chunk_size: the number of ops to send to Elasticsearch at a time
-    :param worker_count: the number of async workers to use for sending the ops
-    :param buffer_multiplier: chunks of ops are buffered in a queue which has a maximum
-                          size set at worker_count * buffer_multiplier, hence this
-                          parameter can be used to control this buffer size. The
-                          size of this buffer impacts memory usage and also reduces
-                          the time workers spend doing nothing. Defaults to 2.
+    :param options: options determining how we do the bulk write
     :return: a WriteResult object
     """
     client = AsyncElasticsearch(hosts)
     try:
-        task_queue = Queue(maxsize=buffer_multiplier * worker_count)
+        task_queue = Queue(maxsize=options.op_buffer_size)
 
         # set up the workers
-        workers = {create_task(worker(client, task_queue)) for _ in range(worker_count)}
+        workers = {
+            create_task(worker(client, task_queue)) for _ in range(options.worker_count)
+        }
 
-        for chunk in partition(op_stream, chunk_size):
+        for chunk in partition(op_stream, options.chunk_size):
             # relinquish control so that the workers can do some work
             await sleep(0)
             # put the next task on the queue
