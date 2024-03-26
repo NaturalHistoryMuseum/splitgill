@@ -1,5 +1,5 @@
-from asyncio import Queue, sleep, create_task, gather, Task
-from unittest.mock import patch, AsyncMock, MagicMock
+from asyncio import Queue, sleep, create_task, gather
+from unittest.mock import AsyncMock
 
 import pytest
 from elastic_transport import ConnectionTimeout
@@ -27,7 +27,6 @@ def test_write_result():
 
 
 class TestWorker:
-    @pytest.mark.asyncio
     async def test_timeout(self):
         queue = Queue()
         queue.put_nowait([IndexOp("test", "doc1", {"x": 4})])
@@ -38,7 +37,6 @@ class TestWorker:
         with pytest.raises(ConnectionTimeout):
             await worker(mock_client, queue)
 
-    @pytest.mark.asyncio
     async def test_timeout_backoff_and_then_succeed(self):
         queue = Queue()
         queue.put_nowait([IndexOp("test", "doc1", {"x": 4})])
@@ -57,7 +55,6 @@ class TestWorker:
         assert indexed == 2
         assert deleted == 1
 
-    @pytest.mark.asyncio
     async def test_counting(self):
         queue = Queue()
         queue.put_nowait([IndexOp("test", "doc1", {"x": 4})])
@@ -73,7 +70,6 @@ class TestWorker:
         assert indexed == 4
         assert deleted == 2
 
-    @pytest.mark.asyncio
     async def test_errors(self):
         queue = Queue()
         queue.put_nowait([IndexOp("test", "doc1", {"x": 4})])
@@ -90,7 +86,6 @@ class TestWorker:
 
 
 class TestCheckForErrors:
-    @pytest.mark.asyncio
     async def test_no_errors(self):
         tasks = set()
         # this task won't be complete by the time we check
@@ -101,7 +96,6 @@ class TestCheckForErrors:
         check_for_errors(tasks)
         await gather(*tasks)
 
-    @pytest.mark.asyncio
     async def test_errors(self):
         tasks = set()
 

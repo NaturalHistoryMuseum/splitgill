@@ -92,3 +92,6 @@ wrap-summaries = 88
 wrap-descriptions = 88
 pre-summary-newline = true
 make-summary-multi-line = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
