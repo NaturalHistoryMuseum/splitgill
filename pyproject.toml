@@ -27,7 +27,6 @@ dependencies = [
     "python-dateutil>=2.8.2",
     "fastnumbers>=5.0.1",
     "pendulum>=2.0.0",
-    "cytoolz>=0.12.2",
     "pyproj>=3.5.0",
     "shapely>=2.0.1",
     "regex>=2023.10.3",
