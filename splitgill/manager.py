@@ -527,6 +527,14 @@ class SplitgillDatabase:
             versions.update(bucket["key"]["version"] for bucket in buckets)
         return sorted(versions)
 
+    def get_profiles(self) -> List[Profile]:
+        """
+        Returns a list of profiles of this database.
+
+        :return: a list of Profile objects in ascending version order
+        """
+        return self._client.profile_manager.get_profiles(self.name)
+
     def get_profile(self, version: int) -> Optional[Profile]:
         """
         Given a version, gets the data profile that applies, if there is one available.
