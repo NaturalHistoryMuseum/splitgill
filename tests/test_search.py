@@ -2,8 +2,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from indexing.fields import ParsedType
-from search import (
+from splitgill.indexing.fields import ParsedType
+from splitgill.search import (
     term_query,
     number,
     date,
