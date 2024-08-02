@@ -1,110 +1,73 @@
 from functools import lru_cache
-from itertools import chain, repeat
-from numbers import Number
-from typing import Union, Optional, Tuple, Iterable
+from itertools import chain
+from typing import Optional, Iterable
 
+import orjson
 from cytoolz.itertoolz import sliding_window
 from fastnumbers import try_float, RAISE
 from pyproj import CRS, Transformer
-from shapely import Point
+from shapely import Point, LineString, Polygon, from_wkt, from_geojson
+from shapely.geometry.base import BaseGeometry
 from shapely.ops import transform
 
+from splitgill.indexing.fields import ParsedType
 from splitgill.model import GeoFieldHint
 
 
-def match_hints(
-    data: dict, hints: Iterable[GeoFieldHint]
-) -> Iterable[Tuple[str, dict]]:
+def match_hints(data: dict, hints: Iterable[GeoFieldHint]) -> dict:
     """
     Check to see if the data has the fields contained in the hints and those fields are
-    valid for use as geo fields. If any hints match then GeoJSON dicts are yielded along
-    with the path that should be used in the geo dict. The GeoJSON yielded will be a
-    dict, either a Point if only a lat and lon is provided or Polygon if a radius is
-    included.
+    valid for use as geo fields. If any hint matches, then a.
 
     :param data: the data dict to check
-    :param hints: the hints to match on
-    :return: yields path and GeoJSON tuples
+    :param hints: an iterable of GeoFieldHints to check
+    :return:
     """
+    matches = {}
+
     for hint in hints:
+        longitude = data.get(hint.lon_field, "")
+        latitude = data.get(hint.lat_field, "")
         try:
-            if hint.radius_field:
-                geojson = create_polygon_circle(
-                    parse_latitude(data.get(hint.lat_field, "")),
-                    parse_longitude(data.get(hint.lon_field, "")),
-                    parse_uncertainty(data.get(hint.radius_field, "")),
-                )
-            else:
-                geojson = {
-                    "type": "Point",
-                    "coordinates": (
-                        parse_longitude(data.get(hint.lon_field, "")),
-                        parse_latitude(data.get(hint.lat_field, "")),
-                    ),
-                }
-            yield hint.path, geojson
+            point = Point(longitude, latitude)
         except (ValueError, TypeError):
-            pass
+            continue
 
+        if not is_shape_valid(point):
+            continue
 
-def parse_longitude(candidate: Union[str, Number]) -> float:
-    """
-    Attempt to parse the candidate to a float and return the float. If there are any
-    problems, raise errors. The value is also checked to make sure it's between -180 and
-    180 and if it's not a ValueError is raised.
+        shape = point
+        if hint.radius_field:
+            try:
+                radius = try_float(
+                    data.get(hint.radius_field, ""), on_fail=RAISE, nan=RAISE, inf=RAISE
+                )
+                # only need to make a circle if the radius is greater than 0, this also
+                # means we ignore negative radius values
+                if radius > 0:
+                    circle = create_polygon_circle(point.y, point.x, radius)
+                    if is_shape_valid(circle):
+                        shape = circle
+            except (ValueError, TypeError):
+                # if anything goes wrong, just carry on
+                pass
 
-    :param candidate: the candidate to parse
-    :return: a float
-    :raises: TypeError and ValueError
-    """
-    longitude = try_float(candidate, on_fail=RAISE, nan=RAISE, inf=RAISE)
-    if -180 <= longitude <= 180:
-        return longitude
+        matches[hint.lat_field] = {
+            ParsedType.GEO_POINT: point.wkt,
+            ParsedType.GEO_SHAPE: shape.wkt,
+        }
 
-    raise ValueError(f"{candidate} invalid, not between -180 and 180")
-
-
-def parse_latitude(candidate: Union[str, Number]) -> Optional[float]:
-    """
-    Attempt to parse the candidate to a float and return the float. If there are any
-    problems, raise errors. The value is also checked to make sure it's between -90 and
-    90 and if it's not a ValueError is raised.
-
-    :param candidate: the candidate to parse
-    :return: a float
-    :raises: TypeError and ValueError
-    """
-    latitude = try_float(candidate, on_fail=RAISE, nan=RAISE, inf=RAISE)
-    if -90 <= latitude <= 90:
-        return latitude
-
-    raise ValueError(f"{candidate} invalid, not between -90 and 90")
-
-
-def parse_uncertainty(candidate: Union[str, Number]) -> Optional[float]:
-    """
-    Attempt to parse the candidate to a float and return the float. If there are any
-    problems, raise errors. The value is also checked to make sure it's above 0 and if
-    not a ValueError is raised.
-
-    :param candidate: the candidate to parse
-    :return: a float
-    :raises: TypeError and ValueError
-    """
-    uncertainty = try_float(candidate, on_fail=RAISE, nan=RAISE, inf=RAISE)
-    if uncertainty <= 0:
-        raise ValueError("Uncertainty cannot be <= 0")
-    return uncertainty
+    return matches
 
 
 @lru_cache(maxsize=100_000)
 def create_polygon_circle(
     latitude: float, longitude: float, radius_in_metres: float
-) -> dict:
+) -> Polygon:
     """
     Given a point and a radius in metres, create a circle that represents this using a
-    GeoJSON polygon. The polygon's coordinates will be an approximation of the circle
-    around the given lat/lon pair, with the given radius.
+    WKT polygon. The polygon's coordinates will be an approximation of the circle around
+    the given lat/lon pair, with the given radius.
 
     Note that the radius must be in metres and must be greater than 0, if it isn't, a
     ValueError will be raised.
@@ -112,7 +75,7 @@ def create_polygon_circle(
     :param latitude: a latitude float value
     :param longitude: a longitude float value
     :param radius_in_metres: a radius in metres value
-    :return: a GeoJSON polygon
+    :return: a Polygon
     """
     if radius_in_metres <= 0:
         raise ValueError("Uncertainty cannot be <= 0")
@@ -122,20 +85,21 @@ def create_polygon_circle(
         f"+proj=aeqd +lat_0={latitude} +lon_0={longitude} +x_0=0 +y_0=0"
     )
     tfmr = Transformer.from_proj(aeqd_proj, aeqd_proj.geodetic_crs)
-    # quad_segs=8 produces 33 coordinates in the resulting polygon which should be
-    # enough for what we're doing here (we're trading accuracy of the circle vs. index
-    # storage and shape complexity
-    buf = Point(0, 0).buffer(radius_in_metres, quad_segs=8)
-    return {
-        "type": "Polygon",
-        "coordinates": [
-            # reverse the copy so that we obey the geojson right-hand rule
-            transform(tfmr.transform, buf).exterior.coords[::-1]
-        ],
-    }
+    # quad_segs=16 produces 64 (+1 for the repeat start/end) coordinates in the
+    # resulting polygon which should be enough for what we're doing here (we're trading
+    # accuracy of the circle vs. index storage and shape complexity)
+    # todo: quad segs could be a parsing option
+    buf = Point(0, 0).buffer(radius_in_metres, quad_segs=16)
+    # reverse the coords so that we obey the geojson right-hand rule
+    polygon = Polygon(transform(tfmr.transform, buf).exterior.coords[::-1])
+    # confirm that we've created something sensible
+    if not is_shape_valid(polygon) or not is_winding_valid(polygon):
+        raise ValueError("Invalid circle generated")
+
+    return polygon
 
 
-def as_geojson(candidate: dict) -> Optional[dict]:
+def match_geojson(candidate: dict) -> Optional[dict]:
     """
     Check the given dict to see if it is a GeoJSON object. If it is, return a cleaned up
     version to be inserted into the geo root field.
@@ -147,92 +111,106 @@ def as_geojson(candidate: dict) -> Optional[dict]:
     easier.
 
     :param candidate: the dict to check
-    :return: a GeoJSON object as a dict if matched, otherwise None
+    :return: returns a dict ready for indexing or None
     """
-    feature_type = candidate.get("type", "").lower()
-    coordinates = candidate.get("coordinates")
+    # check to make sure trying to get GeoJSON out of this dict is even worth trying
+    if "type" not in candidate or "coordinates" not in candidate:
+        return None
 
-    if feature_type == "point":
-        # technically you can include elevation as a 3rd element in the position, but we
-        # ignore it as elasticsearch can't do anything with it
-        if isinstance(coordinates, (tuple, list)) and 2 <= len(coordinates) <= 3:
-            try:
-                return {
-                    "type": "Point",
-                    "coordinates": (
-                        parse_longitude(coordinates[0]),
-                        parse_latitude(coordinates[1]),
-                    ),
-                }
-            except ValueError or TypeError:
-                pass
+    shape: Optional[BaseGeometry] = from_geojson(
+        orjson.dumps(candidate), on_invalid="ignore"
+    )
+    if shape is None or not is_shape_valid(shape):
+        return None
 
-    if feature_type == "linestring":
-        if isinstance(coordinates, (tuple, list)) and len(coordinates) >= 2:
-            try:
-                return {
-                    "type": "LineString",
-                    "coordinates": [
-                        (parse_longitude(position[0]), parse_latitude(position[1]))
-                        for position in coordinates
-                    ],
-                }
-            except ValueError or TypeError:
-                pass
+    # geojson has a strict orientation specification
+    if isinstance(shape, Polygon) and not is_winding_valid(shape):
+        return None
 
-    elif feature_type == "polygon":
-        if isinstance(coordinates, (tuple, list)) and len(coordinates) >= 1:
-            parsed_rings = []
-            try:
-                # this is used to check that the rings are winding the correct way.
-                # According to the GeoJSON standard, the first ring (the linear ring)
-                # must be anticlockwise and any subsequent rings (holes) must be
-                # clockwise.
-                windings = chain([True], repeat(False))
-                for ring, wind_right in zip(coordinates, windings):
-                    if isinstance(ring, (tuple, list)) and len(ring) >= 4:
-                        parsed_ring = [
-                            (parse_longitude(position[0]), parse_latitude(position[1]))
-                            for position in ring
-                        ]
-                        # check if the polygon is closed (it must be closed!)
-                        if parsed_ring[0] != parsed_ring[-1]:
-                            # this is caught within this function so no need for an
-                            # error message
-                            raise ValueError()
-                        # check if the rings are wound the right way
-                        if not is_winding_valid(parsed_ring, right=wind_right):
-                            raise ValueError()
-                        parsed_rings.append(parsed_ring)
-                    else:
-                        # this is caught within this function so no need for an error
-                        # message
-                        raise ValueError()
-                return {
-                    "type": "Polygon",
-                    "coordinates": parsed_rings,
-                }
-            except ValueError or TypeError:
-                pass
-
-    return None
+    return {ParsedType.GEO_POINT: shape.centroid.wkt, ParsedType.GEO_SHAPE: shape.wkt}
 
 
-def is_winding_valid(coordinates: Union[tuple, list], right: bool = True) -> bool:
+def match_wkt(candidate: str) -> Optional[dict]:
     """
-    Check if the winding of the given list of coordinates matches the direction
-    specified by the right boolean parameter. Right winding means anticlockwise.
+    Match a candidate string that may be WKT. If the string is not recognised as WKT
+    then None is returned, otherwise a GeoData object is constructed and returned if the
+    WKT can be parsed successfully.
 
-    :param coordinates: the coordinate list (a tuple/list of tuples/lists of floats)
-    :param right: boolean indicating direction, default: True meaning right winding
-    :return: True if the coordinates match the direction, False if not
+    :param candidate: the candidate string to match
+    :return: returns a dict ready for indexing or None
+    """
+    shape: Optional[BaseGeometry] = from_wkt(candidate, on_invalid="ignore")
+    if shape is None or not is_shape_valid(shape):
+        return None
+
+    return {ParsedType.GEO_POINT: shape.centroid.wkt, ParsedType.GEO_SHAPE: shape.wkt}
+
+
+def is_shape_valid(shape: BaseGeometry) -> bool:
+    """
+    Checks if a shape has a valid construction. If we pass Elasticsearch a bad shape, it
+    will fail when indexing, so we try to avoid that by validating them first.
+
+    To be valid, shape must:
+        - not be empty
+        - be a Point, LineString, or Polygon
+        - have all longitude values between -180 and 180
+        - have all latitude values between -90 and 90
+
+    This function doesn't check winding orientation as it is designed to be used for
+    Polygons derived from GeoJSON and WKT, but only GeoJSON has winding orientation
+    rules.
+
+    :param shape: the shape object, we accept BaseGeometry as the type for type checking
+                  reasons, but the shape must be a Point, LineString, or Polygon.
+    :return: True if the shape is valid, False otherwise
+    """
+    if shape.is_empty or not isinstance(shape, (Point, LineString, Polygon)):
+        return False
+
+    if isinstance(shape, (Point, LineString)):
+        coords_to_check = shape.coords
+    else:
+        # create a stream of coords from the exterior and interior rings
+        coords_to_check = chain(
+            shape.exterior.coords,
+            *(interior.coords for interior in shape.interiors),
+        )
+
+    # elasticsearch only allows lon/lat pairs in these ranges
+    return all(
+        -180 <= longitude <= 180 and -90 <= latitude <= 90
+        for longitude, latitude in coords_to_check
+    )
+
+
+def is_winding_valid(polygon: Polygon) -> bool:
+    """
+    Check if the winding of the rings in the given polygon are valid. This is only used
+    for GeoJSON polygons as the orientation is specified as part of the standard,
+    whereas wkt doesn't specify an orientation.
+
+    :param polygon: the polygon to check
+    :return: True if the all rings wind in the correct way, False if not
     """
     # sweet stackoverflow goodness: https://stackoverflow.com/a/1165943
-    edge_sum = sum(
-        (x2 - x1) * (y2 + y1) for (x1, y1), (x2, y2) in sliding_window(2, coordinates)
+    exterior_edge_sum = sum(
+        (x2 - x1) * (y2 + y1)
+        for (x1, y1), (x2, y2) in sliding_window(2, polygon.exterior.coords)
     )
-    # negative sum is anticlockwise, positive is clockwise
-    if right:
-        return edge_sum < 0
-    else:
-        return edge_sum >= 0
+    # exterior ring must be right wound which means the edge sum must be a negative
+    # value to be valid
+    if exterior_edge_sum >= 0:
+        return False
+
+    for interior in polygon.interiors:
+        interior_edge_sum = sum(
+            (x2 - x1) * (y2 + y1)
+            for (x1, y1), (x2, y2) in sliding_window(2, interior.coords)
+        )
+        # interior ring must be left wound which means the edge sum must be a positive
+        # value to be valid
+        if interior_edge_sum < 0:
+            return False
+
+    return True

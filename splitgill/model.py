@@ -1,14 +1,12 @@
 from dataclasses import dataclass, field, astuple
-from functools import cached_property
 from itertools import chain
-from typing import Dict, Iterable, NamedTuple, List, Optional, FrozenSet
+from typing import Dict, Iterable, NamedTuple, List, Optional, FrozenSet, Any
 from uuid import uuid4
 
 from bson import ObjectId
 from pymongo.results import BulkWriteResult
 
 from splitgill.diffing import patch, DiffOp
-from splitgill.indexing import fields
 
 
 @dataclass
@@ -125,9 +123,13 @@ class GeoFieldHint:
     lon_field: str
     radius_field: Optional[str] = None
 
-    @cached_property
-    def path(self) -> str:
-        return fields.geo_make_name(self.lat_field, self.lon_field, self.radius_field)
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, GeoFieldHint):
+            return self.lat_field == other.lat_field
+        raise NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(self.lat_field)
 
 
 # set frozen=True to make the objects immutable and provide hashing (which we need for

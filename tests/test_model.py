@@ -57,24 +57,20 @@ class TestMongoRecord:
 
 
 class TestGeoFieldHint:
-    def test_geo_path_with_radius(self):
-        assert (
-            GeoFieldHint("latitude", "longitude", "radius").path
-            == "latitude/longitude/radius"
-        )
-
-    def test_geo_path_without_radius(self):
-        assert GeoFieldHint("latitude", "longitude").path == "latitude/longitude"
-
     def test_hash(self):
         hints = set()
         hints.add(GeoFieldHint("latitude", "longitude"))
         hints.add(GeoFieldHint("latitude", "longitude"))
+        hints.add(GeoFieldHint("latitude", "longitude", "radius"))
         hints.add(GeoFieldHint("latitude", "longitude", None))
-        assert len(hints) == 1
-        hints.add(GeoFieldHint("latitude", "longitude", "radius"))
-        hints.add(GeoFieldHint("latitude", "longitude", "radius"))
+        hints.add(GeoFieldHint("lat", "lon"))
         assert len(hints) == 2
+
+    def test_eq(self):
+        # should be equal based on the lat, nothing else
+        assert GeoFieldHint("lat", "lon") == GeoFieldHint("lat", "lon")
+        assert GeoFieldHint("lat", "lon") == GeoFieldHint("lat", "difflon")
+        assert GeoFieldHint("lat", "lon", None) == GeoFieldHint("lat", "lon", "rad")
 
 
 class TestParsingOptions:

@@ -1,8 +1,7 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from itertools import islice
+from time import time
 from typing import Iterable
-
-from dateutil.tz import UTC
 
 
 def to_timestamp(moment: datetime) -> int:
@@ -22,7 +21,7 @@ def to_timestamp(moment: datetime) -> int:
 
 
 def parse_to_timestamp(
-    datetime_string: str, datetime_format: str, tzinfo: datetime.tzinfo = UTC
+    datetime_string: str, datetime_format: str, tzinfo: datetime.tzinfo = timezone.utc
 ) -> int:
     """
     Parses the given string using the given format and returns a timestamp.
@@ -48,7 +47,7 @@ def now() -> int:
     """
     Get the current datetime as a timestamp.
     """
-    return to_timestamp(datetime.now(tz=UTC))
+    return int(time() * 1000)
 
 
 def partition(iterable: Iterable, size: int) -> Iterable[list]:

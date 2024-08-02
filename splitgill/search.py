@@ -1,41 +1,49 @@
 from collections import defaultdict
-from functools import partial
-from typing import Optional, Dict
+from datetime import datetime
+from typing import Dict, Union, Optional
 
 from elasticsearch_dsl import Q
 from elasticsearch_dsl.query import Bool, Query
 
-from splitgill.indexing import fields
+from splitgill.indexing.fields import DocumentField, ParsedType, parsed_path
+from splitgill.utils import to_timestamp
 
 # the all fields text field which contains all data for easy full record searching
-ALL_FIELD = fields.ALL
+ALL_TEXT = DocumentField.ALL_TEXT
 # the all geo values field which contains all geo values found in this record, again
 # for easy searching
-ALL_GEO_FIELD = fields.GEO_ALL
+ALL_SHAPES = DocumentField.ALL_SHAPES
+# the all geo values field which contains all geo values as centroid points in this
+# record, again for easy searching, but mainly for mapping
+ALL_POINTS = DocumentField.ALL_POINTS
 
-# convenient access for the data type path functions
-text = fields.text_path
-keyword_ci = partial(fields.keyword_path, case_sensitive=False)
-keyword_cs = partial(fields.keyword_path, case_sensitive=True)
-boolean = fields.boolean_path
-number = fields.number_path
-date = fields.date_path
-list_length = fields.list_path
-geo = fields.geo_compound_path
-geojson = fields.geo_single_path
+# convenient access for parsed type path functions
+text = ParsedType.TEXT.path_to
+keyword_ci = ParsedType.KEYWORD_CASE_INSENSITIVE.path_to
+keyword_cs = ParsedType.KEYWORD_CASE_SENSITIVE.path_to
+boolean = ParsedType.BOOLEAN.path_to
+number = ParsedType.NUMBER.path_to
+date = ParsedType.DATE.path_to
+point = ParsedType.GEO_POINT.path_to
+shape = ParsedType.GEO_SHAPE.path_to
 
 
-def exists(field: str, full: bool = True) -> str:
+def keyword(field: str, case_sensitive: bool, full: bool = True) -> str:
     """
-    Returns the path to the field's parsed base which can be used for existence checks.
-    At the returned path, the field's value is represented using an object with the
-    various parsed data types as properties.
+    A convenience function for creating a keyword path where the case sensitivity can be
+    set using a boolean.
 
-    :param field: the field path
-    :param full: whether to include the "parsed." prefix on the returned path or not
+    :param field: the name (including dots if needed) of the field
+    :param case_sensitive: where the path should be to the case-sensitive (True) or
+                           case-insensitive (False) version of the field's string value
+    :param full: whether to prepend the parsed field name to the path or not (default:
+                 True)
     :return: the path to the field
     """
-    return fields.parsed_path(field, data_type=None, full=full)
+    if case_sensitive:
+        return keyword_cs(field, full)
+    else:
+        return keyword_ci(field, full)
 
 
 def create_version_query(version: int) -> Query:
@@ -47,7 +55,7 @@ def create_version_query(version: int) -> Query:
     :param version: the requested version
     :return: an elasticsearch-dsl Query object
     """
-    return Q("term", **{fields.VERSIONS: version})
+    return Q("term", **{DocumentField.VERSIONS: version})
 
 
 def create_index_specific_version_filter(indexes_and_versions: Dict[str, int]) -> Query:
@@ -90,3 +98,70 @@ def create_index_specific_version_filter(indexes_and_versions: Dict[str, int]) -
                     Bool(filter=[Q("terms", _index=indexes), version_filter])
                 )
         return Bool(should=filters, minimum_should_match=1)
+
+
+def exists_query(field: str) -> Query:
+    """
+    A convenience function which returns an exists query for the given field.
+
+    :param field: the field path
+    :return: an exists query on the field using the full parsed path
+    """
+    return Q("exists", field=parsed_path(field, parsed_type=None, full=True))
+
+
+def term_query(
+    field: str,
+    value: Union[int, float, str, bool, datetime],
+    parsed_type: Optional[ParsedType] = None,
+    case_sensitive: bool = False,
+) -> Query:
+    """
+    Create and return a term query which will find documents that have an exact value
+    match in the given field. If the parsed_type parameter is not specified, it will be
+    inferred based on the value type.
+
+    :param field: the field match
+    :param value: the value to match
+    :param parsed_type: the parsed type of the field to use, or None to infer from value
+    :param case_sensitive: only applicable for str values, specifies whether the match
+                           is case-sensitive or not (default: False)
+    :return: a Q object
+    """
+    if parsed_type is None:
+        if isinstance(value, str):
+            if case_sensitive:
+                parsed_type = ParsedType.KEYWORD_CASE_SENSITIVE
+            else:
+                parsed_type = ParsedType.KEYWORD_CASE_INSENSITIVE
+        elif isinstance(value, bool):
+            parsed_type = ParsedType.BOOLEAN
+        elif isinstance(value, (int, float)):
+            parsed_type = ParsedType.NUMBER
+        elif isinstance(value, datetime):
+            parsed_type = ParsedType.DATE
+        else:
+            raise ValueError(f"Unexpected type {type(value)}")
+
+    if parsed_type == ParsedType.DATE and isinstance(value, datetime):
+        value = to_timestamp(value)
+
+    return Q("term", **{parsed_path(field, parsed_type=parsed_type, full=True): value})
+
+
+def match_query(query: str, field: Optional[str] = None, **match_kwargs) -> Q:
+    """
+    Create and return a match query using the given query and the optional field name.
+    If the field name is not specified, all text data is searched instead using the
+    ALL_TEXT field.
+
+    :param query: the query to match
+    :param field: the field to query, or None if all fields should be queried
+    :param match_kwargs: additional options for the match query
+    :return: a Q object
+    """
+    if field is None:
+        path = ALL_TEXT
+    else:
+        path = text(field)
+    return Q("match", **{path: {"query": query, **match_kwargs}})

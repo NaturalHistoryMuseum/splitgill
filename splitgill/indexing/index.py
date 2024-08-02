@@ -1,22 +1,12 @@
 import abc
+import math
 from dataclasses import dataclass
 from typing import Optional, Iterable, Dict
 
-import math
-import orjson
+from orjson import dumps, OPT_NON_STR_KEYS
 
-from splitgill.indexing.fields import (
-    ID,
-    VERSIONS,
-    VERSION,
-    GEO,
-    GEO_ALL,
-    LISTS,
-    DATA,
-    NEXT,
-    PARSED,
-)
-from splitgill.indexing.parser import parse_for_index
+from splitgill.indexing.fields import DocumentField
+from splitgill.indexing.parser import parse
 from splitgill.model import MongoRecord, ParsingOptions
 
 
@@ -110,10 +100,14 @@ class IndexOp(BulkOp):
     document: dict
 
     def serialise(self) -> str:
-        # index ops are 2 lines, first the action metadata and then the document. For
-        # speed, build the JSON metadata line directly as a str
-        metadata = f'{{"index":{{"_index":"{self.index}","_id":"{self.doc_id}"}}}}'
-        return f"{metadata}\n{orjson.dumps(self.document).decode('utf8')}"
+        # index ops are 2 lines, first the action metadata and then the document
+        return (
+            dumps({"index": {"_index": self.index, "_id": self.doc_id}})
+            + b"\n"
+            # we have to use OPT_NON_STR_KEYS because we're using StrEnums and orjson
+            # doesn't work with them :(
+            + dumps(self.document, option=OPT_NON_STR_KEYS)
+        ).decode("utf-8")
 
 
 @dataclass
@@ -187,47 +181,41 @@ def generate_index_ops(
         options_version, options = next(options_iter)
         version = max(data_version, options_version)
         next_version = None
-        last_parsed = None
+        last_parsed_data = None
         data_arc_index = indices.get_arc(record.id)
 
         while True:
             if not data:
-                last_parsed = None
+                last_parsed_data = None
                 # this is a delete! If this is the latest version then we delete the
                 # record's document in the latest index, otherwise do nothing
                 if next_version is None:
                     yield DeleteOp(latest_index, record.id)
             else:
-                parsed = parse_for_index(data, options)
+                parsed_data = parse(data, options)
                 # only yield an op if there is a change. Every data version should
                 # trigger an op to be yielded, but options versions can result in the
                 # same parsed data if the underlying data was the same between the
                 # versions and the options change didn't impact any of fields present in
                 # the data (e.g. changing a float string format when there are no
                 # floats)
-                if parsed != last_parsed:
-                    last_parsed = parsed
+                if parsed_data != last_parsed_data:
+                    last_parsed_data = parsed_data
                     document = {
-                        ID: record.id,
-                        VERSION: version,
-                        VERSIONS: {"gte": version},
-                        DATA: parsed.data,
-                        PARSED: parsed.parsed,
-                        GEO: parsed.geo,
-                        LISTS: parsed.lists,
+                        DocumentField.ID: record.id,
+                        DocumentField.VERSION: version,
+                        DocumentField.VERSIONS: {"gte": version},
+                        DocumentField.DATA: data,
+                        DocumentField.PARSED: parsed_data.parsed,
+                        DocumentField.DATA_TYPES: parsed_data.data_types,
+                        DocumentField.PARSED_TYPES: parsed_data.parsed_types,
                     }
-                    if parsed.geo:
-                        # create a collection using the individual geo GeoJSON values
-                        document[GEO_ALL] = {
-                            "type": "GeometryCollection",
-                            "geometries": list(parsed.geo.values()),
-                        }
                     if next_version is None:
                         index_name = latest_index
                         doc_id = record.id
                     else:
-                        document[NEXT] = next_version
-                        document[VERSIONS]["lt"] = next_version
+                        document[DocumentField.NEXT] = next_version
+                        document[DocumentField.VERSIONS]["lt"] = next_version
                         index_name = data_arc_index
                         doc_id = f"{record.id}:{version}"
                     yield IndexOp(index_name, doc_id, document)

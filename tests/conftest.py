@@ -1,3 +1,4 @@
+import json
 from contextlib import suppress
 from typing import List
 
@@ -7,6 +8,7 @@ from elasticsearch import Elasticsearch, AsyncElasticsearch
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
+from shapely import from_geojson
 
 from splitgill.manager import SplitgillClient
 
@@ -69,17 +71,16 @@ def splitgill(
     return SplitgillClient(mongo_client, elasticsearch_client)
 
 
-# these are all nabbed from wikipedia: https://en.wikipedia.org/wiki/GeoJSON#Geometries
 @pytest.fixture
 def geojson_point() -> dict:
-    return {"type": "Point", "coordinates": (30.0, 10.0)}
+    return {"type": "Point", "coordinates": [30, 10]}
 
 
 @pytest.fixture
 def geojson_linestring() -> dict:
     return {
         "type": "LineString",
-        "coordinates": [(30.0, 10.0), (10.0, 30.0), (40.0, 40.0)],
+        "coordinates": [[10, 10], [20, 10], [20, 20]],
     }
 
 
@@ -87,18 +88,37 @@ def geojson_linestring() -> dict:
 def geojson_polygon() -> dict:
     return {
         "type": "Polygon",
-        "coordinates": [
-            [(30.0, 10.0), (40.0, 40.0), (20.0, 40.0), (10.0, 20.0), (30.0, 10.0)]
-        ],
+        "coordinates": [[[10, 10], [20, 10], [20, 20], [10, 20], [10, 10]]],
     }
 
 
 @pytest.fixture
 def geojson_holed_polygon() -> dict:
+    # this is a lovely square with an hourglass like shape hole
     return {
         "type": "Polygon",
         "coordinates": [
-            [(35.0, 10.0), (45.0, 45.0), (15.0, 40.0), (10.0, 20.0), (35.0, 10.0)],
-            [(20.0, 30.0), (35.0, 35.0), (30.0, 20.0), (20.0, 30.0)],
+            [[10, 10], [20, 10], [20, 20], [10, 20], [10, 10]],
+            [[12, 12], [14, 15], [12, 18], [18, 18], [16, 15], [18, 12], [12, 12]],
         ],
     }
+
+
+@pytest.fixture
+def wkt_point(geojson_point: dict) -> str:
+    return from_geojson(json.dumps(geojson_point)).wkt
+
+
+@pytest.fixture
+def wkt_linestring(geojson_linestring: dict) -> str:
+    return from_geojson(json.dumps(geojson_linestring)).wkt
+
+
+@pytest.fixture
+def wkt_polygon(geojson_polygon: dict) -> str:
+    return from_geojson(json.dumps(geojson_polygon)).wkt
+
+
+@pytest.fixture
+def wkt_holed_polygon(geojson_holed_polygon: dict) -> str:
+    return from_geojson(json.dumps(geojson_holed_polygon)).wkt

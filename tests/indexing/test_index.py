@@ -1,12 +1,12 @@
 import json
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from itertools import chain
 from typing import Dict, Optional
 
 from freezegun import freeze_time
 
-from splitgill.indexing import fields
+from splitgill.indexing.fields import DocumentField
 from splitgill.indexing.index import (
     generate_index_ops,
     IndexNames,
@@ -15,7 +15,7 @@ from splitgill.indexing.index import (
     DeleteOp,
 )
 from splitgill.indexing.options import ParsingOptionsBuilder
-from splitgill.indexing.parser import parse_for_index
+from splitgill.indexing.parser import parse
 from splitgill.manager import SplitgillClient, SplitgillDatabase
 from splitgill.model import Record, ParsingOptions
 
@@ -75,7 +75,7 @@ def setup_scenario(
         if options_to_update:
             database.update_options(options_to_update, commit=False)
 
-        with freeze_time(datetime.fromtimestamp(version / 1000)):
+        with freeze_time(datetime.fromtimestamp(version / 1000, tz=timezone.utc)):
             database.commit()
 
     return database
@@ -98,28 +98,24 @@ def check_op(
 ):
     assert isinstance(op, IndexOp)
     if next_version is not None:
-        assert op.document[fields.NEXT] == next_version
-        assert op.document[fields.VERSIONS]["lt"] == next_version
+        assert op.document[DocumentField.NEXT] == next_version
+        assert op.document[DocumentField.VERSIONS]["lt"] == next_version
         assert op.doc_id == f"{record_id}:{version}"
         assert op.index == IndexNames(name).get_arc(record_id)
     else:
-        assert fields.NEXT not in op.document
+        assert DocumentField.NEXT not in op.document
         assert op.doc_id == record_id
         assert op.index == IndexNames(name).latest
 
-    assert op.document[fields.ID] == record_id
-    assert op.document[fields.VERSION] == version
-    assert op.document[fields.VERSIONS]["gte"] == version
+    assert op.document[DocumentField.ID] == record_id
+    assert op.document[DocumentField.VERSION] == version
+    assert op.document[DocumentField.VERSIONS]["gte"] == version
+    assert op.document[DocumentField.DATA] == data
 
-    parsed = parse_for_index(data, options)
-    assert op.document[fields.DATA] == parsed.data
-    assert op.document[fields.PARSED] == parsed.parsed
-    assert op.document[fields.GEO] == parsed.geo
-    assert op.document[fields.LISTS] == parsed.lists
-
-    if parsed.geo:
-        assert op.document[fields.GEO_ALL]["type"] == "GeometryCollection"
-        assert op.document[fields.GEO_ALL]["geometries"] == list(parsed.geo.values())
+    parsed_data = parse(data, options)
+    assert op.document[DocumentField.PARSED] == parsed_data.parsed
+    assert op.document[DocumentField.DATA_TYPES] == parsed_data.data_types
+    assert op.document[DocumentField.PARSED_TYPES] == parsed_data.parsed_types
 
 
 class TestGenerateIndexOps:
@@ -132,11 +128,12 @@ class TestGenerateIndexOps:
         )
 
         after = 11
-        assert not list(
+        ops = list(
             generate_index_ops(
                 database.indices, database.iter_records(), database.get_options(), after
             )
         )
+        assert not ops
 
     def test_after_beyond_options_version(self, splitgill: SplitgillClient):
         # this shouldn't happen, but might as well check it!
@@ -377,7 +374,7 @@ class TestGenerateIndexOps:
         assert len(ops) == 1
         check_op(ops[0], "r1", 1, data[1], options[1])
 
-    def test_meta_geo_is_filled(self, splitgill: SplitgillClient):
+    def test_meta_geo(self, splitgill: SplitgillClient):
         data = {
             1: {
                 "x": "beans",
@@ -398,12 +395,6 @@ class TestGenerateIndexOps:
 
         assert len(ops) == 1
         check_op(ops[0], "r1", 1, data[1], options[1])
-
-        # do some bonus checks
-        geometries = ops[0].document[fields.GEO_ALL]["geometries"]
-        assert len(geometries) == 2
-        assert {"type": "Point", "coordinates": (10.0, 4.0)} in geometries
-        assert {"type": "Point", "coordinates": (100.4, 0.1)} in geometries
 
 
 def test_delete_op():

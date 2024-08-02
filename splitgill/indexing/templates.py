@@ -1,8 +1,7 @@
-from splitgill.indexing import fields
+from splitgill.indexing.fields import DocumentField, ParsedType
 
 # template for the data-* indices
 DATA_TEMPLATE = {
-    # matches the data-* indexes (e.g. data-<year>-<id> and data-latest-<id>)
     "index_patterns": ["data-*"],
     "template": {
         "settings": {
@@ -30,72 +29,94 @@ DATA_TEMPLATE = {
             },
         },
         "mappings": {
+            # we're handling dates ourselves so none of this please
+            "date_detection": False,
+            # this is off by default anyway but just to make sure
+            "numeric_detection": False,
             "_source": {
                 # these fields are stored and will be returned in search results
                 "includes": [
-                    fields.ID,
-                    fields.VERSION,
-                    fields.NEXT,
-                    fields.DATA,
+                    DocumentField.ID,
+                    DocumentField.VERSION,
+                    DocumentField.NEXT,
+                    DocumentField.DATA,
+                    DocumentField.DATA_TYPES,
+                    DocumentField.PARSED_TYPES,
                 ],
                 # these fields are not stored, only indexed
                 "excludes": [
-                    fields.ALL,
-                    fields.VERSIONS,
-                    fields.PARSED,
-                    fields.GEO,
-                    fields.LISTS,
+                    DocumentField.VERSIONS,
+                    DocumentField.PARSED,
+                    DocumentField.ALL_TEXT,
+                    DocumentField.ALL_POINTS,
+                    DocumentField.ALL_SHAPES,
                 ],
             },
             "properties": {
-                fields.ID: {"type": "keyword"},
-                fields.VERSION: {"type": "date", "format": "epoch_millis"},
-                fields.NEXT: {"type": "date", "format": "epoch_millis"},
-                fields.VERSIONS: {"type": "date_range", "format": "epoch_millis"},
+                DocumentField.ID: {"type": "keyword"},
+                DocumentField.VERSION: {"type": "date", "format": "epoch_millis"},
+                DocumentField.NEXT: {"type": "date", "format": "epoch_millis"},
+                DocumentField.VERSIONS: {
+                    "type": "date_range",
+                    "format": "epoch_millis",
+                },
                 # enabled set to false means don't index this object
-                fields.DATA: {"type": "object", "enabled": False},
-                # the values of each field will be copied into this field for easy
+                DocumentField.DATA: {"type": "object", "enabled": False},
+                DocumentField.DATA_TYPES: {"type": "keyword"},
+                DocumentField.PARSED_TYPES: {"type": "keyword"},
+                # the text value of each field will be copied into this field for easy
                 # querying (see the dynamic keyword_field below)
-                fields.ALL: {"type": "text"},
-                # a GeoJSON collection of all the found geo field values in this record,
-                # this makes it easy to search based on a record's geo data without
-                # caring which fields are being used
-                fields.GEO_ALL: {"type": "geo_shape"},
-                # detected list field values are stored in this object. Turn off
-                # subobjects so that we can use dots without creating a complex object
-                # and to make the mapping definition easier.
-                fields.LISTS: {"type": "object", "subobjects": False},
+                DocumentField.ALL_TEXT: {"type": "text"},
+                # the geo point value of each geo field will be copied into this field
+                # for easy querying and map making (see the dynamic keyword_field below)
+                DocumentField.ALL_POINTS: {"type": "geo_point"},
+                # the geo shape value of each geo field will be copied into this field
+                # for easy querying (see the dynamic keyword_field below)
+                DocumentField.ALL_SHAPES: {"type": "geo_shape"},
             },
             "dynamic_templates": [
+                # define all the parsed types
                 {
-                    "geo_field": {
-                        "path_match": f"{fields.GEO}.*.geojson",
+                    "parsed_geo_point": {
+                        "path_match": ParsedType.GEO_POINT.path_to("*", True),
+                        "mapping": {
+                            "type": "geo_point",
+                            # copy the value of this field into the all_points field
+                            # (note that this forces us to use WKT to define the points
+                            # in this field because elasticsearch can't do a copy_to on
+                            # objects, only values)
+                            "copy_to": DocumentField.ALL_POINTS,
+                        },
+                    },
+                },
+                {
+                    "parsed_geo_shape": {
+                        "path_match": ParsedType.GEO_SHAPE.path_to("*", True),
                         "mapping": {
                             "type": "geo_shape",
+                            # copy the value of this field into the all_shapes field
+                            # (note that this forces us to use WKT to define the points
+                            # in this field because elasticsearch can't do a copy_to on
+                            # objects, only values)
+                            "copy_to": DocumentField.ALL_SHAPES,
                         },
                     },
                 },
                 {
-                    "arrays_field": {
-                        "path_match": fields.list_path("*", full=True),
-                        "mapping": {
-                            "type": "integer",
-                        },
-                    },
-                },
-                {
-                    "text_field": {
-                        "path_match": fields.text_path("*", full=True),
+                    "parsed_text": {
+                        "path_match": ParsedType.TEXT.path_to("*", full=True),
                         "mapping": {
                             "type": "text",
-                            # copy the text value of this field into the meta.all field
-                            "copy_to": fields.ALL,
+                            # copy the text value of this field into the all text field
+                            "copy_to": DocumentField.ALL_TEXT,
                         },
                     },
                 },
                 {
-                    "keyword_case_insensitive_field": {
-                        "path_match": fields.keyword_path("*", False, full=True),
+                    "parsed_keyword_case_insensitive": {
+                        "path_match": ParsedType.KEYWORD_CASE_INSENSITIVE.path_to(
+                            "*", full=True
+                        ),
                         "mapping": {
                             "type": "keyword",
                             # lowercase the text when storing it, this allows
@@ -105,29 +126,50 @@ DATA_TEMPLATE = {
                     },
                 },
                 {
-                    "keyword_case_sensitive_field": {
-                        "path_match": fields.keyword_path("*", True, full=True),
+                    "parsed_keyword_case_sensitive": {
+                        "path_match": ParsedType.KEYWORD_CASE_SENSITIVE.path_to(
+                            "*", full=True
+                        ),
                         "mapping": {"type": "keyword"},
                     },
                 },
                 {
-                    "number_field": {
-                        "path_match": fields.number_path("*", full=True),
+                    "parsed_number": {
+                        "path_match": ParsedType.NUMBER.path_to("*", full=True),
                         "mapping": {"type": "double"},
                     },
                 },
                 {
-                    "date_field": {
-                        "path_match": fields.date_path("*", full=True),
+                    "parsed_date": {
+                        "path_match": ParsedType.DATE.path_to("*", full=True),
                         "mapping": {"type": "date", "format": "epoch_millis"},
                     },
                 },
                 {
-                    "boolean_field": {
-                        "path_match": fields.boolean_path("*", full=True),
+                    "parsed_boolean": {
+                        "path_match": ParsedType.BOOLEAN.path_to("*", full=True),
                         "mapping": {"type": "boolean"},
                     },
                 },
+                # # define all types types
+                # {
+                #     "types_type": {
+                #         "path_match": FieldMeta.TYPE.path_to("*", full=True),
+                #         "mapping": {"type": "keyword"},
+                #     },
+                # },
+                # {
+                #     "types_geo_method": {
+                #         "path_match": FieldMeta.GEO_METHOD.path_to("*", full=True),
+                #         "mapping": {"type": "keyword"},
+                #     },
+                # },
+                # {
+                #     "types_list_length": {
+                #         "path_match": FieldMeta.LIST_LENGTH.path_to("*", full=True),
+                #         "mapping": {"type": "integer"},
+                #     },
+                # },
             ],
         },
     },

@@ -1,107 +1,56 @@
-from functools import partial
-
 import pytest
 
 from splitgill.indexing.fields import (
-    DataType,
+    ParsedType,
     parsed_path,
-    number_path,
-    PARSED,
-    boolean_path,
-    date_path,
-    keyword_path,
-    text_path,
-    geo_make_name,
-    geo_compound_path,
-    geo_single_path,
-    list_path,
-    LISTS,
-    GEO,
+    is_field_valid,
+    DocumentField,
+    FieldInfo,
+    DataType,
 )
 
 
-def test_all_types():
-    assert DataType.all() == frozenset(
-        [
-            DataType.NUMBER.value,
-            DataType.BOOLEAN.value,
-            DataType.DATE.value,
-            DataType.TEXT.value,
-            DataType.KEYWORD_CASE_INSENSITIVE.value,
-            DataType.KEYWORD_CASE_SENSITIVE.value,
-        ]
-    )
+def test_is_field_valid():
+    assert is_field_valid("egg")
+    assert is_field_valid("_egg")
+    assert not is_field_valid("")
+    assert not is_field_valid("egg^beans")
+    assert not is_field_valid("egg.beans")
 
 
-def test_parsed_path():
-    assert (
-        parsed_path("a.field.in.the.record", DataType.NUMBER, True)
-        == f"{PARSED}.a.field.in.the.record.{DataType.NUMBER}"
-    )
-    assert (
-        parsed_path("a.field.in.the.record", DataType.NUMBER, False)
-        == f"a.field.in.the.record.{DataType.NUMBER}"
-    )
-    assert (
-        parsed_path("a.field.in.the.record", None, True)
-        == f"{PARSED}.a.field.in.the.record"
-    )
+@pytest.mark.parametrize("parsed_type", ParsedType)
+def test_parsed_path(parsed_type: ParsedType):
+    field = "a.field.in.the.record"
+
+    full = f"{DocumentField.PARSED}.{field}.{parsed_type}"
+    relative = f"{field}.{parsed_type}"
+
+    assert parsed_path(field, parsed_type=parsed_type, full=True) == full
+    assert parsed_type.path_to(field, full=True) == full
+
+    assert parsed_path(field, parsed_type=parsed_type, full=False) == relative
+    assert parsed_type.path_to(field, full=False) == relative
+
+
+def test_parse_path_no_parsed_type():
     assert parsed_path("a.field.in.the.record", None, False) == "a.field.in.the.record"
 
 
-type_specific_functions = [
-    (DataType.NUMBER, number_path),
-    (DataType.DATE, date_path),
-    (DataType.BOOLEAN, boolean_path),
-    (DataType.TEXT, text_path),
-    (DataType.KEYWORD_CASE_SENSITIVE, partial(keyword_path, case_sensitive=True)),
-    (DataType.KEYWORD_CASE_INSENSITIVE, partial(keyword_path, case_sensitive=False)),
-]
+class TestFieldInfo:
+    def test_get_data_field_children(self):
+        fields = FieldInfo()
+        fields.add_data_type(f"a.{DataType.DICT}", 4)
+        fields.add_data_type(f"a.b.{DataType.INT}", 2)
+        fields.add_data_type(f"a.c.{DataType.DICT}", 1)
+        fields.add_data_type(f"a.c.d.{DataType.BOOL}", 10)
 
+        a = fields.get_data_field("a")
+        b = fields.get_data_field("a.b")
+        c = fields.get_data_field("a.c")
+        d = fields.get_data_field("a.c.d")
 
-@pytest.mark.parametrize("data_type, function", type_specific_functions)
-def test_type_specific_functions(data_type, function):
-    full_path = f"{PARSED}.a.field.in.the.record.{data_type}"
-    rel_path = f"a.field.in.the.record.{data_type}"
-    assert function("a.field.in.the.record", full=True) == full_path
-    assert function("a.field.in.the.record", full=False) == rel_path
-    assert data_type.path_to("a.field.in.the.record", full=True) == full_path
-    assert data_type.path_to("a.field.in.the.record", full=False) == rel_path
-
-
-def test_geo_make_name():
-    assert geo_make_name("lat", "lon", "rad") == "lat/lon/rad"
-    assert geo_make_name("lat", "lon") == "lat/lon"
-
-
-def test_compound_path():
-    assert geo_compound_path("lat/lon/rad", True) == "geo.compound.lat/lon/rad.geojson"
-    assert geo_compound_path("lat/lon/rad", False) == "compound.lat/lon/rad.geojson"
-    assert (
-        geo_compound_path("nested.field.lat/lon/rad", True)
-        == "geo.compound.nested.field.lat/lon/rad.geojson"
-    )
-    assert (
-        geo_compound_path("nested.field.lat/lon/rad", False)
-        == "compound.nested.field.lat/lon/rad.geojson"
-    )
-
-
-def test_single_path():
-    assert geo_single_path("lat", True) == f"{GEO}.single.lat.geojson"
-    assert (
-        geo_single_path("nested.field.lat", True)
-        == f"{GEO}.single.nested.field.lat.geojson"
-    )
-    assert geo_single_path("lat", False) == "single.lat.geojson"
-    assert (
-        geo_single_path("nested.field.lat", False) == "single.nested.field.lat.geojson"
-    )
-
-
-def test_lists():
-    assert (
-        list_path("nested.list.in.the.record", True)
-        == f"{LISTS}.nested.list.in.the.record"
-    )
-    assert list_path("nested.list.in.the.record", False) == "nested.list.in.the.record"
+        assert fields.get_data_field_children() == [a]
+        assert fields.get_data_field_children(a) == [b, c]
+        assert fields.get_data_field_children(b) == []
+        assert fields.get_data_field_children(c) == [d]
+        assert fields.get_data_field_children(d) == []

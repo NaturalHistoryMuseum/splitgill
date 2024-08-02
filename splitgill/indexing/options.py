@@ -14,30 +14,24 @@ DEFAULT_DATE_FORMATS = (
     "%Y-%m-%dT%H:%M:%S",
     "%Y-%m-%dT%H:%M:%S.%f",
     "%Y-%m-%dT%H:%M:%S%z",
-    "%Y-%m-%dT%H:%M:%S%Z",
     "%Y-%m-%dT%H:%M:%S.%f%z",
-    "%Y-%m-%dT%H:%M:%S.%f%Z",
     "%Y%m%dT%H%m%s",
     "%Y%m%dT%H%m%s",
     # same as the above, just with a space instead of the T separator
     "%Y-%m-%d %H:%M:%S",
     "%Y-%m-%d %H:%M:%S.%f",
     "%Y-%m-%d %H:%M:%S%z",
-    "%Y-%m-%d %H:%M:%S%Z",
     "%Y-%m-%d %H:%M:%S.%f%z",
-    "%Y-%m-%d %H:%M:%S.%f%Z",
     "%Y%m%d %H%m%s",
     "%Y%m%d %H%m%s",
 )
 DEFAULT_GEO_HINTS = (
-    GeoFieldHint("lat", "lon"),
-    GeoFieldHint("latitude", "longitude"),
-    GeoFieldHint("latitude", "longitude", "radius"),
+    ("lat", "lon"),
+    ("latitude", "longitude"),
+    ("latitude", "longitude", "radius"),
     # dwc
-    GeoFieldHint("decimalLatitude", "decimalLongitude"),
-    GeoFieldHint(
-        "decimalLatitude", "decimalLongitude", "coordinateUncertaintyInMeters"
-    ),
+    ("decimalLatitude", "decimalLongitude"),
+    ("decimalLatitude", "decimalLongitude", "coordinateUncertaintyInMeters"),
 )
 
 
@@ -120,30 +114,39 @@ class ParsingOptionsBuilder:
         return self
 
     def with_geo_hint(
-        self, lat_field: str, lon_field: str, radius_field: Optional[str] = None
+        self,
+        latitude_field: str,
+        longitude_field: str,
+        radius_field: Optional[str] = None,
     ) -> "ParsingOptionsBuilder":
         """
         Add the given lat/lon/radius field combination as a hint for the existence of a
         geo parsable field. The radius field name is optional.
 
-        If either lat or lon field is None or the empty string, nothing happens. If the
-        combination of all 3 fields is already in the set of hints, nothing happens.
+        Latitude fields across hints must be unique and therefore, if a hint is set with
+        a latitude field that already exists in this options builder, the current hint
+        will be replaced. The reason the latitude is the only field considered for a
+        hint's uniqueness is because we store the geo shape and geo point data on the
+        latitude field and we have chosen to only store one of these values per field to
+        allow searching against just that one field.
 
         When parsing of a record's data occurs, the latitude, longitude, and, if
         provided, radius fields named here will be checked to see if they exist in the
         record. If they do then further validation of their values is undertaken and if
-        the values in the fields are valid then they are combined into either a geojson
-        Point (if only latitude and longitude are provided) or Polygon object (if the
-        radius is provided as well, this value is used to create a circle around the
-        latitude and longitude point).
+        the values in the fields are valid then they are combined into either a Point
+        (if only latitude and longitude are provided) or Polygon object (if the radius
+        is provided as well, this value is used to create a circle around the latitude
+        and longitude point).
 
-        :param lat_field: the name of the latitude field
-        :param lon_field: the name of the longitude field
+        :param latitude_field: the name of the latitude field
+        :param longitude_field: the name of the longitude field
         :param radius_field: the name of the radius field (optional)
         :return: self
         """
-        if lat_field and lon_field:
-            self._geo_hints.add(GeoFieldHint(lat_field, lon_field, radius_field))
+        if latitude_field and longitude_field:
+            hint = GeoFieldHint(latitude_field, longitude_field, radius_field)
+            self._geo_hints.discard(hint)
+            self._geo_hints.add(hint)
         return self
 
     def with_keyword_length(self, keyword_length: int) -> "ParsingOptionsBuilder":
@@ -218,9 +221,7 @@ class ParsingOptionsBuilder:
         :return: self
         """
         for geo_hint in DEFAULT_GEO_HINTS:
-            self.with_geo_hint(
-                geo_hint.lat_field, geo_hint.lon_field, geo_hint.radius_field
-            )
+            self.with_geo_hint(*geo_hint)
         return self
 
     def with_default_keyword_length(self) -> "ParsingOptionsBuilder":
