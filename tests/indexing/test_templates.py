@@ -1,11 +1,11 @@
 import pytest
 from elasticsearch import Elasticsearch
 
-from indexing.fields import DocumentField
-from model import Record
-from search import match_query
+from splitgill.indexing.fields import DocumentField
 from splitgill.indexing.templates import DATA_TEMPLATE
 from splitgill.manager import SplitgillClient, SplitgillDatabase
+from splitgill.model import Record
+from splitgill.search import match_query
 
 
 def test_date_index_template_is_valid(elasticsearch_client: Elasticsearch):

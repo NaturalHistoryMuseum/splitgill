@@ -15,7 +15,7 @@ from splitgill.search import (
     text,
     keyword,
 )
-from utils import to_timestamp
+from splitgill.utils import to_timestamp
 
 
 def test_keyword():
