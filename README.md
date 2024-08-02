@@ -51,8 +51,8 @@ real testing.
 To run the tests:
 
 ```bash
-docker-compose build
-docker-compose run sg
+docker compose build
+docker compose run sg
 ```
 
 <!--tests-end-->
