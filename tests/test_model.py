@@ -75,5 +75,7 @@ class TestGeoFieldHint:
 
 class TestParsingOptions:
     def test_from_to_doc_empty(self):
-        options = ParsingOptions(frozenset(), frozenset(), frozenset(), frozenset())
+        options = ParsingOptions(
+            frozenset(), frozenset(), frozenset(), frozenset(), 256, "{0:.15g}"
+        )
         assert options == ParsingOptions.from_doc(options.to_doc())

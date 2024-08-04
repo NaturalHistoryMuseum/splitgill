@@ -22,7 +22,7 @@ from splitgill.manager import (
     OPTIONS_COLLECTION_NAME,
     SearchVersion,
 )
-from splitgill.model import Record
+from splitgill.model import Record, ParsingOptions
 from splitgill.search import create_version_query, number
 from splitgill.utils import to_timestamp
 
@@ -91,33 +91,37 @@ class TestSplitgillDatabaseGetCommittedVersion:
         database.ingest(more_records, commit=False)
         assert database.get_committed_version() == version
 
-    def test_uncommitted_options(self, splitgill: SplitgillClient):
+    def test_uncommitted_options(
+        self, splitgill: SplitgillClient, basic_options: ParsingOptions
+    ):
         database = SplitgillDatabase("test", splitgill)
-        options = ParsingOptionsBuilder().with_defaults().build()
-        database.update_options(options, commit=False)
+        database.update_options(basic_options, commit=False)
         assert database.get_committed_version() is None
 
     @freeze_time("2012-01-14 12:00:01")
-    def test_committed_options(self, splitgill: SplitgillClient):
+    def test_committed_options(
+        self, splitgill: SplitgillClient, basic_options: ParsingOptions
+    ):
         database = SplitgillDatabase("test", splitgill)
-        options = ParsingOptionsBuilder().with_defaults().build()
-        database.update_options(options, commit=True)
+        database.update_options(basic_options, commit=True)
         assert database.get_committed_version() == 1326542401000
 
     @freeze_time("2012-01-14 12:00:01")
-    def test_mixed_options(self, splitgill: SplitgillClient):
+    def test_mixed_options(
+        self, splitgill: SplitgillClient, basic_options_builder: ParsingOptionsBuilder
+    ):
         database = SplitgillDatabase("test", splitgill)
         version = 1326542401000
-        options = ParsingOptionsBuilder().with_defaults().build()
+        options = basic_options_builder.build()
         database.update_options(options, commit=True)
         assert database.get_committed_version() == version
-        new_options = (
-            ParsingOptionsBuilder().with_defaults().with_true_value("aye").build()
-        )
+        new_options = basic_options_builder.with_true_value("aye").build()
         database.update_options(new_options, commit=False)
         assert database.get_committed_version() == version
 
-    def test_mixed_both(self, splitgill: SplitgillClient):
+    def test_mixed_both(
+        self, splitgill: SplitgillClient, basic_options_builder: ParsingOptionsBuilder
+    ):
         database = SplitgillDatabase("test", splitgill)
 
         records = [
@@ -126,8 +130,7 @@ class TestSplitgillDatabaseGetCommittedVersion:
             Record.new({"x": 5}),
         ]
         database.ingest(records, commit=False)
-        options = ParsingOptionsBuilder().with_defaults().build()
-        database.update_options(options, commit=False)
+        database.update_options(basic_options_builder.build(), commit=False)
 
         # add the new stuff
         with freeze_time("2012-01-14 12:00:01"):
@@ -142,9 +145,7 @@ class TestSplitgillDatabaseGetCommittedVersion:
 
         # update the options
         with freeze_time("2012-01-14 12:00:09"):
-            new_options = (
-                ParsingOptionsBuilder().with_defaults().with_true_value("aye").build()
-            )
+            new_options = basic_options_builder.with_true_value("aye").build()
             database.update_options(new_options, commit=True)
         assert database.get_committed_version() == 1326542409000
 
@@ -209,20 +210,18 @@ class TestCommit:
         assert database.commit() == 1326542401000
 
     @freeze_time("2012-01-14 12:00:01")
-    def test_new_options(self, splitgill: SplitgillClient):
+    def test_new_options(
+        self, splitgill: SplitgillClient, basic_options: ParsingOptions
+    ):
         database = SplitgillDatabase("test", splitgill)
-        database.update_options(
-            ParsingOptionsBuilder().with_defaults().build(), commit=False
-        )
+        database.update_options(basic_options, commit=False)
         assert database.commit() == 1326542401000
 
     @freeze_time("2012-01-14 12:00:01")
-    def test_both(self, splitgill: SplitgillClient):
+    def test_both(self, splitgill: SplitgillClient, basic_options: ParsingOptions):
         database = SplitgillDatabase("test", splitgill)
         database.ingest([Record.new({"x": 5})], commit=False)
-        database.update_options(
-            ParsingOptionsBuilder().with_defaults().build(), commit=False
-        )
+        database.update_options(basic_options, commit=False)
         assert database.commit() == 1326542401000
 
 
@@ -919,6 +918,8 @@ class TestGetParsedFields:
         database.ingest(records, commit=True)
         database.update_options(
             ParsingOptionsBuilder()
+            .with_keyword_length(2147483647)
+            .with_float_format("{0:.15g}")
             .with_date_format("%Y-%m-%d")
             .with_date_format("%Y-%m-%dT%H:%M:%S%z")
             .with_date_format("%Y-%m-%d %H:%M:%S")
@@ -1077,7 +1078,11 @@ class TestGetParsedFields:
         ]
         database.ingest(records, commit=True)
         database.update_options(
-            ParsingOptionsBuilder().with_geo_hint("lat", "lon", "rad").build()
+            ParsingOptionsBuilder()
+            .with_keyword_length(2147483647)
+            .with_float_format("{0:.15g}")
+            .with_geo_hint("lat", "lon", "rad")
+            .build()
         )
         database.sync()
 
@@ -1132,7 +1137,11 @@ class TestGetParsedFields:
         ]
         database.ingest(records, commit=True)
         database.update_options(
-            ParsingOptionsBuilder().with_date_format("%Y-%m-%d").build()
+            ParsingOptionsBuilder()
+            .with_keyword_length(2147483647)
+            .with_float_format("{0:.15g}")
+            .with_date_format("%Y-%m-%d")
+            .build()
         )
         database.sync()
 

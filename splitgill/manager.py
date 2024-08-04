@@ -203,8 +203,22 @@ class SplitgillDatabase:
                 return None
 
             if not self.has_options() and not self.has_uncommitted_options():
-                # no existing options and no options to be committed, create a default
-                self.update_options(ParsingOptionsBuilder().build(), commit=False)
+                # no existing options and no options to be committed, so create some
+                # basic, valid parsing options to use. The options just contain the
+                # required settings with some sensible values and nothing more
+                options = (
+                    ParsingOptionsBuilder()
+                    .with_keyword_length(256)
+                    # use 15 significant digits here which roughly matches how a float
+                    # is actually stored in elasticsearch and therefore gives a somewhat
+                    # sensible representative idea to users of what the number actually
+                    # is and how it can be searched. This format will produce string
+                    # representations of numbers in scientific notation if it decides it
+                    # needs to.
+                    .with_float_format("{0:.15g}")
+                    .build()
+                )
+                self.update_options(options, commit=False)
 
             version = now()
 

@@ -10,7 +10,9 @@ from pymongo.collection import Collection
 from pymongo.database import Database
 from shapely import from_geojson
 
+from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.manager import SplitgillClient
+from splitgill.model import ParsingOptions
 
 
 @pytest.fixture
@@ -122,3 +124,38 @@ def wkt_polygon(geojson_polygon: dict) -> str:
 @pytest.fixture
 def wkt_holed_polygon(geojson_holed_polygon: dict) -> str:
     return from_geojson(json.dumps(geojson_holed_polygon)).wkt
+
+
+@pytest.fixture
+def basic_options() -> ParsingOptions:
+    return (
+        ParsingOptionsBuilder()
+        .with_keyword_length(2147483647)
+        .with_float_format("{0:.15g}")
+        .with_true_value("true")
+        .with_true_value("yes")
+        .with_true_value("y")
+        .with_false_value("false")
+        .with_false_value("no")
+        .with_false_value("n")
+        .with_date_format("%Y-%m-%d")
+        .with_date_format("%Y-%m-%dT%H:%M:%S")
+        .with_date_format("%Y-%m-%dT%H:%M:%S.%f")
+        .with_date_format("%Y-%m-%d %H:%M:%S")
+        .with_date_format("%Y-%m-%d %H:%M:%S.%f")
+        .with_date_format("%Y-%m-%dT%H:%M:%S%z")
+        .with_date_format("%Y-%m-%dT%H:%M:%S.%f%z")
+        .with_date_format("%Y-%m-%d %H:%M:%S%z")
+        .with_date_format("%Y-%m-%d %H:%M:%S.%f%z")
+        .with_geo_hint("lat", "lon")
+        .with_geo_hint("latitude", "longitude", "radius")
+        .with_geo_hint(
+            "decimalLatitude", "decimalLongitude", "coordinateUncertaintyInMeters"
+        )
+        .build()
+    )
+
+
+@pytest.fixture
+def basic_options_builder(basic_options: ParsingOptions) -> ParsingOptionsBuilder:
+    return ParsingOptionsBuilder(based_on=basic_options)

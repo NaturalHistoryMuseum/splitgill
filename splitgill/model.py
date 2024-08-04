@@ -152,19 +152,13 @@ class ParsingOptions:
     # GeoFieldHint objects which can be used to test if a record contains any geographic
     # coordinate data
     geo_hints: FrozenSet[GeoFieldHint]
-    # the maximum length of keyword strings (both case-sensitive and -insensitive).
-    # Strings will be truncated to this length before indexing them in either keyword
-    # field. Defaults to the maximum Elasticsearch allows.
-    keyword_length: int = 2147483647
+    # the maximum length of keyword strings (both case-sensitive and case-insensitive).
+    # Strings will be truncated to this length before indexing
+    keyword_length: int
     # the format to use to convert a float to a string for indexing. The string will
     # have format() called on it with the float value passed as the only parameter,
-    # therefore the format string should use 0 to reference it. The default format uses
-    # 15 significant digits. This roughly matches how a float is actually stored in
-    # elasticsearch and therefore gives a somewhat sensible representative idea to users
-    # of what the number actually is and how it can be searched. This format will
-    # produce string representations of numbers in scientific notation if it decides it
-    # needs to.
-    float_format: str = "{0:.15g}"
+    # therefore the format string should use 0 to reference it
+    float_format: str
 
     def to_doc(self) -> dict:
         return {

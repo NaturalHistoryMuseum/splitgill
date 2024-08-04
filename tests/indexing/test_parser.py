@@ -5,6 +5,7 @@ from typing import List, Any
 import pytest
 from shapely import from_wkt
 
+from model import ParsingOptions
 from splitgill.diffing import prepare_data
 from splitgill.indexing.fields import ParsedType, DataType
 from splitgill.indexing.geo import match_hints, match_geojson
@@ -14,12 +15,11 @@ from splitgill.utils import to_timestamp
 
 
 class TestParse:
-    def test_no_nesting(self):
+    def test_no_nesting(self, basic_options: ParsingOptions):
         data = {"x": "beans"}
-        options = ParsingOptionsBuilder().build()
-        parsed_data = parse(data, options)
+        parsed_data = parse(data, basic_options)
 
-        assert parsed_data.parsed == {"x": parse_value("beans", options)}
+        assert parsed_data.parsed == {"x": parse_value("beans", basic_options)}
         assert parsed_data.data_types == ["x.str"]
         assert sorted(parsed_data.parsed_types) == [
             f"x.{ParsedType.KEYWORD_CASE_INSENSITIVE}",
@@ -27,13 +27,12 @@ class TestParse:
             f"x.{ParsedType.TEXT}",
         ]
 
-    def test_list_of_strings(self):
+    def test_list_of_strings(self, basic_options: ParsingOptions):
         data = {"x": ["beans", "lemons", "goats"]}
-        options = ParsingOptionsBuilder().build()
-        parsed_data = parse(data, options)
+        parsed_data = parse(data, basic_options)
 
         assert parsed_data.parsed == {
-            "x": [parse_value(value, options) for value in data["x"]]
+            "x": [parse_value(value, basic_options) for value in data["x"]]
         }
         assert parsed_data.data_types == [f"x.{DataType.LIST}", f"x..{DataType.STR}"]
         assert sorted(parsed_data.parsed_types) == [
@@ -42,16 +41,15 @@ class TestParse:
             f"x.{ParsedType.TEXT}",
         ]
 
-    def test_list_of_dicts(self):
+    def test_list_of_dicts(self, basic_options: ParsingOptions):
         data = {"x": [{"a": 4}, {"a": 5}, {"a": 6}]}
-        options = ParsingOptionsBuilder().build()
-        parsed_data = parse(data, options)
+        parsed_data = parse(data, basic_options)
 
         assert parsed_data.parsed == {
             "x": [
-                {"a": parse_value(4, options)},
-                {"a": parse_value(5, options)},
-                {"a": parse_value(6, options)},
+                {"a": parse_value(4, basic_options)},
+                {"a": parse_value(5, basic_options)},
+                {"a": parse_value(6, basic_options)},
             ]
         }
         assert sorted(parsed_data.data_types) == sorted(
@@ -68,15 +66,14 @@ class TestParse:
             f"x.a.{ParsedType.TEXT}",
         ]
 
-    def test_list_of_lists(self):
+    def test_list_of_lists(self, basic_options: ParsingOptions):
         data = {"x": [[1, 2, 3], [4, 5, 6]]}
-        options = ParsingOptionsBuilder().build()
-        parsed_data = parse(data, options)
+        parsed_data = parse(data, basic_options)
 
         assert parsed_data.parsed == {
             "x": [
-                [parse_value(value, options) for value in [1, 2, 3]],
-                [parse_value(value, options) for value in [4, 5, 6]],
+                [parse_value(value, basic_options) for value in [1, 2, 3]],
+                [parse_value(value, basic_options) for value in [4, 5, 6]],
             ]
         }
         assert sorted(parsed_data.data_types) == sorted(
@@ -93,16 +90,15 @@ class TestParse:
             f"x.{ParsedType.TEXT}",
         ]
 
-    def test_nested_dict(self):
+    def test_nested_dict(self, basic_options: ParsingOptions):
         data = {"x": "beans", "y": {"a": "5", "b": "buckets!"}}
-        options = ParsingOptionsBuilder().build()
-        parsed_data = parse(data, options)
+        parsed_data = parse(data, basic_options)
 
         assert parsed_data.parsed == {
-            "x": parse_value("beans", options),
+            "x": parse_value("beans", basic_options),
             "y": {
-                "a": parse_value("5", options),
-                "b": parse_value("buckets!", options),
+                "a": parse_value("5", basic_options),
+                "b": parse_value("buckets!", basic_options),
             },
         }
         assert sorted(parsed_data.data_types) == [
@@ -124,28 +120,37 @@ class TestParse:
             f"y.b.{ParsedType.TEXT}",
         ]
 
-    def test_nested_mix(self):
+    def test_nested_mix(self, basic_options: ParsingOptions):
         data = {
             "x": ["4", "6", [{"a": ["1", "2"]}, {"a": ["6", "1"]}]],
             "y": {"t": [{"x": 4}, {"x": 1}, {"x": 5.6}]},
         }
-        options = ParsingOptionsBuilder().build()
-        parsed_data = parse(data, options)
+        parsed_data = parse(data, basic_options)
 
         assert parsed_data.parsed == {
             "x": [
-                parse_value("4", options),
-                parse_value("6", options),
+                parse_value("4", basic_options),
+                parse_value("6", basic_options),
                 [
-                    {"a": [parse_value("1", options), parse_value("2", options)]},
-                    {"a": [parse_value("6", options), parse_value("1", options)]},
+                    {
+                        "a": [
+                            parse_value("1", basic_options),
+                            parse_value("2", basic_options),
+                        ]
+                    },
+                    {
+                        "a": [
+                            parse_value("6", basic_options),
+                            parse_value("1", basic_options),
+                        ]
+                    },
                 ],
             ],
             "y": {
                 "t": [
-                    {"x": parse_value(4, options)},
-                    {"x": parse_value(1, options)},
-                    {"x": parse_value(5.6, options)},
+                    {"x": parse_value(4, basic_options)},
+                    {"x": parse_value(1, basic_options)},
+                    {"x": parse_value(5.6, basic_options)},
                 ]
             },
         }
@@ -165,49 +170,56 @@ class TestParse:
             ]
         )
 
-    def test_geo_hinted_fields(self):
+    def test_geo_hinted_fields(self, basic_options: ParsingOptions):
         data = {
             "x": "something",
             "y": "somewhere",
             "decimalLatitude": 14.897,
             "decimalLongitude": -87.956,
         }
-        options = ParsingOptionsBuilder().with_default_geo_hints().build()
 
-        parsed_data = parse(data, options)
-        geo_data = next(iter(match_hints(data, options.geo_hints).values()))
+        parsed_data = parse(data, basic_options)
+        geo_data = next(iter(match_hints(data, basic_options.geo_hints).values()))
         assert parsed_data.parsed == {
-            "x": parse_value("something", options),
-            "y": parse_value("somewhere", options),
-            "decimalLatitude": {**parse_value(14.897, options), **geo_data},
-            "decimalLongitude": parse_value(-87.956, options),
+            "x": parse_value("something", basic_options),
+            "y": parse_value("somewhere", basic_options),
+            "decimalLatitude": {**parse_value(14.897, basic_options), **geo_data},
+            "decimalLongitude": parse_value(-87.956, basic_options),
         }
 
-    def test_geojson_field(self, geojson_point: dict, wkt_point: str):
+    def test_geojson_field(
+        self, geojson_point: dict, wkt_point: str, basic_options: ParsingOptions
+    ):
         data = {
             "x": geojson_point,
             "y": "somewhere",
         }
-        options = ParsingOptionsBuilder().build()
-        parsed_data = parse(data, options)
+        parsed_data = parse(data, basic_options)
 
         assert parsed_data.parsed == {
             "x": {
                 ParsedType.GEO_POINT: wkt_point,
                 ParsedType.GEO_SHAPE: wkt_point,
-                "type": parse_value("Point", options),
-                "coordinates": [parse_value(30, options), parse_value(10, options)],
+                "type": parse_value("Point", basic_options),
+                "coordinates": [
+                    parse_value(30, basic_options),
+                    parse_value(10, basic_options),
+                ],
             },
-            "y": parse_value("somewhere", options),
+            "y": parse_value("somewhere", basic_options),
         }
 
-    def test_geojson_at_root_not_recognised(self, geojson_point: dict):
-        options = ParsingOptionsBuilder().build()
-        parsed_data = parse(geojson_point, options)
+    def test_geojson_at_root_not_recognised(
+        self, geojson_point: dict, basic_options: ParsingOptions
+    ):
+        parsed_data = parse(geojson_point, basic_options)
 
         assert parsed_data.parsed == {
-            "type": parse_value("Point", options),
-            "coordinates": [parse_value(30.0, options), parse_value(10.0, options)],
+            "type": parse_value("Point", basic_options),
+            "coordinates": [
+                parse_value(30.0, basic_options),
+                parse_value(10.0, basic_options),
+            ],
         }
 
     def test_geojson_field_list(
@@ -216,6 +228,7 @@ class TestParse:
         geojson_polygon: dict,
         geojson_linestring: dict,
         geojson_holed_polygon: dict,
+        basic_options: ParsingOptions,
     ):
         data = {
             "x": [
@@ -225,13 +238,12 @@ class TestParse:
                 geojson_holed_polygon,
             ]
         }
-        options = ParsingOptionsBuilder().build()
-        parsed_data = parse(data, options)
+        parsed_data = parse(data, basic_options)
 
         assert parsed_data.parsed == {
             "x": [
                 {
-                    **parse(prepare_data(value), options).parsed,
+                    **parse(prepare_data(value), basic_options).parsed,
                     **match_geojson(prepare_data(value)),
                 }
                 for value in [
@@ -243,12 +255,11 @@ class TestParse:
             ]
         }
 
-    def test_dict_with_nulls(self):
+    def test_dict_with_nulls(self, basic_options: ParsingOptions):
         data = {"a": "hello", "b": None, "c": ""}
-        options = ParsingOptionsBuilder().build()
-        parsed_data = parse(data, options)
+        parsed_data = parse(data, basic_options)
 
-        assert parsed_data.parsed == {"a": parse_value("hello", options)}
+        assert parsed_data.parsed == {"a": parse_value("hello", basic_options)}
         assert parsed_data.data_types == [
             f"a.{DataType.STR}",
             f"b.{DataType.NULL}",
@@ -260,12 +271,13 @@ class TestParse:
             f"a.{ParsedType.TEXT}",
         ]
 
-    def test_list_with_nulls(self):
+    def test_list_with_nulls(self, basic_options: ParsingOptions):
         data = {"a": ["hello", None, ""]}
-        options = ParsingOptionsBuilder().build()
-        parsed_data = parse(data, options)
+        parsed_data = parse(data, basic_options)
 
-        assert parsed_data.parsed == {"a": [parse_value("hello", options), None, None]}
+        assert parsed_data.parsed == {
+            "a": [parse_value("hello", basic_options), None, None]
+        }
         assert sorted(parsed_data.data_types) == sorted(
             [
                 f"a.{DataType.LIST}",
@@ -281,93 +293,86 @@ class TestParse:
 
 
 class TestParseValue:
-    def test_normal_text(self):
-        options = ParsingOptionsBuilder().build()
-        assert parse_value("banana", options) == {
+    def test_normal_text(self, basic_options: ParsingOptions):
+        assert parse_value("banana", basic_options) == {
             ParsedType.TEXT: "banana",
             ParsedType.KEYWORD_CASE_INSENSITIVE: "banana",
             ParsedType.KEYWORD_CASE_SENSITIVE: "banana",
         }
 
-    def test_bools(self):
-        options = ParsingOptionsBuilder().with_default_boolean_values().build()
-
+    def test_bools(self, basic_options: ParsingOptions):
         for value in chain(
-            options.true_values, [o.upper() for o in options.true_values]
+            basic_options.true_values, [o.upper() for o in basic_options.true_values]
         ):
-            assert parse_value(value, options) == {
+            assert parse_value(value, basic_options) == {
                 ParsedType.TEXT: value,
                 ParsedType.KEYWORD_CASE_INSENSITIVE: value,
                 ParsedType.KEYWORD_CASE_SENSITIVE: value,
                 ParsedType.BOOLEAN: True,
             }
         for value in chain(
-            options.false_values, [o.upper() for o in options.false_values]
+            basic_options.false_values, [o.upper() for o in basic_options.false_values]
         ):
-            assert parse_value(value, options) == {
+            assert parse_value(value, basic_options) == {
                 ParsedType.TEXT: value,
                 ParsedType.KEYWORD_CASE_INSENSITIVE: value,
                 ParsedType.KEYWORD_CASE_SENSITIVE: value,
                 ParsedType.BOOLEAN: False,
             }
 
-    def test_number(self):
-        options = ParsingOptionsBuilder().build()
-        assert parse_value("5.3", options) == {
+    def test_number(self, basic_options: ParsingOptions):
+        assert parse_value("5.3", basic_options) == {
             ParsedType.TEXT: "5.3",
             ParsedType.KEYWORD_CASE_INSENSITIVE: "5.3",
             ParsedType.KEYWORD_CASE_SENSITIVE: "5.3",
             ParsedType.NUMBER: 5.3,
         }
-        assert parse_value("70", options) == {
+        assert parse_value("70", basic_options) == {
             ParsedType.TEXT: "70",
             ParsedType.KEYWORD_CASE_INSENSITIVE: "70",
             ParsedType.KEYWORD_CASE_SENSITIVE: "70",
             ParsedType.NUMBER: 70.0,
         }
-        assert parse_value("70.0", options) == {
+        assert parse_value("70.0", basic_options) == {
             ParsedType.TEXT: "70.0",
             ParsedType.KEYWORD_CASE_INSENSITIVE: "70.0",
             ParsedType.KEYWORD_CASE_SENSITIVE: "70.0",
             ParsedType.NUMBER: 70.0,
         }
-        assert parse_value(4, options) == {
+        assert parse_value(4, basic_options) == {
             ParsedType.TEXT: "4",
             ParsedType.KEYWORD_CASE_INSENSITIVE: "4",
             ParsedType.KEYWORD_CASE_SENSITIVE: "4",
             ParsedType.NUMBER: 4,
         }
-        assert parse_value(16.04, options) == {
+        assert parse_value(16.04, basic_options) == {
             ParsedType.TEXT: "16.04",
             ParsedType.KEYWORD_CASE_INSENSITIVE: "16.04",
             ParsedType.KEYWORD_CASE_SENSITIVE: "16.04",
             ParsedType.NUMBER: 16.04,
         }
-        assert parse_value(16.042245342119813456, options) == {
+        assert parse_value(16.042245342119813456, basic_options) == {
             ParsedType.TEXT: "16.0422453421198",
             ParsedType.KEYWORD_CASE_INSENSITIVE: "16.0422453421198",
             ParsedType.KEYWORD_CASE_SENSITIVE: "16.0422453421198",
             ParsedType.NUMBER: 16.042245342119813456,
         }
-        assert parse_value("1.2312e-20", options) == {
+        assert parse_value("1.2312e-20", basic_options) == {
             ParsedType.TEXT: "1.2312e-20",
             ParsedType.KEYWORD_CASE_INSENSITIVE: "1.2312e-20",
             ParsedType.KEYWORD_CASE_SENSITIVE: "1.2312e-20",
             ParsedType.NUMBER: 1.2312e-20,
         }
 
-    def test_invalid_numbers(self):
-        options = ParsingOptionsBuilder().build()
-        assert ParsedType.NUMBER.value not in parse_value("5.3.4", options)
-        assert ParsedType.NUMBER.value not in parse_value("NaN", options)
-        assert ParsedType.NUMBER.value not in parse_value("inf", options)
+    def test_invalid_numbers(self, basic_options: ParsingOptions):
+        assert ParsedType.NUMBER.value not in parse_value("5.3.4", basic_options)
+        assert ParsedType.NUMBER.value not in parse_value("NaN", basic_options)
+        assert ParsedType.NUMBER.value not in parse_value("inf", basic_options)
 
-    def test_date_date_and_time(self):
-        options = ParsingOptionsBuilder().with_default_date_formats().build()
-
+    def test_date_date_and_time(self, basic_options: ParsingOptions):
         value = "2005-07-02 20:16:47.458301"
 
-        assert parse_value(value, options) == {
+        assert parse_value(value, basic_options) == {
             ParsedType.TEXT: value,
             ParsedType.KEYWORD_CASE_INSENSITIVE: value,
             ParsedType.KEYWORD_CASE_SENSITIVE: value,
@@ -377,9 +382,8 @@ class TestParseValue:
             ),
         }
 
-    def test_date_date_and_time_and_tz(self):
-        options = ParsingOptionsBuilder().with_default_date_formats().build()
-        assert parse_value("2005-07-02 20:16:47.103+05:00", options) == {
+    def test_date_date_and_time_and_tz(self, basic_options: ParsingOptions):
+        assert parse_value("2005-07-02 20:16:47.103+05:00", basic_options) == {
             ParsedType.TEXT: "2005-07-02 20:16:47.103+05:00",
             ParsedType.KEYWORD_CASE_INSENSITIVE: "2005-07-02 20:16:47.103+05:00",
             ParsedType.KEYWORD_CASE_SENSITIVE: "2005-07-02 20:16:47.103+05:00",
@@ -388,12 +392,10 @@ class TestParseValue:
             ),
         }
 
-    def test_date_just_a_date(self):
-        options = ParsingOptionsBuilder().with_default_date_formats().build()
-
+    def test_date_just_a_date(self, basic_options: ParsingOptions):
         value = "2005-07-02"
 
-        assert parse_value(value, options) == {
+        assert parse_value(value, basic_options) == {
             ParsedType.TEXT: value,
             ParsedType.KEYWORD_CASE_INSENSITIVE: value,
             ParsedType.KEYWORD_CASE_SENSITIVE: value,
@@ -408,60 +410,45 @@ class TestParseValue:
         [
             # RFC 3339
             ("1996-12-19T16:39:57-08:00", 851042397000),
-            ("1990-12-31T23:59:59Z", 662687999000),
+            ("1990-12-31T23:59:59+00:00", 662687999000),
             # dates
-            ("2012", 1325376000000),
             ("2012-05-03", 1336003200000),
-            ("20120503", 1336003200000),
-            ("2012-05", 1335830400000),
         ],
     )
-    def test_date_formats(self, value: str, epoch: int):
-        options = ParsingOptionsBuilder().with_default_date_formats().build()
-        parsed = parse_value(value, options)
+    def test_date_formats(self, value: str, epoch: int, basic_options: ParsingOptions):
+        parsed = parse_value(value, basic_options)
         assert parsed[ParsedType.DATE.value] == epoch
 
-    def test_date_formats_that_we_want_ignore(self):
-        options = ParsingOptionsBuilder().with_default_date_formats().build()
-        assert ParsedType.DATE.value not in parse_value("12:04:23", options)
+    def test_date_formats_that_we_want_ignore(self, basic_options: ParsingOptions):
+        assert ParsedType.DATE.value not in parse_value("12:04:23", basic_options)
         assert ParsedType.DATE.value not in parse_value(
-            "2007-03-01T13:00:00Z.2008-05-11T15:30:00Z", options
+            "2007-03-01T13:00:00Z.2008-05-11T15:30:00Z", basic_options
         )
 
-    def test_caching_of_bools_and_ints(self):
-        options = ParsingOptionsBuilder().build()
-
-        parsed_bool = parse_value(False, options)
-        parsed_int = parse_value(0, options)
+    def test_caching_of_bools_and_ints(self, basic_options: ParsingOptions):
+        parsed_bool = parse_value(False, basic_options)
+        parsed_int = parse_value(0, basic_options)
 
         assert parsed_bool is not parsed_int
 
-    def test_caching_of_ints_and_floats(self):
-        options = ParsingOptionsBuilder().build()
-
-        parsed_float = parse_value(3.0, options)
-        parsed_int = parse_value(3, options)
+    def test_caching_of_ints_and_floats(self, basic_options: ParsingOptions):
+        parsed_float = parse_value(3.0, basic_options)
+        parsed_int = parse_value(3, basic_options)
 
         assert parsed_float is not parsed_int
 
-    def test_ensure_bools_are_not_ints(self):
-        options = ParsingOptionsBuilder().build()
-
-        result = parse_value(True, options)
+    def test_ensure_bools_are_not_ints(self, basic_options: ParsingOptions):
+        result = parse_value(True, basic_options)
         assert ParsedType.BOOLEAN.value in result
         assert ParsedType.NUMBER.value not in result
 
-    def test_ensure_ints_are_not_bools(self):
-        options = ParsingOptionsBuilder().build()
-
-        result = parse_value(1, options)
+    def test_ensure_ints_are_not_bools(self, basic_options: ParsingOptions):
+        result = parse_value(1, basic_options)
         assert ParsedType.BOOLEAN.value not in result
         assert ParsedType.NUMBER.value in result
 
-    def test_wkt_point(self, wkt_point: str):
-        options = ParsingOptionsBuilder().build()
-
-        result = parse_value(wkt_point, options)
+    def test_wkt_point(self, wkt_point: str, basic_options: ParsingOptions):
+        result = parse_value(wkt_point, basic_options)
         assert result == {
             ParsedType.TEXT: wkt_point,
             ParsedType.KEYWORD_CASE_INSENSITIVE: wkt_point,
@@ -470,10 +457,8 @@ class TestParseValue:
             ParsedType.GEO_SHAPE: wkt_point,
         }
 
-    def test_wkt_linestring(self, wkt_linestring: str):
-        options = ParsingOptionsBuilder().build()
-
-        result = parse_value(wkt_linestring, options)
+    def test_wkt_linestring(self, wkt_linestring: str, basic_options: ParsingOptions):
+        result = parse_value(wkt_linestring, basic_options)
         assert result == {
             ParsedType.TEXT: wkt_linestring,
             ParsedType.KEYWORD_CASE_INSENSITIVE: wkt_linestring,
@@ -482,10 +467,8 @@ class TestParseValue:
             ParsedType.GEO_SHAPE: wkt_linestring,
         }
 
-    def test_wkt_polygon(self, wkt_polygon: str):
-        options = ParsingOptionsBuilder().build()
-
-        result = parse_value(wkt_polygon, options)
+    def test_wkt_polygon(self, wkt_polygon: str, basic_options: ParsingOptions):
+        result = parse_value(wkt_polygon, basic_options)
         assert result == {
             ParsedType.TEXT: wkt_polygon,
             ParsedType.KEYWORD_CASE_INSENSITIVE: wkt_polygon,
@@ -494,10 +477,10 @@ class TestParseValue:
             ParsedType.GEO_SHAPE: wkt_polygon.upper(),
         }
 
-    def test_wkt_holed_polygon(self, wkt_holed_polygon: str):
-        options = ParsingOptionsBuilder().build()
-
-        result = parse_value(wkt_holed_polygon, options)
+    def test_wkt_holed_polygon(
+        self, wkt_holed_polygon: str, basic_options: ParsingOptions
+    ):
+        result = parse_value(wkt_holed_polygon, basic_options)
         assert result == {
             ParsedType.TEXT: wkt_holed_polygon,
             ParsedType.KEYWORD_CASE_INSENSITIVE: wkt_holed_polygon,

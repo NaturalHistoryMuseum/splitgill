@@ -6,6 +6,7 @@ from typing import Dict, Optional
 
 from freezegun import freeze_time
 
+from indexing.options import ParsingOptionsBuilder
 from splitgill.indexing.fields import DocumentField
 from splitgill.indexing.index import (
     generate_index_ops,
@@ -14,7 +15,6 @@ from splitgill.indexing.index import (
     IndexOp,
     DeleteOp,
 )
-from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.indexing.parser import parse
 from splitgill.manager import SplitgillClient, SplitgillDatabase
 from splitgill.model import Record, ParsingOptions
@@ -119,12 +119,14 @@ def check_op(
 
 
 class TestGenerateIndexOps:
-    def test_after_beyond_data_version(self, splitgill: SplitgillClient):
+    def test_after_beyond_data_version(
+        self, splitgill: SplitgillClient, basic_options: ParsingOptions
+    ):
         # this shouldn't happen, but might as well check it!
         database = setup_scenario(
             splitgill,
             records={"r1": {10: {"x": 5}}},
-            options={8: ParsingOptionsBuilder().build()},
+            options={8: basic_options},
         )
 
         after = 11
@@ -136,13 +138,14 @@ class TestGenerateIndexOps:
         assert not ops
 
     def test_after_beyond_options_version(self, splitgill: SplitgillClient):
+        builder = ParsingOptionsBuilder().with_float_format("{0:.15g}")
         # this shouldn't happen, but might as well check it!
         database = setup_scenario(
             splitgill,
             records={"r1": {10: {"x": 5}}},
             options={
-                8: ParsingOptionsBuilder().build(),
-                12: ParsingOptionsBuilder().with_keyword_length(4).build(),
+                8: builder.with_keyword_length(256).build(),
+                12: builder.with_keyword_length(4).build(),
             },
         )
 
@@ -154,7 +157,7 @@ class TestGenerateIndexOps:
         )
 
     def test_mix(self, splitgill: SplitgillClient):
-        builder = ParsingOptionsBuilder()
+        builder = ParsingOptionsBuilder().with_keyword_length(256)
         data = {
             2: {"x": 5.4},
             4: {"x": 3.8},
@@ -184,7 +187,7 @@ class TestGenerateIndexOps:
         check_op(ops[6], "r1", 2, data[2], options[1], next_version=4)
 
     def test_delete(self, splitgill: SplitgillClient):
-        builder = ParsingOptionsBuilder()
+        builder = ParsingOptionsBuilder().with_keyword_length(256)
         data = {
             2: {"x": 5.4},
             4: {},
@@ -214,7 +217,7 @@ class TestGenerateIndexOps:
         check_op(ops[2], "r1", 2, data[2], options[1], next_version=4)
 
     def test_after_between_versions(self, splitgill: SplitgillClient):
-        builder = ParsingOptionsBuilder()
+        builder = ParsingOptionsBuilder().with_keyword_length(256)
         data = {
             2: {"x": 5.4},
             4: {"x": 2.7},
@@ -243,7 +246,7 @@ class TestGenerateIndexOps:
         check_op(ops[4], "r1", 5, data[4], options[5], next_version=7)
 
     def test_after_at_both_versions(self, splitgill: SplitgillClient):
-        builder = ParsingOptionsBuilder()
+        builder = ParsingOptionsBuilder().with_keyword_length(256)
         data = {
             2: {"x": 5.4},
             5: {"x": 2.7},
@@ -272,7 +275,7 @@ class TestGenerateIndexOps:
         check_op(ops[4], "r1", 5, data[5], options[5], next_version=7)
 
     def test_after_new_data(self, splitgill: SplitgillClient):
-        builder = ParsingOptionsBuilder()
+        builder = ParsingOptionsBuilder().with_keyword_length(256)
         data = {
             2: {"x": 5.4},
             4: {"x": 2.7},
@@ -299,7 +302,7 @@ class TestGenerateIndexOps:
         check_op(ops[1], "r1", 8, data[8], options[7], next_version=9)
 
     def test_after_new_options(self, splitgill: SplitgillClient):
-        builder = ParsingOptionsBuilder()
+        builder = ParsingOptionsBuilder().with_keyword_length(256)
         data = {
             2: {"x": 5.4},
             4: {"x": 2.7},
@@ -328,7 +331,7 @@ class TestGenerateIndexOps:
         check_op(ops[1], "r1", 9, data[9], options[7], next_version=10)
 
     def test_after_new_both(self, splitgill: SplitgillClient):
-        builder = ParsingOptionsBuilder()
+        builder = ParsingOptionsBuilder().with_keyword_length(256)
         data = {
             2: {"x": 5.4},
             4: {"x": 2.7},
@@ -356,14 +359,11 @@ class TestGenerateIndexOps:
         check_op(ops[0], "r1", 9, data[9], options[9])
         check_op(ops[1], "r1", 8, data[8], options[7], next_version=9)
 
-    def test_just_latest(self, splitgill: SplitgillClient):
-        builder = ParsingOptionsBuilder()
-        data = {
-            1: {"x": 5.4},
-        }
-        options = {
-            1: builder.build(),
-        }
+    def test_just_latest(
+        self, splitgill: SplitgillClient, basic_options: ParsingOptions
+    ):
+        data = {1: {"x": 5.4}}
+        options = {1: basic_options}
         database = setup_scenario(splitgill, {"r1": data}, options)
 
         ops = list(
@@ -375,6 +375,11 @@ class TestGenerateIndexOps:
         check_op(ops[0], "r1", 1, data[1], options[1])
 
     def test_meta_geo(self, splitgill: SplitgillClient):
+        builder = (
+            ParsingOptionsBuilder()
+            .with_keyword_length(256)
+            .with_float_format("{0:.15g}")
+        )
         data = {
             1: {
                 "x": "beans",
@@ -383,7 +388,7 @@ class TestGenerateIndexOps:
                 "location": {"type": "Point", "coordinates": [100.4, 0.1]},
             }
         }
-        options = {1: ParsingOptionsBuilder().with_geo_hint("lat", "lon").build()}
+        options = {1: builder.with_geo_hint("lat", "lon").build()}
 
         database = setup_scenario(splitgill, {"r1": data}, options)
 
