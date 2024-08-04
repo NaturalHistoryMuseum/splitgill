@@ -6,7 +6,6 @@ from typing import Dict, Optional
 
 from freezegun import freeze_time
 
-from indexing.options import ParsingOptionsBuilder
 from splitgill.indexing.fields import DocumentField
 from splitgill.indexing.index import (
     generate_index_ops,
@@ -15,6 +14,7 @@ from splitgill.indexing.index import (
     IndexOp,
     DeleteOp,
 )
+from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.indexing.parser import parse
 from splitgill.manager import SplitgillClient, SplitgillDatabase
 from splitgill.model import Record, ParsingOptions
