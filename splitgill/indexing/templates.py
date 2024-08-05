@@ -69,10 +69,10 @@ DATA_TEMPLATE = {
                 DocumentField.ALL_TEXT: {"type": "text"},
                 # the geo point value of each geo field will be copied into this field
                 # for easy querying and map making (see the dynamic keyword_field below)
-                DocumentField.ALL_POINTS: {"type": "geo_point"},
+                DocumentField.ALL_POINTS: {"type": "geo_point", "ignore_z_value": True},
                 # the geo shape value of each geo field will be copied into this field
                 # for easy querying (see the dynamic keyword_field below)
-                DocumentField.ALL_SHAPES: {"type": "geo_shape"},
+                DocumentField.ALL_SHAPES: {"type": "geo_shape", "ignore_z_value": True},
             },
             "dynamic_templates": [
                 # define all the parsed types
@@ -82,6 +82,7 @@ DATA_TEMPLATE = {
                         "path_match": ParsedType.GEO_POINT.path_to("*", full=True),
                         "mapping": {
                             "type": "geo_point",
+                            "ignore_z_value": True,
                             # copy the value of this field into the all_points field
                             # (note that this forces us to use WKT to define the points
                             # in this field because elasticsearch can't do a copy_to on
@@ -96,6 +97,7 @@ DATA_TEMPLATE = {
                         "path_match": ParsedType.GEO_SHAPE.path_to("*", full=True),
                         "mapping": {
                             "type": "geo_shape",
+                            "ignore_z_value": True,
                             # copy the value of this field into the all_shapes field
                             # (note that this forces us to use WKT to define the points
                             # in this field because elasticsearch can't do a copy_to on
