@@ -130,7 +130,7 @@ def wkt_holed_polygon(geojson_holed_polygon: dict) -> str:
 def basic_options() -> ParsingOptions:
     return (
         ParsingOptionsBuilder()
-        .with_keyword_length(2147483647)
+        .with_keyword_length(8191)
         .with_float_format("{0:.15g}")
         .with_true_value("true")
         .with_true_value("yes")

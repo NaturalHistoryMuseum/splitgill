@@ -134,15 +134,28 @@ class ParsingOptionsBuilder:
         longer than this value will be trimmed down before they are sent to
         Elasticsearch.
 
-        The length value must be in the range 1 <= keyword_length <= 2147483647 and will
-        be clamped to ensure this.
+        Elasticsearch provides an ignore_above feature we could use on keywords to limit
+        the length entered, however, this means that anything longer is completely
+        ignored and not indexed rather than just being truncated. Truncating the data
+        before it goes into Elasticsearch to ensure it is indexed no matter what seems
+        more appealing.
+
+        This method will error if the length is below 1 (for obvious reasons) or above
+        32766. If using full 4 byte UTF-8 characters, this will need to be reduced to
+        8191 but to avoid restricting when it is potentially not necessary, we use
+        32766. Relevant documentation, though it's not exactly detailed:
+        https://www.elastic.co/guide/en/elasticsearch/reference/current/ignore-above.html
 
         :param keyword_length: the maximum keyword length
         :return: self
         """
-        # set the new keyword length but clamp it between 1 and 2147483647 to ensure it
-        # is a valid input
-        self._keyword_length = max(1, min(keyword_length, 2147483647))
+        if keyword_length < 1:
+            # 0 would mean no keyword values would be indexed, minus numbers are silly
+            raise ValueError("Keyword length must be greater than 0")
+        if keyword_length > 32766:
+            # lucerne has a term byte-length limit of ~32k so cap at that
+            raise ValueError("Keyword length must be less than 32766")
+        self._keyword_length = keyword_length
         return self
 
     def with_float_format(self, float_format: str) -> "ParsingOptionsBuilder":

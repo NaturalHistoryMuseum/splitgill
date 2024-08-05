@@ -1,3 +1,5 @@
+import pytest
+
 from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.model import GeoFieldHint
 
@@ -37,4 +39,13 @@ class TestParsingOptionsBuilder:
         assert "%Y" in builder._date_formats
         assert len(builder._date_formats) == 1
 
-    # TODO: test the rest
+    def test_keyword_length(self):
+        builder = ParsingOptionsBuilder()
+        with pytest.raises(ValueError):
+            builder.with_keyword_length(0)
+        with pytest.raises(ValueError):
+            builder.with_keyword_length(-6)
+        with pytest.raises(ValueError):
+            builder.with_keyword_length(32767)
+
+    # todo: test the rest
