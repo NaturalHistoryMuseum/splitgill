@@ -55,7 +55,7 @@ def generate_ops(
                       to the size of the $in query ID list. Defaults to 100.
     :return: yields bulk Mongo ops
     """
-    # TODO: refactor this, it's a bit messy
+    # todo: refactor this, it's a bit messy
     for chunk in partition(records, find_size):
         records_by_id = {record.id: record for record in chunk}
         # find if any of the records to be added/updated already exist in the collection

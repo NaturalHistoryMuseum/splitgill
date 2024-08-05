@@ -195,8 +195,8 @@ class SplitgillDatabase:
 
         :return: the new version or None if no uncommitted changes were found
         """
-        # TODO: global now?
-        # TODO: transaction/rollback? Can't do this without replicasets so who knows?
+        # todo: global now?
+        # todo: transaction/rollback? Can't do this without replicasets so who knows?
         with self.locker.lock(self.name, stage="commit"):
             if not self.has_uncommitted_data() and not self.has_uncommitted_options():
                 # nothing to commit, so nothing to do

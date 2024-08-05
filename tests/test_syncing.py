@@ -117,5 +117,5 @@ class TestCheckForErrors:
         await gather(task_1, task_2)
 
 
-# TODO: some more tests would be nice, although the coverage from integration tests is
+# todo: some more tests would be nice, although the coverage from integration tests is
 #       pretty good

@@ -257,7 +257,7 @@ def diff(base: dict, new: dict) -> Iterable[DiffOp]:
     if not isinstance(base, dict) or not isinstance(new, dict):
         raise DiffingTypeComparisonException("Both base and new must be dicts")
 
-    # TODO: we could write a shortcut when one of the dicts is empty
+    # todo: we could write a shortcut when one of the dicts is empty
 
     queue: Deque[Comparison] = deque([DictComparison(tuple(), base, new)])
     while queue:

@@ -346,7 +346,7 @@ class TestListComparisonCompare:
         assert len(more) == 0
 
 
-# TODO: make this a more complete, systematic set of scenarios
+# todo: make this a more complete, systematic set of scenarios
 patching_scenarios = [
     # a basic example
     ({"x": "4"}, {"x": "5"}),
