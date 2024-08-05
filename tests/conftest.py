@@ -1,4 +1,5 @@
 import json
+from os import getenv
 from contextlib import suppress
 from typing import List
 
@@ -17,7 +18,7 @@ from splitgill.model import ParsingOptions
 
 @pytest.fixture
 def mongo_client() -> MongoClient:
-    with MongoClient("mongo", 27017) as client:
+    with MongoClient(getenv("SPLITGILL_MONGO_HOST", "mongo"), 27017) as client:
         yield client
         database_names = client.list_database_names()
         for name in database_names:
@@ -40,7 +41,7 @@ def mongo_collection(mongo_database: Database) -> Collection:
 
 @pytest.fixture
 def es_node_configs() -> List[NodeConfig]:
-    node_configs = [NodeConfig("http", "es", 9200)]
+    node_configs = [NodeConfig("http", getenv("SPLITGILL_ES_HOST", "es"), 9200)]
 
     yield node_configs
 
