@@ -5,12 +5,11 @@ from typing import List, Any
 import pytest
 from shapely import from_wkt
 
-from model import ParsingOptions
 from splitgill.diffing import prepare_data
 from splitgill.indexing.fields import ParsedType, DataType
 from splitgill.indexing.geo import match_hints, match_geojson
-from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.indexing.parser import parse, parse_value, type_for
+from splitgill.model import ParsingOptions
 from splitgill.utils import to_timestamp
 
 
