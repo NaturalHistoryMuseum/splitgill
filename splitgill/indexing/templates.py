@@ -78,6 +78,7 @@ DATA_TEMPLATE = {
                 # define all the parsed types
                 {
                     "parsed_geo_point": {
+                        "match_pattern": "simple",
                         "path_match": ParsedType.GEO_POINT.path_to("*", True),
                         "mapping": {
                             "type": "geo_point",
@@ -91,6 +92,7 @@ DATA_TEMPLATE = {
                 },
                 {
                     "parsed_geo_shape": {
+                        "match_pattern": "simple",
                         "path_match": ParsedType.GEO_SHAPE.path_to("*", True),
                         "mapping": {
                             "type": "geo_shape",
@@ -104,6 +106,7 @@ DATA_TEMPLATE = {
                 },
                 {
                     "parsed_text": {
+                        "match_pattern": "simple",
                         "path_match": ParsedType.TEXT.path_to("*", full=True),
                         "mapping": {
                             "type": "text",
@@ -114,6 +117,7 @@ DATA_TEMPLATE = {
                 },
                 {
                     "parsed_keyword_case_insensitive": {
+                        "match_pattern": "simple",
                         "path_match": ParsedType.KEYWORD_CASE_INSENSITIVE.path_to(
                             "*", full=True
                         ),
@@ -127,6 +131,7 @@ DATA_TEMPLATE = {
                 },
                 {
                     "parsed_keyword_case_sensitive": {
+                        "match_pattern": "simple",
                         "path_match": ParsedType.KEYWORD_CASE_SENSITIVE.path_to(
                             "*", full=True
                         ),
@@ -135,18 +140,21 @@ DATA_TEMPLATE = {
                 },
                 {
                     "parsed_number": {
+                        "match_pattern": "simple",
                         "path_match": ParsedType.NUMBER.path_to("*", full=True),
                         "mapping": {"type": "double"},
                     },
                 },
                 {
                     "parsed_date": {
+                        "match_pattern": "simple",
                         "path_match": ParsedType.DATE.path_to("*", full=True),
                         "mapping": {"type": "date", "format": "epoch_millis"},
                     },
                 },
                 {
                     "parsed_boolean": {
+                        "match_pattern": "simple",
                         "path_match": ParsedType.BOOLEAN.path_to("*", full=True),
                         "mapping": {"type": "boolean"},
                     },
