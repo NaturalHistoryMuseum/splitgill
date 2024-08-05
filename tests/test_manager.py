@@ -918,8 +918,6 @@ class TestGetParsedFields:
         database.ingest(records, commit=True)
         database.update_options(
             ParsingOptionsBuilder()
-            .with_keyword_length(8191)
-            .with_float_format("{0:.15g}")
             .with_date_format("%Y-%m-%d")
             .with_date_format("%Y-%m-%dT%H:%M:%S%z")
             .with_date_format("%Y-%m-%d %H:%M:%S")
@@ -1078,11 +1076,7 @@ class TestGetParsedFields:
         ]
         database.ingest(records, commit=True)
         database.update_options(
-            ParsingOptionsBuilder()
-            .with_keyword_length(8191)
-            .with_float_format("{0:.15g}")
-            .with_geo_hint("lat", "lon", "rad")
-            .build()
+            ParsingOptionsBuilder().with_geo_hint("lat", "lon", "rad").build()
         )
         database.sync()
 
@@ -1137,11 +1131,7 @@ class TestGetParsedFields:
         ]
         database.ingest(records, commit=True)
         database.update_options(
-            ParsingOptionsBuilder()
-            .with_keyword_length(8191)
-            .with_float_format("{0:.15g}")
-            .with_date_format("%Y-%m-%d")
-            .build()
+            ParsingOptionsBuilder().with_date_format("%Y-%m-%d").build()
         )
         database.sync()
 

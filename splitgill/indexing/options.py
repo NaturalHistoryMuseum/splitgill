@@ -9,8 +9,15 @@ class ParsingOptionsBuilder:
     """
 
     def __init__(self, based_on: Optional[ParsingOptions] = None):
-        self._keyword_length: int = 0
-        self._float_format: str = ""
+        # set the default keyword length to the max lucerne byte-length limit divided by
+        # 4 to account for 4 byte utf-8
+        self._keyword_length: int = 8191
+        # set the float format by default to use 15 significant digits which roughly
+        # matches how a float is actually stored in elasticsearch and therefore gives a
+        # somewhat sensible representative idea to users of what the number actually is
+        # and how it can be searched. This format will produce string representations of
+        # numbers in scientific notation if it decides it needs to
+        self._float_format: str = "{0:.15g}"
         self._true_values: Set[str] = set()
         self._false_values: Set[str] = set()
         self._date_formats: Set[str] = set()
@@ -31,10 +38,6 @@ class ParsingOptionsBuilder:
 
         :return: a new ParsingOptions object
         """
-        if self._keyword_length < 1:
-            raise ValueError("You must specify a valid keyword length")
-        if not self._float_format:
-            raise ValueError("You must specify a valid float format")
         return ParsingOptions(
             frozenset(self._true_values),
             frozenset(self._false_values),
