@@ -6,12 +6,30 @@ import orjson
 from cytoolz.itertoolz import sliding_window
 from fastnumbers import try_float, RAISE
 from pyproj import CRS, Transformer
-from shapely import Point, LineString, Polygon, from_wkt, from_geojson
+from shapely import Point, LineString, Polygon, from_wkt, from_geojson, to_wkt
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import transform
 
 from splitgill.indexing.fields import ParsedType
 from splitgill.model import GeoFieldHint
+
+
+def to_parsed_dict(point: BaseGeometry, shape: BaseGeometry) -> dict:
+    """
+    Create a dict representing the point and shape geometries to be used as part of the
+    parsed data of a value. Aside from DRYness, this also gives us an opportunity to
+    ensure we only create 2-dimensional geometries. Elasticsearch can handle
+    3-dimensional inputs, but it just ignores the 3rd dimension, so it really is useless
+    sending it, and WKT can support 4-dimensions which Elasticsearch would not like.
+
+    :param point: the point
+    :param shape: the shape
+    :return: a dict
+    """
+    return {
+        ParsedType.GEO_POINT: to_wkt(point, rounding_precision=-1, output_dimension=2),
+        ParsedType.GEO_SHAPE: to_wkt(shape, rounding_precision=-1, output_dimension=2),
+    }
 
 
 def match_hints(data: dict, hints: Iterable[GeoFieldHint]) -> dict:
@@ -54,10 +72,7 @@ def match_hints(data: dict, hints: Iterable[GeoFieldHint]) -> dict:
                 # if anything goes wrong, just carry on
                 pass
 
-        matches[hint.lat_field] = {
-            ParsedType.GEO_POINT: point.wkt,
-            ParsedType.GEO_SHAPE: shape.wkt,
-        }
+        matches[hint.lat_field] = to_parsed_dict(point, shape)
 
     return matches
 
@@ -110,6 +125,11 @@ def match_geojson(candidate: dict) -> Optional[dict]:
     arbitrary decision, but it makes the parsing here and the rendering on a map much
     easier.
 
+    Note that this doesn't support three-dimensional geometries. This is because Shapely
+    (or more likely, the underlying lib) doesn't support them. Elasticsearch doesn't
+    either, but it would be nice if we could parse the 2 coordinates we can deal with
+    and ignore the 3rd one, but sadly not so yet.
+
     :param candidate: the dict to check
     :return: returns a dict ready for indexing or None
     """
@@ -127,7 +147,7 @@ def match_geojson(candidate: dict) -> Optional[dict]:
     if isinstance(shape, Polygon) and not is_winding_valid(shape):
         return None
 
-    return {ParsedType.GEO_POINT: shape.centroid.wkt, ParsedType.GEO_SHAPE: shape.wkt}
+    return to_parsed_dict(shape.centroid, shape)
 
 
 def match_wkt(candidate: str) -> Optional[dict]:
@@ -143,7 +163,7 @@ def match_wkt(candidate: str) -> Optional[dict]:
     if shape is None or not is_shape_valid(shape):
         return None
 
-    return {ParsedType.GEO_POINT: shape.centroid.wkt, ParsedType.GEO_SHAPE: shape.wkt}
+    return to_parsed_dict(shape.centroid, shape)
 
 
 def is_shape_valid(shape: BaseGeometry) -> bool:
@@ -180,7 +200,7 @@ def is_shape_valid(shape: BaseGeometry) -> bool:
     # elasticsearch only allows lon/lat pairs in these ranges
     return all(
         -180 <= longitude <= 180 and -90 <= latitude <= 90
-        for longitude, latitude in coords_to_check
+        for longitude, latitude, *etc in coords_to_check
     )
 
 

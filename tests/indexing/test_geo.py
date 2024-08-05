@@ -12,6 +12,7 @@ from splitgill.indexing.geo import (
     match_hints,
     is_shape_valid,
     match_geojson,
+    match_wkt,
 )
 from splitgill.model import GeoFieldHint
 
@@ -181,12 +182,10 @@ class TestMatchGeoJSON:
         assert parsed[ParsedType.GEO_POINT] == wkt_point
         assert parsed[ParsedType.GEO_SHAPE] == wkt_point
 
-    def test_valid_point_with_elevation(self, geojson_point: dict, wkt_point: str):
+    def test_invalid_point_with_elevation(self, geojson_point: dict, wkt_point: str):
         data = geojson_point.copy()
-        data["coordinates"] = (*data["coordinates"], "2000.6")
-        parsed = match_geojson(geojson_point)
-        assert parsed[ParsedType.GEO_POINT] == wkt_point
-        assert parsed[ParsedType.GEO_SHAPE] == wkt_point
+        data["coordinates"] = (*data["coordinates"], 2000.6)
+        assert match_geojson(data) is None
 
     def test_invalid_with_too_many_points(self, geojson_point: dict):
         data = geojson_point.copy()
@@ -288,6 +287,80 @@ class TestMatchGeoJSON:
             polygon["coordinates"][1][::-1],
         )
         assert match_geojson(polygon) is None
+
+
+class TestMatchWKT:
+    def test_ignore_silly(self):
+        assert match_wkt("beans on toast") is None
+
+    def test_empty(self):
+        assert match_wkt("point empty") is None
+        assert match_wkt("linestring empty") is None
+        assert match_wkt("polygon empty") is None
+
+    def test_valid_point(self, wkt_point: str):
+        parsed = match_wkt(wkt_point)
+        assert parsed[ParsedType.GEO_POINT] == wkt_point
+        assert parsed[ParsedType.GEO_SHAPE] == wkt_point
+
+    def test_valid_point_with_elevation(self, wkt_point: str):
+        test_point = "point (30 10 50)"
+        parsed = match_wkt(test_point)
+        assert parsed[ParsedType.GEO_POINT] == wkt_point
+        assert parsed[ParsedType.GEO_SHAPE] == wkt_point
+
+    def test_invalid_with_too_many_points(self, geojson_point: dict):
+        assert match_wkt("point (20 30 40 50 60 70)") is None
+
+    def test_invalid_point_too_few_points(self, geojson_point: dict):
+        assert match_wkt("point (20)") is None
+
+    def test_invalid_point_bad_lat(self):
+        data = "point (30.0 100.0)"
+        assert match_wkt(data) is None
+
+    def test_invalid_point_bad_lon(self):
+        data = "point (-190.0 100.0)"
+        assert match_wkt(data) is None
+
+    def test_invalid_point_bad_lat_cause_its_a_random_string(self):
+        data = "point (30.0 garbage)"
+        assert match_wkt(data) is None
+
+    def test_valid_linestring(self, wkt_linestring: str):
+        parsed = match_wkt(wkt_linestring)
+        assert parsed[ParsedType.GEO_POINT] == "POINT (17.5 12.5)"
+        assert parsed[ParsedType.GEO_SHAPE] == wkt_linestring
+
+    def test_invalid_linestring_too_few_points(self):
+        data = "linestring (10 10)"
+        assert match_wkt(data) is None
+
+    def test_invalid_linestring_bad_lat(self):
+        data = "linestring (30 100, 30 10)"
+        assert match_wkt(data) is None
+
+    def test_invalid_linestring_bad_lon(self):
+        data = "linestring (-190 100, 30 10)"
+        assert match_wkt(data) is None
+
+    def test_valid_polygon(self, wkt_polygon: str):
+        parsed = match_wkt(wkt_polygon)
+        assert parsed[ParsedType.GEO_POINT] == "POINT (15 15)"
+        assert parsed[ParsedType.GEO_SHAPE] == wkt_polygon
+
+    def test_valid_linear_and_hole_winding_polygon(self, wkt_holed_polygon: str):
+        parsed = match_wkt(wkt_holed_polygon)
+        assert parsed[ParsedType.GEO_POINT] == "POINT (15 15)"
+        assert parsed[ParsedType.GEO_SHAPE] == wkt_holed_polygon
+
+    def test_invalid_not_closed_polygon_in_linear_ring(self):
+        polygon = "POLYGON ((30 10, 40 40, 20 40, 10 20))"
+        assert match_wkt(polygon) is None
+
+    def test_invalid_not_closed_polygon_in_hole(self):
+        polygon = "POLYGON ((35 10, 45 45, 15 40, 10 20, 35 10), (20 30, 35 35, 30 20))"
+        assert match_wkt(polygon) is None
 
 
 def test_is_winding_valid(geojson_holed_polygon: dict):
