@@ -123,10 +123,15 @@ class ParsingOptionsBuilder:
         is provided as well, this value is used to create a circle around the latitude
         and longitude point).
 
+        When matching, if the radius_field is provided but not found in a record's data
+        but the latitude and longitude fields are found, the hint will still match the
+        record and produce a precise point.
+
         :param latitude_field: the name of the latitude field
         :param longitude_field: the name of the longitude field
         :param radius_field: the name of the radius field (optional)
         :param segments: the number of segments to use when creating the circle
+                         (optional, defaults to 16)
         :return: self
         """
         if latitude_field and longitude_field:
