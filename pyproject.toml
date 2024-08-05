@@ -20,17 +20,15 @@ classifiers = [
 ]
 
 dependencies = [
-    "elasticsearch[async]>=8.10.1",
+    "elasticsearch[async]>=8.0.0",
     "elasticsearch-dsl>=8.9.0",
     "pymongo>=4.4.1",
-    "cytoolz>=0.12.2",
-    "python-dateutil>=2.8.2",
+    "cytoolz>=0.12.3",
     "fastnumbers>=5.0.1",
-    "pendulum>=2.0.0",
     "pyproj>=3.5.0",
-    "shapely>=2.0.1",
-    "regex>=2023.10.3",
-    "orjson>=3.9.15",
+    "shapely>=2.0.5",
+    "regex>=2024.7.24",
+    "orjson>=3.10.6",
     # only needed while we run on <python3.11
     "StrEnum>=0.4.15",
 ]
