@@ -59,15 +59,40 @@ class TestMatchHints:
         lat = 51.496111
         lon = -0.176111
         rad = 10.5
-        circle = create_polygon_circle(lat, lon, rad)
-        h = GeoFieldHint("lat", "lon", "rad")
+        segments = 16
+        circle = create_polygon_circle(lat, lon, rad, segments)
+        h = GeoFieldHint("lat", "lon", "rad", segments)
 
-        matches = match_hints({"lat": str(lat), "lon": str(lon), "rad": str(rad)}, [h])
+        matches = match_hints({"lat": lat, "lon": lon, "rad": rad}, [h])
 
         assert len(matches) == 1
-        geo_data = matches[hint.lat_field]
+        geo_data = matches[h.lat_field]
         assert geo_data[ParsedType.GEO_POINT] == f"POINT ({lon} {lat})"
         assert geo_data[ParsedType.GEO_SHAPE] == circle.wkt
+
+    def test_segments_is_passed_correctly(self):
+        lat = 51.496111
+        lon = -0.176111
+        rad = 2000
+        segments_1 = 16
+        segments_2 = 128
+        circle_1 = create_polygon_circle(lat, lon, rad, segments_1)
+        circle_2 = create_polygon_circle(lat, lon, rad, segments_2)
+        h_1 = GeoFieldHint("lat", "lon", "rad", segments_1)
+        h_2 = GeoFieldHint("lat", "lon", "rad", segments_2)
+
+        matches_1 = match_hints({"lat": lat, "lon": lon, "rad": rad}, [h_1])
+        geo_data_1 = matches_1[h_1.lat_field]
+        assert geo_data_1[ParsedType.GEO_POINT] == f"POINT ({lon} {lat})"
+        assert geo_data_1[ParsedType.GEO_SHAPE] == circle_1.wkt
+
+        matches_2 = match_hints({"lat": lat, "lon": lon, "rad": rad}, [h_2])
+        geo_data_2 = matches_2[h_2.lat_field]
+        assert geo_data_2[ParsedType.GEO_POINT] == f"POINT ({lon} {lat})"
+        assert geo_data_2[ParsedType.GEO_SHAPE] == circle_2.wkt
+
+        assert geo_data_1[ParsedType.GEO_POINT] == geo_data_2[ParsedType.GEO_POINT]
+        assert geo_data_1[ParsedType.GEO_SHAPE] != geo_data_2[ParsedType.GEO_SHAPE]
 
 
 is_shape_valid_scenarios = [
@@ -122,7 +147,7 @@ def test_is_shape_valid(shape: BaseGeometry, is_valid: bool):
 
 class TestCreatePolygonCircle:
     def test_valid_geojson(self):
-        circle = create_polygon_circle(0, 0, 200)
+        circle = create_polygon_circle(0, 0, 200, 16)
 
         # check it's a polygon, let's get the basics right!
         assert isinstance(circle, Polygon)
@@ -132,11 +157,22 @@ class TestCreatePolygonCircle:
 
     def test_less_than_0(self):
         with pytest.raises(ValueError):
-            create_polygon_circle(0, 0, -1)
+            create_polygon_circle(0, 0, -1, 16)
 
     def test_equal_0(self):
         with pytest.raises(ValueError):
-            create_polygon_circle(0, 0, 0)
+            create_polygon_circle(0, 0, 0, 16)
+
+    def test_different_segment_values_work(self):
+        # seemingly, negative numbers are fine too, I think shapely just rounds them all
+        # up to 1
+        for segments in range(-4, 100):
+            circle = create_polygon_circle(0, 0, 200, segments)
+            # check it's a polygon, let's get the basics right!
+            assert isinstance(circle, Polygon)
+            # check it's a closed polygon
+            assert circle.exterior.coords[0] == circle.exterior.coords[-1]
+            assert is_winding_valid(circle)
 
 
 class TestMatchGeoJSON:

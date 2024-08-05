@@ -122,6 +122,15 @@ class GeoFieldHint:
     lat_field: str
     lon_field: str
     radius_field: Optional[str] = None
+    # the number of segments to use to create a circle around a point when a radius is
+    # provided in the geo hint. Circles can't be directly represented in WKT nor
+    # GeoJSON, so we have to build a polygon instead that looks like a circle using
+    # triangles. This setting configures the number of segments to use to make the
+    # circle, the higher this number the more accurate the polygon's representation of
+    # the circle, but the more complex the shape. Defaults to 16 which produces 64 (+1
+    # for the repeat start/end) coordinates in the resulting polygon. This should be
+    # enough for the majority of uses.
+    segments: int = 16
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, GeoFieldHint):

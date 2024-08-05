@@ -100,10 +100,13 @@ class ParsingOptionsBuilder:
         latitude_field: str,
         longitude_field: str,
         radius_field: Optional[str] = None,
+        segments: int = 16,
     ) -> "ParsingOptionsBuilder":
         """
         Add the given lat/lon/radius field combination as a hint for the existence of a
-        geo parsable field. The radius field name is optional.
+        geo parsable field. The radius field name is optional. A segments parameter can
+        also be provided which specifies the number of segments to use when creating the
+        circle around the point if radius is specified.
 
         Latitude fields across hints must be unique and therefore, if a hint is set with
         a latitude field that already exists in this options builder, the current hint
@@ -123,10 +126,11 @@ class ParsingOptionsBuilder:
         :param latitude_field: the name of the latitude field
         :param longitude_field: the name of the longitude field
         :param radius_field: the name of the radius field (optional)
+        :param segments: the number of segments to use when creating the circle
         :return: self
         """
         if latitude_field and longitude_field:
-            hint = GeoFieldHint(latitude_field, longitude_field, radius_field)
+            hint = GeoFieldHint(latitude_field, longitude_field, radius_field, segments)
             self._geo_hints.discard(hint)
             self._geo_hints.add(hint)
         return self

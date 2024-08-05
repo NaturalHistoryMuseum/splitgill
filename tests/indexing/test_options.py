@@ -7,10 +7,10 @@ from splitgill.model import GeoFieldHint
 class TestParsingOptionsBuilder:
     def test_with_geo_hint(self):
         builder = ParsingOptionsBuilder()
-        builder.with_geo_hint("lat", "lon").with_geo_hint("x", "y", "rad")
+        builder.with_geo_hint("lat", "lon").with_geo_hint("x", "y", "rad", 12)
 
         assert GeoFieldHint("lat", "lon") in builder._geo_hints
-        assert GeoFieldHint("x", "y", "rad") in builder._geo_hints
+        assert GeoFieldHint("x", "y", "rad", 12) in builder._geo_hints
 
         another_ref = builder.with_geo_hint("lat", "lon")
 

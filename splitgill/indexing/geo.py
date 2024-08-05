@@ -45,7 +45,9 @@ def match_hints(data: dict, hints: Iterable[GeoFieldHint]) -> dict:
                 # only need to make a circle if the radius is greater than 0, this also
                 # means we ignore negative radius values
                 if radius > 0:
-                    circle = create_polygon_circle(point.y, point.x, radius)
+                    circle = create_polygon_circle(
+                        point.y, point.x, radius, hint.segments
+                    )
                     if is_shape_valid(circle):
                         shape = circle
             except (ValueError, TypeError):
@@ -62,7 +64,7 @@ def match_hints(data: dict, hints: Iterable[GeoFieldHint]) -> dict:
 
 @lru_cache(maxsize=100_000)
 def create_polygon_circle(
-    latitude: float, longitude: float, radius_in_metres: float
+    latitude: float, longitude: float, radius_in_metres: float, segments: int
 ) -> Polygon:
     """
     Given a point and a radius in metres, create a circle that represents this using a
@@ -75,6 +77,8 @@ def create_polygon_circle(
     :param latitude: a latitude float value
     :param longitude: a longitude float value
     :param radius_in_metres: a radius in metres value
+    :param segments: the quad_segs parameter to pass when creating the circle around the
+                     point (the number of segments used will be 4*segments).
     :return: a Polygon
     """
     if radius_in_metres <= 0:
@@ -85,11 +89,7 @@ def create_polygon_circle(
         f"+proj=aeqd +lat_0={latitude} +lon_0={longitude} +x_0=0 +y_0=0"
     )
     tfmr = Transformer.from_proj(aeqd_proj, aeqd_proj.geodetic_crs)
-    # quad_segs=16 produces 64 (+1 for the repeat start/end) coordinates in the
-    # resulting polygon which should be enough for what we're doing here (we're trading
-    # accuracy of the circle vs. index storage and shape complexity)
-    # todo: quad segs could be a parsing option
-    buf = Point(0, 0).buffer(radius_in_metres, quad_segs=16)
+    buf = Point(0, 0).buffer(radius_in_metres, quad_segs=segments)
     # reverse the coords so that we obey the geojson right-hand rule
     polygon = Polygon(transform(tfmr.transform, buf).exterior.coords[::-1])
     # confirm that we've created something sensible
