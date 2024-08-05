@@ -1,3 +1,4 @@
+import re
 from functools import lru_cache
 from itertools import chain
 from typing import Optional, Iterable
@@ -150,6 +151,9 @@ def match_geojson(candidate: dict) -> Optional[dict]:
     return to_parsed_dict(shape.centroid, shape)
 
 
+wkt_start_check_regex = re.compile(r"(point|linestring|polygon) ", re.IGNORECASE)
+
+
 def match_wkt(candidate: str) -> Optional[dict]:
     """
     Match a candidate string that may be WKT. If the string is not recognised as WKT
@@ -159,6 +163,10 @@ def match_wkt(candidate: str) -> Optional[dict]:
     :param candidate: the candidate string to match
     :return: returns a dict ready for indexing or None
     """
+    # check to make sure trying to get wkt out of this str is even worth it
+    if wkt_start_check_regex.match(candidate) is None:
+        return None
+
     shape: Optional[BaseGeometry] = from_wkt(candidate, on_invalid="ignore")
     if shape is None or not is_shape_valid(shape):
         return None
