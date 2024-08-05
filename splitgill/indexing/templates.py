@@ -159,25 +159,6 @@ DATA_TEMPLATE = {
                         "mapping": {"type": "boolean"},
                     },
                 },
-                # # define all types types
-                # {
-                #     "types_type": {
-                #         "path_match": FieldMeta.TYPE.path_to("*", full=True),
-                #         "mapping": {"type": "keyword"},
-                #     },
-                # },
-                # {
-                #     "types_geo_method": {
-                #         "path_match": FieldMeta.GEO_METHOD.path_to("*", full=True),
-                #         "mapping": {"type": "keyword"},
-                #     },
-                # },
-                # {
-                #     "types_list_length": {
-                #         "path_match": FieldMeta.LIST_LENGTH.path_to("*", full=True),
-                #         "mapping": {"type": "integer"},
-                #     },
-                # },
             ],
         },
     },
