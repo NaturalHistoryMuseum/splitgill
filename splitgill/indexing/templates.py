@@ -79,7 +79,7 @@ DATA_TEMPLATE = {
                 {
                     "parsed_geo_point": {
                         "match_pattern": "simple",
-                        "path_match": ParsedType.GEO_POINT.path_to("*", True),
+                        "path_match": ParsedType.GEO_POINT.path_to("*", full=True),
                         "mapping": {
                             "type": "geo_point",
                             # copy the value of this field into the all_points field
@@ -93,7 +93,7 @@ DATA_TEMPLATE = {
                 {
                     "parsed_geo_shape": {
                         "match_pattern": "simple",
-                        "path_match": ParsedType.GEO_SHAPE.path_to("*", True),
+                        "path_match": ParsedType.GEO_SHAPE.path_to("*", full=True),
                         "mapping": {
                             "type": "geo_shape",
                             # copy the value of this field into the all_shapes field
