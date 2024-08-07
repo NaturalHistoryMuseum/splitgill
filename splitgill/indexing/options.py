@@ -22,11 +22,7 @@ class ParsingOptionsBuilder:
         self._true_values: Set[str] = set()
         self._false_values: Set[str] = set()
         # add the formats we use for datetime and date objects during ingest by default
-        self._date_formats: Set[str] = {
-            DATETIME_FORMAT,
-            DATE_FORMAT,
-            NAIVE_DATETIME_FORMAT,
-        }
+        self._date_formats: Set[str] = set()
         self._geo_hints: Set[GeoFieldHint] = set()
 
         if based_on:
@@ -36,6 +32,8 @@ class ParsingOptionsBuilder:
             self._false_values = set(based_on.false_values)
             self._date_formats = set(based_on.date_formats)
             self._geo_hints = set(based_on.geo_hints)
+        else:
+            self.reset_date_formats()
 
     def build(self) -> ParsingOptions:
         """
@@ -186,4 +184,27 @@ class ParsingOptionsBuilder:
         :return: self
         """
         self._float_format = float_format
+        return self
+
+    def clear_date_formats(self) -> "ParsingOptionsBuilder":
+        """
+        Clears out the date formats in this builder. Note that this will remove the
+        default formats which handle the default way Splitgill handles datetime and date
+        objects through from ingest to indexing.
+
+        :return: self
+        """
+        self._date_formats.clear()
+        return self
+
+    def reset_date_formats(self) -> "ParsingOptionsBuilder":
+        """
+        Reset the date formats in this builder back to the default set.
+
+        :return: self
+        """
+        self.clear_date_formats()
+        self._date_formats.add(DATETIME_FORMAT)
+        self._date_formats.add(DATE_FORMAT)
+        self._date_formats.add(NAIVE_DATETIME_FORMAT)
         return self

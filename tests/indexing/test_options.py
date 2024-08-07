@@ -49,4 +49,16 @@ class TestParsingOptionsBuilder:
         with pytest.raises(ValueError):
             builder.with_keyword_length(32767)
 
+    def test_clear_date_formats(self):
+        builder = ParsingOptionsBuilder()
+        assert len(builder._date_formats) > 0
+        builder.clear_date_formats()
+        assert len(builder._date_formats) == 0
+
+    def test_reset_date_formats(self):
+        builder = ParsingOptionsBuilder()
+        before = set(builder._date_formats)
+        builder.reset_date_formats()
+        assert builder._date_formats == before
+
     # todo: test the rest
