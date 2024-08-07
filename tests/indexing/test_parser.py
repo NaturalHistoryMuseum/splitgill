@@ -1,15 +1,42 @@
-from datetime import datetime
+from datetime import datetime, date, timezone, timedelta
 from itertools import chain
 from typing import List, Any
 
 import pytest
 from shapely import from_wkt
 
+from diffing import prepare_data
+from indexing.options import ParsingOptionsBuilder
 from splitgill.indexing.fields import ParsedType, DataType
 from splitgill.indexing.geo import match_hints, match_geojson
 from splitgill.indexing.parser import parse, parse_value, type_for
 from splitgill.model import ParsingOptions
 from splitgill.utils import to_timestamp
+
+
+def test_in_and_out_of_dates():
+    # check that using the default options, we can put a date through prepare_data and
+    # get the correct date back out when we parse it
+    options = ParsingOptionsBuilder().build()
+    tz = timezone(timedelta(hours=7))
+    candidates = [
+        date(2021, 1, 5),
+        datetime(2021, 1, 5, 6, 23, 17),
+        datetime(2021, 1, 5, 6, 23, 17, 234567),
+        datetime(2021, 1, 5, 6, 23, 17, tzinfo=tz),
+        datetime(2021, 1, 5, 6, 23, 17, 234567, tzinfo=tz),
+    ]
+
+    for candidate in candidates:
+        parsed = parse_value(prepare_data(candidate), options)
+        assert ParsedType.DATE in parsed
+        if isinstance(candidate, datetime):
+            if candidate.tzinfo is None:
+                candidate = candidate.replace(tzinfo=timezone.utc)
+        else:
+            candidate = datetime(candidate.year, candidate.month, candidate.day)
+
+        assert parsed[ParsedType.DATE] == to_timestamp(candidate)
 
 
 class TestParse:
