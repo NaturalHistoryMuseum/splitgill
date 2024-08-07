@@ -1,7 +1,7 @@
 import abc
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, date
 from itertools import zip_longest
 from typing import (
     Iterable,
@@ -20,6 +20,15 @@ from typing import (
 
 import regex as rx
 
+# strftime formats used to turn datetime and date objects into strings before data
+# enters MongoDB (see prepare_data), these are based on ISO 8601
+DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%f%z"
+DATE_FORMAT = "%Y-%m-%d"
+# when we turn a naive datetime into a string using the DATETIME_FORMAT above, %z won't
+# appear meaning we can't strptime with the same format. This is annoying, so here's a
+# strptime format that can parse this native result
+NAIVE_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%f"
+
 # this regex matches invalid characters which we would like to remove from all string
 # values as they are ingested into the system. It matches unicode control characters
 # (i.e. category C*) but not \n, \r, or \t).
@@ -30,7 +39,9 @@ invalid_value_char_regex = rx.compile(r"[^\P{C}\n\r\t]")
 invalid_key_char_regex = rx.compile(r"[^\P{C}]")
 
 
-def prepare_data(value: Any) -> Union[str, dict, list, int, float, bool, None]:
+def prepare_data(
+    value: Any,
+) -> Union[str, dict, list, int, float, bool, datetime, date, None]:
     """
     Prepares the given value for storage in MongoDB. Conversions are completed like so:
 
@@ -38,7 +49,8 @@ def prepare_data(value: Any) -> Union[str, dict, list, int, float, bool, None]:
         - str values have invalid characters removed and are then returned. The
           characters are currently all unicode control characters except \n, \r, and \t.
         - int, float, bool, and None values are returned with no changes made
-        - datetime values are converted to isoformat strings
+        - datetime and date values are converted to strings using strftime with the
+          specific formats DATETIME_FORMAT and DATE_FORMAT.
         - dict values are returned as a new dict instance, with all the keys converted
           to strings and all the values recursively prepared using this function.
         - lists, sets, and tuples are converted to lists with each element of the value
@@ -49,21 +61,34 @@ def prepare_data(value: Any) -> Union[str, dict, list, int, float, bool, None]:
     """
     if value is None:
         return None
+
     if isinstance(value, str):
         # replace any invalid characters in the string with the empty string
         return invalid_value_char_regex.sub("", value)
+
     if isinstance(value, (int, float, bool)):
         return value
+
     if isinstance(value, dict):
         return {
             prepare_field_name(key): prepare_data(value) for key, value in value.items()
         }
+
     if isinstance(value, (list, set, tuple)):
         return list(map(prepare_data, value))
+
+    # check datetime first as datetime is a subclass of date
     if isinstance(value, datetime):
         # stringifying this ensures the tz info is recorded and won't change going
         # in/out mongo
-        return value.isoformat()
+        return value.strftime(DATETIME_FORMAT)
+
+    # now check date as we've covered off datetimes
+    if isinstance(value, date):
+        # stringify to simplify handling of dates to mirror datetime pattern even though
+        # the same timezone issue doesn't exist here
+        return value.strftime(DATE_FORMAT)
+
     # fallback
     return str(value)
 

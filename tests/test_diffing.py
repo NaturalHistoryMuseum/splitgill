@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone, timedelta, date
 from decimal import Decimal
 
 import pytest
@@ -41,8 +41,19 @@ class TestPrepare:
         assert prepare_data(False) is False
 
     def test_datetime(self):
-        now = datetime.now()
-        assert prepare_data(now) == now.isoformat()
+        naive_no_ms = datetime(2020, 5, 18, 15, 16, 56)
+        assert prepare_data(naive_no_ms) == "2020-05-18T15:16:56.000000"
+        naive_with_ms = datetime(2020, 5, 18, 15, 16, 56, 2908)
+        assert prepare_data(naive_with_ms) == "2020-05-18T15:16:56.002908"
+
+        minus_3_hours = timezone(timedelta(hours=-3))
+        with_tz_no_ms = datetime(2020, 5, 18, 15, 16, 56, tzinfo=minus_3_hours)
+        assert prepare_data(with_tz_no_ms) == "2020-05-18T15:16:56.000000-0300"
+        with_tz_with_ms = datetime(2020, 5, 18, 15, 16, 56, 2908, tzinfo=minus_3_hours)
+        assert prepare_data(with_tz_with_ms) == "2020-05-18T15:16:56.002908-0300"
+
+    def test_date(self):
+        assert prepare_data(date(2024, 3, 10)) == "2024-03-10"
 
     def test_dict(self):
         assert prepare_data({}) == {}
@@ -86,7 +97,6 @@ class TestPrepare:
         assert prepare_data(A()) == "beans"
 
     def test_mix(self):
-        now = datetime.now()
         prepared = prepare_data(
             {
                 "x": "4",
@@ -94,7 +104,7 @@ class TestPrepare:
                 "z": [1, 2, 3],
                 "a": {
                     "x": ["4", 20.7],
-                    "y": now,
+                    "y": datetime(2020, 5, 18, 15, 16, 56),
                 },
                 "b": [{"x": 1}, {"x": "4.2"}],
             }
@@ -105,7 +115,7 @@ class TestPrepare:
             "z": [1, 2, 3],
             "a": {
                 "x": ["4", 20.7],
-                "y": now.isoformat(),
+                "y": "2020-05-18T15:16:56.000000",
             },
             "b": [{"x": 1}, {"x": "4.2"}],
         }

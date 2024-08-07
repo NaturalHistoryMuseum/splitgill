@@ -1,5 +1,6 @@
 from typing import Optional, Set
 
+from splitgill.diffing import DATETIME_FORMAT, DATE_FORMAT, NAIVE_DATETIME_FORMAT
 from splitgill.model import ParsingOptions, GeoFieldHint
 
 
@@ -20,16 +21,21 @@ class ParsingOptionsBuilder:
         self._float_format: str = "{0:.15g}"
         self._true_values: Set[str] = set()
         self._false_values: Set[str] = set()
-        self._date_formats: Set[str] = set()
+        # add the formats we use for datetime and date objects during ingest by default
+        self._date_formats: Set[str] = {
+            DATETIME_FORMAT,
+            DATE_FORMAT,
+            NAIVE_DATETIME_FORMAT,
+        }
         self._geo_hints: Set[GeoFieldHint] = set()
 
         if based_on:
             self._keyword_length = based_on.keyword_length
             self._float_format = based_on.float_format
-            self._true_values.update(based_on.true_values)
-            self._false_values.update(based_on.false_values)
-            self._date_formats.update(based_on.date_formats)
-            self._geo_hints.update(based_on.geo_hints)
+            self._true_values = set(based_on.true_values)
+            self._false_values = set(based_on.false_values)
+            self._date_formats = set(based_on.date_formats)
+            self._geo_hints = set(based_on.geo_hints)
 
     def build(self) -> ParsingOptions:
         """
