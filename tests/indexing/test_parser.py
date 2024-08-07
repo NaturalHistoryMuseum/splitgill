@@ -5,7 +5,6 @@ from typing import List, Any
 import pytest
 from shapely import from_wkt
 
-from splitgill.diffing import prepare_data
 from splitgill.indexing.fields import ParsedType, DataType
 from splitgill.indexing.geo import match_hints, match_geojson
 from splitgill.indexing.parser import parse, parse_value, type_for
@@ -242,8 +241,8 @@ class TestParse:
         assert parsed_data.parsed == {
             "x": [
                 {
-                    **parse(prepare_data(value), basic_options).parsed,
-                    **match_geojson(prepare_data(value)),
+                    **parse(value, basic_options).parsed,
+                    **match_geojson(value),
                 }
                 for value in [
                     geojson_point,
