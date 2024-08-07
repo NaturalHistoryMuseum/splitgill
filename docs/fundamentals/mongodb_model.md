@@ -1,20 +1,15 @@
 ## Collections
-Each set of data (referred to by the library as a `database`) is stored in two
-collections.
-A _data_ collection and a _config_ collection.
-
-Each `database` gets a name which is then used to define the data and config collections
+Each set of data (referred to by the library as a `database`) is stored in a collection.
+Each `database` gets a name which is then used to define this single data collection,
 like so:
 
 - `data-{name}`
-- `config-{name}`
 
 All collections are stored in the Splitgill managed MongoDB database called `sg`.
 
-Additionally, a `status` collections is maintained with some basic information about
-each `database` Splitgill is managing.
-
-There is only one `status` collection for all the managed `databases`.
+In addition to each data collection, two "system" collections exist, one called
+`options`, and one called `locks`.
+These are used to manage each database's parsing options and locking respectively.
 
 ### Data Collection Model
 Each document in a data collection represents one record including its current and
@@ -41,17 +36,20 @@ For example `22/07/23 23:55:07 UTC` is `1690070107000`.
 Version numbers can only go forward in Splitgill and will be assigned by Splitgill
 itself (using the current time at the moment of data storage).
 
+If the version field is `null` it means the data in the record hasn't been committed
+yet.
+This allows Splitgill to manage a certain level of transactionality.
+
 #### The `data` field
 This field stores a modified version of the original data presented to Splitgill by the
 caller.
 The code which performs these modifications is located in the
-`splitgill.diffing.prepare` function.
+`splitgill.diffing.prepare_data` function.
 
 The data must be a passed to Splitgill as a dict whereby it will then be passed
 through this prepare function, before being diffed (if necessary) and stored in MongoDB.
 The data is modified in this way to sanitise it and provide consistent uniformity when
-diffing and patching (this process also only uses immutable types which increases
-performance).
+diffing and patching.
 
 If the data field's value is an empty dict then this means the record has been deleted.
 
@@ -74,3 +72,55 @@ To rebuild the data for version 1:
 - patch current data (version 10) with version 5 diff
 - patch result of previous step with version 4 diff
 - patch result of previous step with version 1 diff
+
+
+### Options Collection
+
+The `options` collection stores parsing options for the databases.
+The parsing options define how the data in MongoDB should be parsed and indexed in
+Elasticsearch.
+
+Each database that contains data must have at least one set of parsing options stored in
+this collection.
+Each set of parsing options is versioned to allow correct recreation of data at all
+versions.
+
+The parsing options are managed using the `splitgill.model.ParsingOptions` class which
+can be instantiated directly, but it is recommended to use the `ParsingOptionsBuilder`
+from the `splitgill.indexing.options` module.
+
+For details on the specific parsing options available, check the Elasticsearch model
+page.
+
+
+### Locks Collection
+
+The `locks` collection stores locks for various Splitgill operations to ensure only one
+process is running a specific type of task at a time.
+This collection is only used for internal Splitgill processes.
+
+
+
+
+#### Available Parsing Options
+
+##### Boolean parsing
+
+Lists string values which when encountered will be indexed as booleans (``).
+A list of true and false values can be set using the keys `true_values` and
+`false_values` respectively.
+
+For example:
+
+```python
+from splitgill.indexing.options import ParsingOptionsBuilder
+
+builder = ParsingOptionsBuilder()
+
+# true values
+builder.with_true_value("true").with_true_value("yes").with_true_value("y")
+# false values
+builder.with_false_value("false").with_false_value("no").with_false_value("n")
+
+options = builder.build()
+```

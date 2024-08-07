@@ -11,8 +11,9 @@
 ## Overview
 
 <!--overview-start-->
-splitgill is a library providing base classes with the functionality to create, update
-and query versioned data. Uses MongoDB and Elasticsearch.
+Splitgill is a library providing functionality to create, update, and query versioned
+data.
+Uses MongoDB and Elasticsearch.
 
 Note that this library is relatively stable but is still quite new and could still be
 significantly altered.
@@ -40,6 +41,15 @@ Or from Github:
 pip install git+git://github.com/NaturalHistoryMuseum/splitgill.git#egg=splitgill
 ```
 
+Splitgill requires:
+
+- MongoDB >= version 6
+- Elasticsearch >= version 8
+
+This library has not been tested across many MongoDB and Elasticsearch versions, your
+mileage may vary, and it'd be worth running the test suite against the versions you're
+targeting before using this library in earnest.
+
 <!--installation-end-->
 
 ## Tests
@@ -52,7 +62,7 @@ To run the tests:
 
 ```bash
 docker compose build
-docker compose run sg
+docker compose run test
 ```
 
 <!--tests-end-->
