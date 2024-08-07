@@ -34,10 +34,11 @@ class TestParsingOptionsBuilder:
 
     def test_with_date_format(self):
         builder = ParsingOptionsBuilder()
+        base_count = len(builder._date_formats)
         builder.with_date_format("%Y")
         builder.with_date_format(None)
         assert "%Y" in builder._date_formats
-        assert len(builder._date_formats) == 1
+        assert len(builder._date_formats) == 1 + base_count
 
     def test_keyword_length(self):
         builder = ParsingOptionsBuilder()
