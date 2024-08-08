@@ -168,7 +168,7 @@ def term_query(
     return Q("term", **{parsed_path(field, parsed_type=parsed_type, full=True): value})
 
 
-def match_query(query: str, field: Optional[str] = None, **match_kwargs) -> Q:
+def match_query(query: str, field: Optional[str] = None, **match_kwargs) -> Query:
     """
     Create and return a match query using the given query and the optional field name.
     If the field name is not specified, all text data is searched instead using the
@@ -177,7 +177,7 @@ def match_query(query: str, field: Optional[str] = None, **match_kwargs) -> Q:
     :param query: the query to match
     :param field: the field to query, or None if all fields should be queried
     :param match_kwargs: additional options for the match query
-    :return: a Q object
+    :return: a Query object
     """
     if field is None:
         path = ALL_TEXT
@@ -195,7 +195,7 @@ def range_query(
     parsed_type: Optional[ParsedType] = None,
     case_sensitive: bool = False,
     **range_kwargs,
-):
+) -> Query:
     """
     Create and return a range query using the given parameters to specify the extent. At
     least one of the gte/lt/gt/lte parameters must be specified otherwise a ValueError
@@ -211,7 +211,7 @@ def range_query(
     :param case_sensitive: only applicable for inferred str values, specifies whether
                            the search should be case-sensitive or not (default: False)
     :param range_kwargs: additional options for the range query
-    :return: a Q object
+    :return: a Query object
     """
     range_inner = {}
     for_inference = None
