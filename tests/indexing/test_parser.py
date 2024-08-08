@@ -30,11 +30,8 @@ def test_in_and_out_of_dates():
     for candidate in candidates:
         parsed = parse_value(prepare_data(candidate), options)
         assert ParsedType.DATE in parsed
-        if isinstance(candidate, datetime):
-            if candidate.tzinfo is None:
-                candidate = candidate.replace(tzinfo=timezone.utc)
-        else:
-            candidate = datetime(candidate.year, candidate.month, candidate.day)
+        if isinstance(candidate, datetime) and candidate.tzinfo is None:
+            candidate = candidate.replace(tzinfo=timezone.utc)
 
         assert parsed[ParsedType.DATE] == to_timestamp(candidate)
 
