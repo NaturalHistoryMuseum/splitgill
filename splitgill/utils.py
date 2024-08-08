@@ -1,23 +1,27 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from itertools import islice
 from time import time
-from typing import Iterable
+from typing import Iterable, Union
 
 
-def to_timestamp(moment: datetime) -> int:
+def to_timestamp(moment: Union[datetime, date]) -> int:
     """
-    Converts a datetime object into a timestamp value. The timestamp returned is an int.
-    The timestamp value is the number of milliseconds that have elapsed between the UNIX
-    epoch and the given moment.
+    Converts a datetime or date object into a timestamp value. The timestamp returned is
+    an int. The timestamp value is the number of milliseconds that have elapsed between
+    the UNIX epoch and the given moment. If the moment is a date, 00:00:00 on the day
+    will be used.
 
     Any precision greater than milliseconds held within the datetime is simply ignored
     and no rounding occurs.
 
-    :param moment: a datetime object
+    :param moment: a datetime or date object
     :return: the timestamp (number of milliseconds between the UNIX epoch and the
              moment) as an int
     """
-    return int(moment.timestamp() * 1000)
+    if isinstance(moment, datetime):
+        return int(moment.timestamp() * 1000)
+    else:
+        return int(datetime(moment.year, moment.month, moment.day).timestamp() * 1000)
 
 
 def parse_to_timestamp(

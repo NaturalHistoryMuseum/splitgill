@@ -1,29 +1,35 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone, date
 
-from dateutil.tz import UTC, tzoffset
 from freezegun import freeze_time
 
 from splitgill.utils import to_timestamp, parse_to_timestamp, now, partition
 
 
 class TestToTimestamp:
-    @freeze_time("2012-01-14 12:00:01")
     def test_no_tz(self):
-        assert to_timestamp(datetime.now(tz=None)) == 1326542401000
+        assert to_timestamp(datetime(2012, 1, 14, 12, 0, 1)) == 1326542401000
 
-    @freeze_time("2012-01-14 12:00:01")
     def test_with_utc_tz(self):
-        assert to_timestamp(datetime.now(tz=UTC)) == 1326542401000
+        assert (
+            to_timestamp(datetime(2012, 1, 14, 12, 0, 1, tzinfo=timezone.utc))
+            == 1326542401000
+        )
 
-    @freeze_time("2012-01-14 12:00:01")
     def test_with_other_tz(self):
-        four_hours_ahead = tzoffset("test", timedelta(hours=4))
-        assert to_timestamp(datetime.now(tz=four_hours_ahead)) == 1326542401000
+        four_hours_ahead = timezone(timedelta(hours=4))
+        assert (
+            to_timestamp(datetime(2012, 1, 14, 12, 0, 1, tzinfo=four_hours_ahead))
+            == 1326528001000
+        )
 
-    @freeze_time("2012-01-14 12:00:01.333999")
     def test_no_rounding(self):
         # check that the 9 doesn't round the 3 up, it just gets cut off
-        assert to_timestamp(datetime.now(tz=None)) == 1326542401000 + 333
+        assert (
+            to_timestamp(datetime(2012, 1, 14, 12, 0, 1, 333999)) == 1326542401000 + 333
+        )
+
+    def test_date(self):
+        assert to_timestamp(date(2012, 1, 14)) == 1326499200000
 
 
 class TestParseTimestamp:
@@ -32,11 +38,11 @@ class TestParseTimestamp:
 
     def test_default_no_tz_is_utc(self):
         no_tz = parse_to_timestamp("2012-01-14", "%Y-%m-%d")
-        with_utc_tz = parse_to_timestamp("2012-01-14", "%Y-%m-%d", UTC)
+        with_utc_tz = parse_to_timestamp("2012-01-14", "%Y-%m-%d", timezone.utc)
         assert no_tz == with_utc_tz
 
     def test_different_tz(self):
-        five_hours_behind = tzoffset("test", timedelta(hours=-5))
+        five_hours_behind = timezone(timedelta(hours=-5))
         assert (
             parse_to_timestamp(
                 "2012-01-14 15:30:54", "%Y-%m-%d %H:%M:%S", five_hours_behind
@@ -53,7 +59,7 @@ class TestParseTimestamp:
         )
 
     def test_when_format_has_tz_and_we_give_tz(self):
-        ten_hours_ahead = tzoffset("test", timedelta(hours=10))
+        ten_hours_ahead = timezone(timedelta(hours=10))
         # if the +10 tz was applied here then we'd expect 1326519054000 to come out, but
         # it is ignored because the timezone is specified in the formatted string
         assert (
