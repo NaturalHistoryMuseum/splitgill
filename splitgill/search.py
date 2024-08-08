@@ -184,3 +184,56 @@ def match_query(query: str, field: Optional[str] = None, **match_kwargs) -> Q:
     else:
         path = text(field)
     return Q("match", **{path: {"query": query, **match_kwargs}})
+
+
+def range_query(
+    field: str,
+    gte: Union[int, float, str, datetime.date, datetime.datetime] = None,
+    lt: Union[int, float, str, datetime.date, datetime.datetime] = None,
+    gt: Union[int, float, str, datetime.date, datetime.datetime] = None,
+    lte: Union[int, float, str, datetime.date, datetime.datetime] = None,
+    parsed_type: Optional[ParsedType] = None,
+    case_sensitive: bool = False,
+    **range_kwargs,
+):
+    """
+    Create and return a range query using the given parameters to specify the extent. At
+    least one of the gte/lt/gt/lte parameters must be specified otherwise a ValueError
+    is raised. If the parsed_type parameter is not specified, it will be inferred from
+    the first non-None gte/lt/gt/lte parameter.
+
+    :param field: the field to query
+    :param gte: the greater than or equal to value
+    :param lt: the less than value
+    :param gt: the greater than value
+    :param lte: the less than or equal to value
+    :param parsed_type: the parsed type of the field to use, or None to infer from value
+    :param case_sensitive: only applicable for inferred str values, specifies whether
+                           the search should be case-sensitive or not (default: False)
+    :param range_kwargs: additional options for the range query
+    :return: a Q object
+    """
+    range_inner = {}
+    for_inference = None
+    for key, value in zip(["gte", "lt", "gt", "lte"], [gte, lt, gt, lte]):
+        if value is None:
+            continue
+        if for_inference is None:
+            for_inference = value
+        # date is the parent class of datetime so this check is ok
+        if isinstance(value, datetime.date):
+            range_inner[key] = to_timestamp(value)
+        else:
+            range_inner[key] = value
+
+    if not range_inner:
+        raise ValueError("You must provide at least one of the lt/lte/gt/gte values")
+
+    if parsed_type is None:
+        parsed_type = infer_parsed_type(for_inference, case_sensitive)
+
+    range_inner.update(range_kwargs)
+
+    return Q(
+        "range", **{parsed_path(field, parsed_type=parsed_type, full=True): range_inner}
+    )

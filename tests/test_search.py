@@ -14,6 +14,7 @@ from splitgill.search import (
     ALL_TEXT,
     text,
     keyword,
+    range_query,
 )
 from splitgill.utils import to_timestamp
 
@@ -103,4 +104,104 @@ class TestMatchQuery:
         }
         assert match_query("banana", "beans.toast", fuzziness="AUTO").to_dict() == {
             "match": {text("beans.toast"): {"query": "banana", "fuzziness": "AUTO"}}
+        }
+
+
+class TestRangeQuery:
+    def test_int(self):
+        assert range_query("beans.toast", 4, 10).to_dict() == {
+            "range": {
+                number("beans.toast"): {
+                    "gte": 4,
+                    "lt": 10,
+                }
+            }
+        }
+
+    def test_float(self):
+        assert range_query("beans.toast", 4.5, 10.2).to_dict() == {
+            "range": {
+                number("beans.toast"): {
+                    "gte": 4.5,
+                    "lt": 10.2,
+                }
+            }
+        }
+
+    def test_number_mix(self):
+        assert range_query("beans.toast", 4.5, 10).to_dict() == {
+            "range": {
+                number("beans.toast"): {
+                    "gte": 4.5,
+                    "lt": 10,
+                }
+            }
+        }
+        assert range_query("beans.toast", 4, 10.6).to_dict() == {
+            "range": {
+                number("beans.toast"): {
+                    "gte": 4,
+                    "lt": 10.6,
+                }
+            }
+        }
+
+    def test_lte_gte(self):
+        assert range_query("beans.toast", gte=4, lte=10).to_dict() == {
+            "range": {
+                number("beans.toast"): {
+                    "gte": 4,
+                    "lte": 10,
+                }
+            }
+        }
+        assert range_query("beans.toast", gt=4, lt=10).to_dict() == {
+            "range": {
+                number("beans.toast"): {
+                    "gt": 4,
+                    "lt": 10,
+                }
+            }
+        }
+        assert range_query("beans.toast", gte=4, lt=10).to_dict() == {
+            "range": {
+                number("beans.toast"): {
+                    "gte": 4,
+                    "lt": 10,
+                }
+            }
+        }
+        assert range_query("beans.toast", gt=4, lte=10).to_dict() == {
+            "range": {
+                number("beans.toast"): {
+                    "gt": 4,
+                    "lte": 10,
+                }
+            }
+        }
+
+    def test_datetime(self):
+        gte = datetime(2020, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
+        lt = datetime(2020, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
+
+        assert range_query("beans.toast", gte, lt).to_dict() == {
+            "range": {
+                date("beans.toast"): {
+                    "gte": to_timestamp(gte),
+                    "lt": to_timestamp(lt),
+                }
+            }
+        }
+
+    def test_date(self):
+        gte = datetime(2020, 1, 2)
+        lt = datetime(2020, 1, 2)
+
+        assert range_query("beans.toast", gte, lt).to_dict() == {
+            "range": {
+                date("beans.toast"): {
+                    "gte": to_timestamp(gte),
+                    "lt": to_timestamp(lt),
+                }
+            }
         }
