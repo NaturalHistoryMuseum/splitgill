@@ -1,5 +1,5 @@
+import datetime
 from collections import defaultdict
-from datetime import datetime
 from typing import Dict, Union, Optional
 
 from elasticsearch_dsl import Q
@@ -110,9 +110,39 @@ def exists_query(field: str) -> Query:
     return Q("exists", field=parsed_path(field, parsed_type=None, full=True))
 
 
+def infer_parsed_type(
+    value: Union[int, float, str, bool, datetime.date, datetime.datetime],
+    case_sensitive=False,
+) -> ParsedType:
+    """
+    Given a value, infer the ParsedType based on the type of the value.
+
+    If no ParsedType can be matched, a ValueError is raised.
+
+    :param value: the value
+    :param case_sensitive: if the value is a str either keyword ParsedType would work,
+                           this parameter provides a way of choosing which keyword type
+                           should be inferred (default: False)
+    :return: a ParsedType
+    """
+    if isinstance(value, str):
+        if case_sensitive:
+            return ParsedType.KEYWORD_CASE_SENSITIVE
+        else:
+            return ParsedType.KEYWORD_CASE_INSENSITIVE
+    elif isinstance(value, bool):
+        return ParsedType.BOOLEAN
+    elif isinstance(value, (int, float)):
+        return ParsedType.NUMBER
+    elif isinstance(value, (datetime.date, datetime.datetime)):
+        return ParsedType.DATE
+    else:
+        raise ValueError(f"Unexpected type {type(value)}")
+
+
 def term_query(
     field: str,
-    value: Union[int, float, str, bool, datetime],
+    value: Union[int, float, str, bool, datetime.date, datetime.datetime],
     parsed_type: Optional[ParsedType] = None,
     case_sensitive: bool = False,
 ) -> Query:
@@ -124,26 +154,15 @@ def term_query(
     :param field: the field match
     :param value: the value to match
     :param parsed_type: the parsed type of the field to use, or None to infer from value
-    :param case_sensitive: only applicable for str values, specifies whether the match
-                           is case-sensitive or not (default: False)
+    :param case_sensitive: only applicable for inferred str values, specifies whether
+                           the search should be case-sensitive or not (default: False)
     :return: a Q object
     """
     if parsed_type is None:
-        if isinstance(value, str):
-            if case_sensitive:
-                parsed_type = ParsedType.KEYWORD_CASE_SENSITIVE
-            else:
-                parsed_type = ParsedType.KEYWORD_CASE_INSENSITIVE
-        elif isinstance(value, bool):
-            parsed_type = ParsedType.BOOLEAN
-        elif isinstance(value, (int, float)):
-            parsed_type = ParsedType.NUMBER
-        elif isinstance(value, datetime):
-            parsed_type = ParsedType.DATE
-        else:
-            raise ValueError(f"Unexpected type {type(value)}")
+        parsed_type = infer_parsed_type(value, case_sensitive)
 
-    if parsed_type == ParsedType.DATE and isinstance(value, datetime):
+    # date is the parent class of datetime so this check is ok
+    if parsed_type == ParsedType.DATE and isinstance(value, datetime.date):
         value = to_timestamp(value)
 
     return Q("term", **{parsed_path(field, parsed_type=parsed_type, full=True): value})
