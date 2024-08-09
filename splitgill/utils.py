@@ -25,26 +25,25 @@ def to_timestamp(moment: Union[datetime, date]) -> int:
 
 
 def parse_to_timestamp(
-    datetime_string: str, datetime_format: str, tzinfo: datetime.tzinfo = timezone.utc
+    datetime_string: str, datetime_format: str, tz: timezone = timezone.utc
 ) -> int:
     """
     Parses the given string using the given format and returns a timestamp.
 
     If the datetime object built from parsing the string with the given format doesn't
-    contain a tzinfo component, then the tzinfo parameter is added as a replacement
-    value. This defaults to UTC.
+    contain a tzinfo component, then the tz parameter is added as a replacement value.
+    This defaults to UTC.
 
     :param datetime_string: the datetime as a string
     :param datetime_format: the format as a string
-    :param tzinfo: the timezone to use (default: UTC)
+    :param tz: the timezone to use (default: UTC)
     :return: the parsed datetime as the number of milliseconds since the UNIX epoch as
              an int
     """
-    date = datetime.strptime(datetime_string, datetime_format)
-    # if no timezone info was provided, apply UTC as a default to ensure consistency
-    if date.tzinfo is None:
-        date = date.replace(tzinfo=tzinfo)
-    return to_timestamp(date)
+    dt = datetime.strptime(datetime_string, datetime_format)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=tz)
+    return to_timestamp(dt)
 
 
 def now() -> int:

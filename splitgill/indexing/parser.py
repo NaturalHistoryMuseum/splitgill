@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import timezone
 from functools import lru_cache
 from typing import Union, NamedTuple, Tuple
 
@@ -7,7 +7,7 @@ from fastnumbers import try_float
 from splitgill.indexing.fields import ParsedType, DataType
 from splitgill.indexing.geo import match_geojson, match_wkt, match_hints
 from splitgill.model import ParsingOptions
-from splitgill.utils import to_timestamp
+from splitgill.utils import parse_to_timestamp
 
 
 class ParsedData(NamedTuple):
@@ -176,17 +176,11 @@ def parse_value(value: Union[int, str, bool, float], options: ParsingOptions) ->
         if as_number is not None:
             parsed[ParsedType.NUMBER] = as_number
 
-    # attempt to parse dates using the formats listed in the options
+    # attempt to parse dates using the formats listed in the options, stop when we find
+    # one that works
     for date_format in options.date_formats:
         try:
-            date_value = datetime.strptime(str_value, date_format)
-            # if the datetime object is naive, replace the timezone with utc
-            if date_value.tzinfo is None:
-                date_value = date_value.replace(tzinfo=timezone.utc)
-            # the date field we've configured in the Elasticsearch model uses the
-            # epoch_millis format so convert the datetime object to that here
-            parsed[ParsedType.DATE] = to_timestamp(date_value)
-            # if we have a match, break out and don't try the other formats
+            parsed[ParsedType.DATE] = parse_to_timestamp(str_value, date_format)
             break
         except ValueError:
             pass
