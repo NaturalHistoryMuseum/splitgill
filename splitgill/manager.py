@@ -144,27 +144,28 @@ class SplitgillDatabase:
     def get_elasticsearch_version(self) -> Optional[int]:
         """
         Returns the latest version found in the Elasticsearch indices for this database.
-        If no records exist in any index, None is returned.
+        If no records exist in any index, None is returned. This method checks both the
+        maximum value in the version field and the next field. Checking the next field
+        accounts for updates that only include deletions.
 
         :return: the max version or None
         """
-        result = self._client.elasticsearch.search(
-            aggs={"max_version": {"max": {"field": DocumentField.VERSION}}},
-            size=0,
-            # search all data indices for this database (really the most recent version
-            # will always be in the latest index, but using a wildcard on all indices
-            # means we can avoid doing a check that the latest index exists first and
-            # just go for it).
-            index=self.indices.wildcard,
-        )
-
-        version = get_in(("aggregations", "max_version", "value"), result, None)
-        if version is None:
-            return None
+        version = None
+        for field in (DocumentField.VERSION, DocumentField.NEXT):
+            result = self._client.elasticsearch.search(
+                aggs={"max_version": {"max": {"field": field}}},
+                size=0,
+                # search all indices so that we catch deletes which won't have a
+                # document in latest
+                index=self.indices.wildcard,
+            )
+            value = get_in(("aggregations", "max_version", "value"), result, None)
+            if value is not None and (version is None or value > version):
+                version = value
 
         # elasticsearch does max aggs using the double type apparently, so we need to
         # convert it back to an int to avoid returning a float and causing confusion
-        return int(version)
+        return int(version) if version is not None else None
 
     def has_data(self) -> bool:
         """

@@ -1,3 +1,4 @@
+import time
 from datetime import datetime, timezone
 from unittest.mock import patch, MagicMock
 
@@ -157,45 +158,45 @@ class TestGetElasticsearchVersion:
 
     def test_with_docs(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
-        versions = [
-            # latest
-            1692119228000,
-            1681578428000,
-            1673802428000,
-            1579108028000,
-        ]
-        for version in versions:
-            # make a bare-bones doc
-            doc = {DocumentField.VERSION: version}
-            splitgill.elasticsearch.index(
-                index=database.indices.latest,
-                document=doc,
-                refresh=True,
-            )
-        assert database.get_elasticsearch_version() == versions[0]
 
-    def test_with_deleted_docs(self, splitgill: SplitgillClient):
-        # this imitates the scenario where all the records in the database have been
-        # deleted and therefore there is no data in the latest index but there is in the
-        # old data indices
-        database = SplitgillDatabase("test", splitgill)
-        versions = [
-            # latest
-            1692119228000,
-            1681578428000,
-            1673802428000,
-            1579108028000,
-        ]
-        for version in versions:
-            # make a bare-bones doc
-            doc = {DocumentField.VERSION: version}
-            splitgill.elasticsearch.index(
-                # put these in not the latest index
-                index=database.indices.get_arc("record-1"),
-                document=doc,
-                refresh=True,
+        versions = []
+        for _ in range(5):
+            versions.append(
+                database.ingest([Record.new({"x": 4})], commit=True).version
             )
-        assert database.get_elasticsearch_version() == versions[0]
+            # just to ensure the versions are different have a nap. They will be, cause
+            # Python slow, but this guarantees it
+            time.sleep(0.1)
+
+        database.sync()
+
+        assert database.get_elasticsearch_version() == versions[-1]
+
+    def test_with_deletes(self, splitgill: SplitgillClient):
+        # this test is the same as the above scenario but with the last modification to
+        # the database being a delete. This is therefore checking that the method under
+        # test returns the latest version from es correctly when it is either a new bit
+        # of data or a delete (ensuring that we are getting the latest version from both
+        # the version and the next fields)
+
+        database = SplitgillDatabase("test", splitgill)
+
+        versions = []
+        for _ in range(5):
+            versions.append(
+                database.ingest([Record.new({"x": 4})], commit=True).version
+            )
+            # just to ensure the versions are different have a nap. They will be, cause
+            # Python slow, but this guarantees it
+            time.sleep(0.1)
+
+        # delete a record
+        a_record = next(iter(database.iter_records()))
+        versions.append(database.ingest([Record(a_record.id, {})], commit=True).version)
+
+        database.sync()
+
+        assert database.get_elasticsearch_version() == versions[-1]
 
 
 class TestCommit:
