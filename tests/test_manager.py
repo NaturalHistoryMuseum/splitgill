@@ -1214,3 +1214,32 @@ def test_get_rounded_version(splitgill: SplitgillClient):
     database.sync()
     assert database.get_rounded_version(15) == 15
     assert database.get_rounded_version(20) == 15
+
+
+def test_get_versions(splitgill: SplitgillClient):
+    database = splitgill.get_database("test")
+
+    assert database.get_versions() == []
+
+    record_id = "test-1"
+    versions = [
+        (4, {"a": 1}),
+        (5, {"a": 7}),
+        # delete
+        (7, {}),
+        # it's back! :O
+        (9, {"a": 4}),
+        # lastly, delete the record to check next is also being considered
+        (15, {}),
+    ]
+    for version, data in versions:
+        with freeze_time(datetime.fromtimestamp(version / 1000, timezone.utc)):
+            database.ingest([Record(record_id, data)])
+
+    # no sync has occurred yet so no versions available
+    assert database.get_versions() == []
+
+    database.sync()
+
+    # now there are versions, including the deleted version
+    assert database.get_versions() == [4, 5, 7, 9, 15]

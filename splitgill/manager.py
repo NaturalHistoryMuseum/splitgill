@@ -520,30 +520,34 @@ class SplitgillDatabase:
     def get_versions(self) -> List[int]:
         """
         Returns a list of the available versions that have been indexed into
-        Elasticsearch for this database. The versions are in ascending order.
+        Elasticsearch for this database. The versions are in ascending order and will be
+        retrieved from both the version and next document fields to ensure we capture
+        all versions.
 
         :return: the available versions in ascending order
         """
         versions = set()
-        after = None
-        while True:
-            search = self.search(version=SearchVersion.all)[:0]
-            search.aggs.bucket(
-                "versions",
-                "composite",
-                size=50,
-                sources={
-                    "version": A("terms", field=DocumentField.VERSION, order="asc")
-                },
-            )
-            if after is not None:
-                search.aggs["versions"].after = after
-            result = search.execute().aggs.to_dict()
-            buckets = get_in(("versions", "buckets"), result, [])
-            after = get_in(("versions", "after_key"), result, None)
-            if not buckets:
-                break
-            versions.update(bucket["key"]["version"] for bucket in buckets)
+
+        # get all versions present in the version and next document fields
+        for field in (DocumentField.VERSION, DocumentField.NEXT):
+            after = None
+            while True:
+                search = self.search(version=SearchVersion.all)[:0]
+                search.aggs.bucket(
+                    "versions",
+                    "composite",
+                    size=50,
+                    sources={"version": A("terms", field=field, order="asc")},
+                )
+                if after is not None:
+                    search.aggs["versions"].after = after
+                result = search.execute().aggs.to_dict()
+                buckets = get_in(("versions", "buckets"), result, [])
+                after = get_in(("versions", "after_key"), result, None)
+                if not buckets:
+                    break
+                versions.update(bucket["key"]["version"] for bucket in buckets)
+
         return sorted(versions)
 
     def get_fields(
