@@ -100,6 +100,16 @@ def create_index_specific_version_filter(indexes_and_versions: Dict[str, int]) -
         return Bool(should=filters, minimum_should_match=1)
 
 
+def has_geo() -> Query:
+    """
+    Create an exists query which filters for records which have geo data. Currently,
+    this uses ALL_POINTS, but it could just as easily use ALL_SHAPES, it doesn't matter.
+
+    :return: an exists Query object
+    """
+    return Q("exists", field=DocumentField.ALL_POINTS)
+
+
 def exists_query(field: str) -> Query:
     """
     A convenience function which returns an exists query for the given field.
