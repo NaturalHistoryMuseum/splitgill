@@ -1178,3 +1178,39 @@ class TestGetParsedFields:
         assert len(parsed_fields) == 2
         assert pf("a", n=1, t=1) in parsed_fields
         assert pf("b", d=1, t=1) in parsed_fields
+
+
+def test_get_rounded_version(splitgill: SplitgillClient):
+    database = splitgill.get_database("test")
+
+    # test with no versions
+    assert database.get_rounded_version(8) is None
+
+    # create some versions
+    for version in [4, 5, 9]:
+        with freeze_time(datetime.fromtimestamp(version / 1000, timezone.utc)):
+            database.ingest([Record.new({"a": 4})])
+    database.sync()
+
+    # check before the first version
+    assert database.get_rounded_version(2) is None
+    assert database.get_rounded_version(3) is None
+    # then check some other versions
+    assert database.get_rounded_version(4) == 4
+    assert database.get_rounded_version(5) == 5
+    assert database.get_rounded_version(6) == 5
+    assert database.get_rounded_version(7) == 5
+    assert database.get_rounded_version(8) == 5
+    assert database.get_rounded_version(9) == 9
+    # check after the latest version
+    assert database.get_rounded_version(10) == 9
+    assert database.get_rounded_version(18932123) == 9
+
+    # delete all data and check rounded version is correctly found
+    with freeze_time(datetime.fromtimestamp(15 / 1000, timezone.utc)):
+        database.ingest(
+            [Record.delete(record.id) for record in database.iter_records()]
+        )
+    database.sync()
+    assert database.get_rounded_version(15) == 15
+    assert database.get_rounded_version(20) == 15

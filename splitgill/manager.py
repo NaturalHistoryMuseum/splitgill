@@ -1,3 +1,4 @@
+from bisect import bisect_right
 from enum import Enum
 from typing import Optional, Iterable, List, Dict, Union
 
@@ -166,6 +167,24 @@ class SplitgillDatabase:
         # elasticsearch does max aggs using the double type apparently, so we need to
         # convert it back to an int to avoid returning a float and causing confusion
         return int(version) if version is not None else None
+
+    def get_rounded_version(self, version: int) -> Optional[int]:
+        """
+        Given a target version, rounds the version down to the nearest available
+        version. This in effect returns the version of the data that is application to
+        the given target version.
+
+        If the target version is below the earliest version or this database's indexed
+        data, or, no indexed versions are available, None is returned.
+
+        :param version: the target version
+        :return: a version or None
+        """
+        versions = self.get_versions()
+        if not versions or version < versions[0]:
+            return None
+
+        return versions[bisect_right(versions, version) - 1]
 
     def has_data(self) -> bool:
         """
