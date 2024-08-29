@@ -12,7 +12,7 @@ from pymongo.database import Database
 from shapely import from_geojson
 
 from splitgill.indexing.options import ParsingOptionsBuilder
-from splitgill.manager import SplitgillClient
+from splitgill.manager import SplitgillClient, SplitgillDatabase
 from splitgill.model import ParsingOptions
 
 
@@ -72,6 +72,11 @@ def splitgill(
     mongo_client: MongoClient, elasticsearch_client: Elasticsearch
 ) -> SplitgillClient:
     return SplitgillClient(mongo_client, elasticsearch_client)
+
+
+@pytest.fixture
+def database(splitgill: SplitgillClient) -> SplitgillDatabase:
+    return splitgill.get_database("test-db")
 
 
 @pytest.fixture
