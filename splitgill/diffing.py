@@ -41,7 +41,7 @@ invalid_key_char_regex = rx.compile(r"[^\P{C}]")
 
 def prepare_data(
     value: Any,
-) -> Union[str, dict, list, int, float, bool, datetime, date, None]:
+) -> Union[str, dict, list, int, float, bool, None]:
     """
     Prepares the given value for storage in MongoDB. Conversions are completed like so:
 
