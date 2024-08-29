@@ -27,7 +27,7 @@ from splitgill.manager import (
 )
 from splitgill.model import Record, ParsingOptions
 from splitgill.search import create_version_query, term_query
-from splitgill.utils import to_timestamp
+from splitgill.utils import to_timestamp, now
 
 
 class TestSplitgillClient:
@@ -567,11 +567,36 @@ def test_search(splitgill: SplitgillClient):
     assert database.search(version=SearchVersion.all)._using == client
     assert not database.search(version=SearchVersion.all).to_dict()
 
+    # no data in index so should just create a search over everything at version 5
     assert database.search(version=5)._index == wildcard
     assert database.search(version=5)._using == client
     assert database.search(version=5).to_dict() == {
         "query": {"bool": {"filter": [create_version_query(5).to_dict()]}}
     }
+
+    # data in index and 5 is less than latest, so should create a search over everything
+    # at version 5
+    database.ingest([Record.new({"x": 5})])
+    database.sync()
+    assert 5 < database.get_elasticsearch_version()
+    assert database.search(version=5)._index == wildcard
+    assert database.search(version=5)._using == client
+    assert database.search(version=5).to_dict() == {
+        "query": {"bool": {"filter": [create_version_query(5).to_dict()]}}
+    }
+
+    # data in index and version requested is above latest so should just use latest
+    version = now()
+    assert version > database.get_elasticsearch_version()
+    assert database.search(version=version)._index == latest
+    assert database.search(version=version)._using == client
+    assert not database.search(version=version).to_dict()
+
+    # data in index and version requested is equal to version so should just use latest
+    version = database.get_elasticsearch_version()
+    assert database.search(version=version)._index == latest
+    assert database.search(version=version)._using == client
+    assert not database.search(version=version).to_dict()
 
 
 def pf(

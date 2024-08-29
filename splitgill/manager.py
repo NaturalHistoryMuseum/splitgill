@@ -500,6 +500,14 @@ class SplitgillDatabase:
         the given version parameter, and the Elasticsearch client object in use on this
         database.
 
+        If a version number is passed as the version parameter, it will be checked
+        against the latest version available in Elasticsearch. If it is below the latest
+        version available in Elasticsearch, all indices will be searched and a term
+        filter will be used to get the right data. if the version is equal to or above
+        the latest version available in Elasticsearch, the latest index will be searched
+        and no version term filter will be used. This is for Elasticsearch performance
+        and caching.
+
         :param version: the version to search at, this should either be a SearchVersion
                         enum option or an int. SearchVersion.latest will result in a
                         search on the latest index with no version filter thus searching
@@ -512,8 +520,15 @@ class SplitgillDatabase:
         search = Search(using=self._client.elasticsearch)
 
         if isinstance(version, int):
-            search = search.index(self.indices.wildcard)
-            search = search.filter(create_version_query(version))
+            current_version = self.get_elasticsearch_version()
+            if current_version is not None and current_version <= version:
+                # the version requested is above the latest version, use the latest
+                # index instead of a filter, it'll be faster and more easily cachable
+                # for elasticsearch
+                search = search.index(self.indices.latest)
+            else:
+                search = search.index(self.indices.wildcard)
+                search = search.filter(create_version_query(version))
         else:
             if version == SearchVersion.latest:
                 search = search.index(self.indices.latest)
