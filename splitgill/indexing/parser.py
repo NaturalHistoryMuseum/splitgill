@@ -1,5 +1,5 @@
-from datetime import timezone
 from functools import lru_cache
+from itertools import groupby
 from typing import Union, NamedTuple, Tuple
 
 from fastnumbers import try_float
@@ -20,17 +20,6 @@ class ParsedData(NamedTuple):
     parsed_types: list
 
 
-def type_for(value: Union[str, int, float, bool, dict, list, None]) -> DataType:
-    """
-    Given a value, return the DataType enum for it. If the value's type isn't one we
-    support, a ValueError is thrown (from Enum).
-
-    :param value: value to get the type for
-    :return: a DataType
-    """
-    return DataType(type(value).__name__.lower())
-
-
 def parse(data: dict, options: ParsingOptions) -> ParsedData:
     """
     Parse the given dict and return a ParsedData named tuple. This is the main entry
@@ -40,7 +29,28 @@ def parse(data: dict, options: ParsingOptions) -> ParsedData:
     :param options: the parsing options
     :return: a ParsedData named tuple
     """
-    return parse_dict(data, options, False)
+    parsed, data_types, parsed_types = parse_dict(data, options, False)
+
+    # compress the information in the parsed/data types lists so that each element has
+    # the field path plus all parsed/data types that appear at that path (the
+    # parsed/data types lists we get back from parse_dict contain each path plus only
+    # one type per element). This is necessary because it ensures we can get an accurate
+    # count of how many records had each field in them, and it's also more efficient for
+    # Elasticsearch to handle (smaller doc to index which uses less space, and makes
+    # aggregations faster as there are fewer unique values)
+    parsed_types.sort()
+    parsed_types = [
+        f"{path}.{','.join(pt.rsplit('.', 1)[1] for pt in group)}"
+        for path, group in groupby(parsed_types, lambda pt: pt.rsplit(".", 1)[0])
+    ]
+
+    data_types.sort()
+    data_types = [
+        f"{path}.{','.join(dt.rsplit('.', 1)[1] for dt in group)}"
+        for path, group in groupby(data_types, lambda dt: dt.rsplit(".", 1)[0])
+    ]
+
+    return ParsedData(parsed, data_types, parsed_types)
 
 
 def parse_dict(data: dict, options: ParsingOptions, check_geojson: bool) -> ParsedData:
@@ -53,7 +63,7 @@ def parse_dict(data: dict, options: ParsingOptions, check_geojson: bool) -> Pars
     :return: a ParsedData named tuple
     """
     parsed = {}
-    data_types = [f"{key}.{type_for(value)}" for key, value in data.items()]
+    data_types = [f"{key}.{DataType.type_for(value)}" for key, value in data.items()]
     parsed_types = []
 
     if check_geojson:
@@ -99,7 +109,7 @@ def parse_list(data: list, options: ParsingOptions) -> Tuple[list, set, set]:
     :return: a list of parsed values, a set of parsed types, and a set of data types
     """
     parsed: list = [None] * len(data)
-    data_types = {f".{type_for(value)}" for value in data}
+    data_types = {f".{DataType.type_for(value)}" for value in data}
     parsed_types = set()
 
     for index, value in enumerate(data):

@@ -1,7 +1,10 @@
 import dataclasses
+from collections import Counter
 from enum import auto
-from typing import Optional, Dict, List, Iterable, TypeVar, Generic
+from typing import Optional, List, Tuple, Counter as CounterType, Union
 
+from cytoolz import get_in
+from elasticsearch_dsl import Search, A
 from strenum import LowercaseStrEnum, StrEnum
 
 
@@ -118,210 +121,323 @@ def parsed_path(
         return path
 
 
+valid_data_types = (str, int, float, bool, dict, list)
+
+
 class DataType(LowercaseStrEnum):
     """
     Enum representing the types of data Splitgill indexes as user data.
 
-    This should match the output of diffing.prepare_data.
+    The types represented here should match the output of diffing.prepare_data.
     """
 
-    NULL = "nonetype"
-    STR = auto()
-    INT = auto()
-    FLOAT = auto()
-    BOOL = auto()
-    LIST = auto()
-    DICT = auto()
+    NONE = "#n"
+    STR = "#s"
+    INT = "#i"
+    FLOAT = "#f"
+    BOOL = "#b"
+    LIST = "#l"
+    DICT = "#d"
 
+    @classmethod
+    def type_for(cls, value: Union[str, int, float, bool, dict, list, None]):
+        """
+        Given a value, return the DataType enum for it. If the value's type isn't one we
+        support, a TypeError is thrown.
 
-# type hint for Field
-T = TypeVar("T")
+        :param value: value to get the type for
+        :return: a DataType
+        """
+        if value is not None and not isinstance(value, valid_data_types):
+            raise TypeError(
+                f"Type ({type(value)}) of value ({value}) not valid DataType"
+            )
+        return DataType(f"#{type(value).__name__[0].lower()}")
 
 
 @dataclasses.dataclass
-class Field(Generic[T]):
+class DataField:
     """
-    Base class for information about fields.
-
-    This class is designed to
+    Class representing a field in the original record data structure.
     """
 
+    # can include empty fields which are used to indicate list elements
     path: str
-    counts: Dict[T, int] = dataclasses.field(default_factory=dict)
+    # the total number of records which have a field with this path
+    count: int = 0
+    # the total number of records which have this field represented with a value of the
+    # given types
+    type_counts: CounterType[DataType] = dataclasses.field(default_factory=Counter)
+    # the parent data field (if None, this is a field at the root of the record data)
+    parent: Optional["DataField"] = None
+    # the immediate descendants of this field (will only have values if this field
+    # appears as a list or dict
+    children: List["DataField"] = dataclasses.field(default_factory=list)
 
-    def add_type(self, field_type: T, count: int):
+    def add(self, type_names: str, count: int):
         """
-        Adds the given type to this field's data with the given count.
+        Add the given type count data to this field.
 
-        :param field_type: the type
-        :param count: the number of records which have this field with values of the
-                      given type
+        :param type_names: the types this field is seen as a string of their names
+                          separated by commas.
+        :param count: the number of records with this combination of types
         """
-        self.counts[field_type] = count
+        self.count += count
+        for name in type_names.split(","):
+            self.type_counts[DataType(name)] += count
 
-    def is_types(self, *types: T) -> bool:
+    def is_type(self, *data_types: DataType) -> bool:
         """
-        Checks if this field has any records with the given types.
+        Checks if this field is an instance of one of the given data types.
 
-        :param types: the types to check
-        :return: True if at least one of the passed types has a record count >0 , False
+        :param data_types: the data types to be checked
+        :return: True if the field is an instance of one of the given data types, False
                  if not
         """
-        return any(self.count(t) > 0 for t in types)
-
-    def count(self, field_type: T) -> int:
-        """
-        Returns the number of records which have this field as this type. If the type is
-        not represented in this field, 0 is returned.
-
-        :param field_type: the type
-        :return: an integer >= 0
-        """
-        return self.counts.get(field_type, 0)
+        return any(self.type_counts[data_type] > 0 for data_type in data_types)
 
     @property
-    def depth(self) -> int:
-        """
-        Returns the depth of the field in the record structure. Fields at the root of
-        the record will have a depth of 0. As an example, the field "a.b.c" has depth 2.
-
-        :return: the depth of the field in the record
-        """
-        return self.path.count(".")
+    def has_children(self) -> bool:
+        return len(self.children) > 0
 
     @property
     def name(self) -> str:
-        """
-        The name of the field.
-
-        :return: the name
-        """
-        return self.path.rsplit(".", 1)[-1]
+        return self.path.split(".")[-1]
 
     @property
-    def types(self) -> List[T]:
-        """
-        Returns a list of types this field is represented as.
-
-        :return: a list of types
-        """
-        return list(self.counts.keys())
-
-
-class ParsedField(Field[ParsedType]):
-    """
-    Class representing fields in the parsed and therefore searchable data.
-    """
-
-    pass
-
-
-class DataField(Field[DataType]):
-    """
-    Class representing fields in the source data and therefore not searchable.
-    """
+    def is_none(self) -> bool:
+        return self.type_counts[DataType.NONE] > 0
 
     @property
-    def is_list_member(self) -> bool:
+    def count_none(self) -> int:
+        return self.type_counts[DataType.NONE]
+
+    @property
+    def is_str(self) -> bool:
+        return self.type_counts[DataType.STR] > 0
+
+    @property
+    def count_str(self) -> int:
+        return self.type_counts[DataType.STR]
+
+    @property
+    def is_int(self) -> bool:
+        return self.type_counts[DataType.INT] > 0
+
+    @property
+    def count_int(self) -> int:
+        return self.type_counts[DataType.INT]
+
+    @property
+    def is_float(self) -> bool:
+        return self.type_counts[DataType.FLOAT] > 0
+
+    @property
+    def count_float(self) -> int:
+        return self.type_counts[DataType.FLOAT]
+
+    @property
+    def is_bool(self) -> bool:
+        return self.type_counts[DataType.BOOL] > 0
+
+    @property
+    def count_bool(self) -> int:
+        return self.type_counts[DataType.BOOL]
+
+    @property
+    def is_list(self) -> bool:
+        return self.type_counts[DataType.LIST] > 0
+
+    @property
+    def count_list(self) -> int:
+        return self.type_counts[DataType.LIST]
+
+    @property
+    def is_dict(self) -> bool:
+        return self.type_counts[DataType.DICT] > 0
+
+    @property
+    def count_dict(self) -> int:
+        return self.type_counts[DataType.DICT]
+
+    @property
+    def is_basic(self) -> bool:
+        return self.is_type(
+            DataType.BOOL, DataType.INT, DataType.FLOAT, DataType.STR, DataType.NONE
+        )
+
+    @property
+    def is_container(self) -> bool:
+        return self.is_type(DataType.LIST, DataType.DICT)
+
+    @property
+    def is_root_field(self) -> bool:
+        return self.parent is None
+
+    @property
+    def parsed_path(self) -> str:
         """
-        Checks if this field is a direct member of a list.
+        Returns the equivalent parsed path for this data field.
 
-        :return: True or False
+        :return: a str path
         """
-        return "" in self.path.split(".")
+        return ".".join(filter(None, self.path.split(".")))
+
+    @property
+    def is_list_element(self) -> bool:
+        return self.name == ""
 
 
-class FieldInfo:
+@dataclasses.dataclass
+class ParsedField:
     """
-    Class representing the information about the available fields.
-
-    This class contains information about both the parsed fields and the source data
-    fields.
+    Class representing a field in the parsed record data structure.
     """
 
-    def __init__(self):
-        self.data_fields: Dict[str, DataField] = {}
-        self.parsed_fields: Dict[str, ParsedField] = {}
+    path: str
+    count: int = 0
+    type_counts: CounterType[ParsedType] = dataclasses.field(default_factory=Counter)
 
-    def add_data_type(self, full_path: str, count: int):
+    def add(self, type_names: str, count: int):
         """
-        Add a data type and its record count to this object.
+        Add the given type count data to this field.
 
-        :param full_path: the full path including the field and the data type
-        :param count: the number of records which contain this field/data type combo
+        :param type_names: the types this field is seen as a string of their names
+                          separated by commas.
+        :param count: the number of records with this combination of types
         """
-        path, data_type = full_path.rsplit(".", 1)
-        if path not in self.data_fields:
-            self.data_fields[path] = DataField(path)
-        self.data_fields[path].add_type(DataType(data_type), count)
+        self.count += count
+        for raw_type in type_names.split(","):
+            self.type_counts[ParsedType(raw_type)] += count
 
-    def add_parsed_type(self, full_path: str, count: int):
+    def is_type(self, *parsed_types: ParsedType) -> bool:
         """
-        Add a parsed type and its record count to this object.
+        Checks if this field is an instance of one of the given parsed types.
 
-        :param full_path: the full path including the field and the parsed type
-        :param count: the number of records which contain this field/parsed type combo
+        :param parsed_types: the parsed types to be checked
+        :return: True if the field is an instance of one of the given parsed types,
+                 False if not
         """
-        path, parsed_type = full_path.rsplit(".", 1)
-        if path not in self.parsed_fields:
-            self.parsed_fields[path] = ParsedField(path)
-        self.parsed_fields[path].add_type(ParsedType(parsed_type), count)
+        return any(self.type_counts[parsed_type] > 0 for parsed_type in parsed_types)
 
-    def iter_data_fields(self) -> Iterable[DataField]:
-        """
-        Yields all the data fields in this object.
+    @property
+    def name(self) -> str:
+        return self.path.split(".")[-1]
 
-        :return: yields DataField objects
-        """
-        yield from self.data_fields.values()
+    @property
+    def is_text(self) -> bool:
+        return self.type_counts[ParsedType.TEXT] > 0
 
-    def iter_parsed_fields(self) -> Iterable[ParsedField]:
-        """
-        Yields all the parsed fields in this object.
+    @property
+    def count_text(self) -> int:
+        return self.type_counts[ParsedType.TEXT]
 
-        :return: yields ParsedField objects
-        """
-        yield from self.parsed_fields.values()
-
-    def get_data_field(self, path: str) -> DataField:
-        """
-        Retrieves the DataField with the given path. If the path is not found, returns
-        None.
-
-        :return: None or a DataField object
-        """
-        return self.data_fields.get(path)
-
-    def get_parsed_field(self, path: str) -> ParsedField:
-        """
-        Retrieves the ParsedField with the given path. If the path is not found, returns
-        None.
-
-        :return: None or a ParsedField object
-        """
-        return self.parsed_fields.get(path)
-
-    def get_data_field_children(
-        self, parent: Optional[DataField] = None
-    ) -> List[DataField]:
-        """
-        Retrieves the children of the given DataField. If no parent is given, returns
-        all root fields.
-
-        :param parent: the parent DataField or None to get the root fields
-        :return: a list of DataField objects
-        """
-        if parent is None:
-            # return the root fields
-            return [field for field in self.data_fields.values() if field.depth == 0]
+    def is_keyword(self, case_sensitive: bool) -> bool:
+        if case_sensitive:
+            return self.is_keyword_case_sensitive
         else:
-            # sanity check
-            if not parent.is_types(DataType.LIST, DataType.DICT):
-                return []
-            # find the kids
-            return [
-                field
-                for field in self.data_fields.values()
-                if field.depth == parent.depth + 1
-                and field.path.startswith(f"{parent.path}.")
-            ]
+            return self.is_keyword_case_insensitive
+
+    def count_keyword(self, case_sensitive: bool) -> int:
+        if case_sensitive:
+            return self.count_keyword_case_sensitive
+        else:
+            return self.count_keyword_case_insensitive
+
+    @property
+    def is_keyword_case_insensitive(self) -> bool:
+        return self.type_counts[ParsedType.KEYWORD_CASE_INSENSITIVE] > 0
+
+    @property
+    def count_keyword_case_insensitive(self) -> int:
+        return self.type_counts[ParsedType.KEYWORD_CASE_INSENSITIVE]
+
+    @property
+    def is_keyword_case_sensitive(self) -> bool:
+        return self.type_counts[ParsedType.KEYWORD_CASE_SENSITIVE] > 0
+
+    @property
+    def count_keyword_case_sensitive(self) -> int:
+        return self.type_counts[ParsedType.KEYWORD_CASE_SENSITIVE]
+
+    @property
+    def is_number(self) -> bool:
+        return self.type_counts[ParsedType.NUMBER] > 0
+
+    @property
+    def count_number(self) -> int:
+        return self.type_counts[ParsedType.NUMBER]
+
+    @property
+    def is_date(self) -> bool:
+        return self.type_counts[ParsedType.DATE] > 0
+
+    @property
+    def count_date(self) -> int:
+        return self.type_counts[ParsedType.DATE]
+
+    @property
+    def is_boolean(self) -> bool:
+        return self.type_counts[ParsedType.BOOLEAN] > 0
+
+    @property
+    def count_boolean(self) -> int:
+        return self.type_counts[ParsedType.BOOLEAN]
+
+    @property
+    def is_geo(self) -> bool:
+        # because records either get parsed without geo data or with geo point and geo
+        # shape, we can just use geo point
+        return self.type_counts[ParsedType.GEO_POINT] > 0
+
+    @property
+    def count_geo(self) -> int:
+        # because records either get parsed without geo data or with geo point and geo
+        # shape, we can just use geo point
+        return self.type_counts[ParsedType.GEO_POINT]
+
+
+def get_type_counts(field: DocumentField, search: Search) -> List[Tuple[str, int]]:
+    """
+    Perform a terms aggregation on the given field using the given search as a basis for
+    the aggregation operation. Returns a list of tuples containing the string value
+    (which will be a combination of the field path and the field types) and the number
+    of records which had that combination.
+
+    :param field: which DocumentField to aggregate, must be data_types or parsed_types
+    :param search: a search to perform the aggregation with, this should have the
+                   client, index, and any filters set
+    :return: a list of tuples
+    """
+    if field not in (DocumentField.PARSED_TYPES, DocumentField.DATA_TYPES):
+        raise ValueError("Can only aggregate type counts on parsed_types or data_types")
+
+    paths_and_types = []
+    after = None
+    while True:
+        # this has a dual purpose, it ensures we don't get any search results
+        # when we don't need them, and it ensures we get a fresh copy of the
+        # search to work with
+        agg_search = search[:0]
+        agg_search.aggs.bucket(
+            "paths",
+            "composite",
+            # let's try and get all the fields in one go if we can
+            size=100,
+            sources={"path": A("terms", field=field)},
+        )
+        if after is not None:
+            agg_search.aggs["paths"].after = after
+
+        result = agg_search.execute().aggs.to_dict()
+
+        buckets = get_in(("paths", "buckets"), result, [])
+        after = get_in(("paths", "after_key"), result, None)
+        if not buckets:
+            break
+        else:
+            paths_and_types.extend(
+                (bucket["key"]["path"], bucket["doc_count"]) for bucket in buckets
+            )
+
+    return paths_and_types

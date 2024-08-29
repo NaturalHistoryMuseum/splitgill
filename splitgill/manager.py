@@ -10,7 +10,12 @@ from pymongo import MongoClient, IndexModel, ASCENDING, DESCENDING
 from pymongo.collection import Collection
 from pymongo.database import Database
 
-from splitgill.indexing.fields import DocumentField, FieldInfo
+from splitgill.indexing.fields import (
+    DocumentField,
+    DataField,
+    get_type_counts,
+    ParsedField,
+)
 from splitgill.indexing.index import IndexNames, generate_index_ops
 from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.indexing.syncing import write_ops, WriteResult, BulkOptions
@@ -550,58 +555,94 @@ class SplitgillDatabase:
 
         return sorted(versions)
 
-    def get_fields(
+    def get_data_fields(
         self, version: Optional[int] = None, query: Optional[Query] = None
-    ) -> FieldInfo:
+    ) -> List[DataField]:
         """
-        Get information about the fields available in this database at the given version
-        under the given query criteria. The FieldInfo object that is returned contains
-        information about both fields in the source data (data fields) and fields in the
-        searchable data (parsed fields).
+        Retrieves the available data fields for this database, optionally at the given
+        version with the given query.
 
-        :param version: the version to search at, if None (the default), search at the
-                        latest version
-        :param query: a filter to apply to the result, if None (the default), all
-                      records at the given version are searched
-        :return: a FieldInfo object
+        :param version: the version to find data fields at, if None, the latest data is
+                        searched
+        :param query: the query to filter records with before finding the data fields,
+                      if None, all record data is considered
+        :return: a list of DataField objects with the most frequent field first
         """
-        base = self.search(version if version is not None else SearchVersion.latest)
+        search = self.search(version if version is not None else SearchVersion.latest)
         if query is not None:
-            base = base.filter(query)
+            search = search.filter(query)
+        paths_and_counts = get_type_counts(DocumentField.DATA_TYPES, search)
 
-        field_info = FieldInfo()
+        fields: Dict[str, DataField] = {}
 
-        work = [
-            (DocumentField.DATA_TYPES, field_info.add_data_type),
-            (DocumentField.PARSED_TYPES, field_info.add_parsed_type),
-        ]
+        # create the basic field objects and add type counts
+        for path_and_type, count in paths_and_counts:
+            path, raw_types = path_and_type.rsplit(".", 1)
+            if path not in fields:
+                fields[path] = DataField(path)
+            fields[path].add(raw_types, count)
 
-        for document_field, add_method in work:
-            after = None
+        # go through each field and link it with other fields to create hierarchy
+        for field in fields.values():
+            if not field.is_container:
+                continue
+            target_dot_count = field.path.count(".") + 1
+            for child in fields.values():
+                if child.path.count(".") == target_dot_count and child.path.startswith(
+                    f"{field.path}."
+                ):
+                    field.children.append(child)
+                    child.parent = field
 
-            while True:
-                # this has a dual purpose, it ensures we don't get any search results
-                # when we don't need them, and it ensures we get a fresh copy of the
-                # search to work with
-                search = base[:0]
-                search.aggs.bucket(
-                    "paths",
-                    "composite",
-                    # let's try and get all the fields in one go if we can
-                    size=100,
-                    sources={"path": A("terms", field=document_field)},
-                )
-                if after is not None:
-                    search.aggs["paths"].after = after
+        # return the data fields as a list in a specific order. Note that because we're
+        # using multiple orderings in different directions, we do multiple sorts in the
+        # reverse order of the order we want them applied.
+        # descending depth (so fields closest to the root first)
+        data_fields = sorted(
+            fields.values(), key=lambda f: f.path.count("."), reverse=True
+        )
+        # ascending alphabetical order
+        data_fields.sort(key=lambda f: f.path)
+        # descending frequency (so most frequent fields first)
+        data_fields.sort(key=lambda f: f.count, reverse=True)
+        return data_fields
 
-                result = search.execute().aggs.to_dict()
+    def get_parsed_fields(
+        self, version: Optional[int] = None, query: Optional[Query] = None
+    ) -> List[ParsedField]:
+        """
+        Retrieves the available parsed fields for this database, optionally at the given
+        version with the given query.
 
-                buckets = get_in(("paths", "buckets"), result, [])
-                after = get_in(("paths", "after_key"), result, None)
-                if not buckets:
-                    break
-                else:
-                    for bucket in buckets:
-                        add_method(bucket["key"]["path"], bucket["doc_count"])
+        :param version: the version to find parsed fields at, if None, the latest data
+                        is searched
+        :param query: the query to filter records with before finding the parsed fields,
+                      if None, all record data is considered
+        :return: a list of ParsedField objects with the most frequent field first
+        """
+        search = self.search(version if version is not None else SearchVersion.latest)
+        if query is not None:
+            search = search.filter(query)
+        paths_and_counts = get_type_counts(DocumentField.PARSED_TYPES, search)
 
-        return field_info
+        fields: Dict[str, ParsedField] = {}
+
+        # create the basic field objects and add type counts
+        for path_and_type, count in paths_and_counts:
+            path, raw_types = path_and_type.rsplit(".", 1)
+            if path not in fields:
+                fields[path] = ParsedField(path)
+            fields[path].add(raw_types, count)
+
+        # return the parsed fields as a list in a specific order. Note that because
+        # we're using multiple orderings in different directions, we do multiple sorts
+        # in the reverse order of the order we want them applied.
+        # descending depth (so fields closest to the root first)
+        parsed_fields = sorted(
+            fields.values(), key=lambda f: f.path.count("."), reverse=True
+        )
+        # ascending alphabetical order
+        parsed_fields.sort(key=lambda f: f.path)
+        # descending frequency (so most frequent fields first)
+        parsed_fields.sort(key=lambda f: f.count, reverse=True)
+        return parsed_fields

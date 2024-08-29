@@ -1,6 +1,5 @@
 from datetime import datetime, date, timezone, timedelta
 from itertools import chain
-from typing import List, Any
 
 import pytest
 from shapely import from_wkt
@@ -9,7 +8,7 @@ from splitgill.diffing import prepare_data
 from splitgill.indexing.fields import ParsedType, DataType
 from splitgill.indexing.geo import match_hints, match_geojson
 from splitgill.indexing.options import ParsingOptionsBuilder
-from splitgill.indexing.parser import parse, parse_value, type_for
+from splitgill.indexing.parser import parse, parse_value
 from splitgill.model import ParsingOptions
 from splitgill.utils import to_timestamp
 
@@ -36,18 +35,27 @@ def test_in_and_out_of_dates():
         assert parsed[ParsedType.DATE] == to_timestamp(candidate)
 
 
+def pt(path: str, *types: ParsedType, include_text: bool = True) -> str:
+    types = list(types)
+    if include_text:
+        types.append(ParsedType.KEYWORD_CASE_INSENSITIVE)
+        types.append(ParsedType.KEYWORD_CASE_SENSITIVE)
+        types.append(ParsedType.TEXT)
+    return f"{path}.{','.join(sorted(types))}"
+
+
+def dt(path: str, *types: DataType) -> str:
+    return f"{path}.{','.join(sorted(types))}"
+
+
 class TestParse:
     def test_no_nesting(self, basic_options: ParsingOptions):
         data = {"x": "beans"}
         parsed_data = parse(data, basic_options)
 
         assert parsed_data.parsed == {"x": parse_value("beans", basic_options)}
-        assert parsed_data.data_types == ["x.str"]
-        assert sorted(parsed_data.parsed_types) == [
-            f"x.{ParsedType.KEYWORD_CASE_INSENSITIVE}",
-            f"x.{ParsedType.KEYWORD_CASE_SENSITIVE}",
-            f"x.{ParsedType.TEXT}",
-        ]
+        assert parsed_data.data_types == [dt("x", DataType.STR)]
+        assert parsed_data.parsed_types == [pt("x")]
 
     def test_list_of_strings(self, basic_options: ParsingOptions):
         data = {"x": ["beans", "lemons", "goats"]}
@@ -56,12 +64,11 @@ class TestParse:
         assert parsed_data.parsed == {
             "x": [parse_value(value, basic_options) for value in data["x"]]
         }
-        assert parsed_data.data_types == [f"x.{DataType.LIST}", f"x..{DataType.STR}"]
-        assert sorted(parsed_data.parsed_types) == [
-            f"x.{ParsedType.KEYWORD_CASE_INSENSITIVE}",
-            f"x.{ParsedType.KEYWORD_CASE_SENSITIVE}",
-            f"x.{ParsedType.TEXT}",
+        assert parsed_data.data_types == [
+            dt("x", DataType.LIST),
+            dt("x.", DataType.STR),
         ]
+        assert parsed_data.parsed_types == [pt("x")]
 
     def test_list_of_dicts(self, basic_options: ParsingOptions):
         data = {"x": [{"a": 4}, {"a": 5}, {"a": 6}]}
@@ -74,19 +81,12 @@ class TestParse:
                 {"a": parse_value(6, basic_options)},
             ]
         }
-        assert sorted(parsed_data.data_types) == sorted(
-            [
-                f"x.{DataType.LIST}",
-                f"x..a.{DataType.INT}",
-                f"x..{DataType.DICT}",
-            ]
-        )
-        assert sorted(parsed_data.parsed_types) == [
-            f"x.a.{ParsedType.KEYWORD_CASE_INSENSITIVE}",
-            f"x.a.{ParsedType.KEYWORD_CASE_SENSITIVE}",
-            f"x.a.{ParsedType.NUMBER}",
-            f"x.a.{ParsedType.TEXT}",
+        assert parsed_data.data_types == [
+            dt("x", DataType.LIST),
+            dt("x.", DataType.DICT),
+            dt("x..a", DataType.INT),
         ]
+        assert parsed_data.parsed_types == [pt("x.a", ParsedType.NUMBER)]
 
     def test_list_of_lists(self, basic_options: ParsingOptions):
         data = {"x": [[1, 2, 3], [4, 5, 6]]}
@@ -98,19 +98,12 @@ class TestParse:
                 [parse_value(value, basic_options) for value in [4, 5, 6]],
             ]
         }
-        assert sorted(parsed_data.data_types) == sorted(
-            [
-                f"x...{DataType.INT}",
-                f"x..{DataType.LIST}",
-                f"x.{DataType.LIST}",
-            ]
-        )
-        assert sorted(parsed_data.parsed_types) == [
-            f"x.{ParsedType.KEYWORD_CASE_INSENSITIVE}",
-            f"x.{ParsedType.KEYWORD_CASE_SENSITIVE}",
-            f"x.{ParsedType.NUMBER}",
-            f"x.{ParsedType.TEXT}",
+        assert parsed_data.data_types == [
+            dt("x", DataType.LIST),
+            dt("x.", DataType.LIST),
+            dt("x..", DataType.INT),
         ]
+        assert parsed_data.parsed_types == [pt("x", ParsedType.NUMBER)]
 
     def test_nested_dict(self, basic_options: ParsingOptions):
         data = {"x": "beans", "y": {"a": "5", "b": "buckets!"}}
@@ -123,23 +116,16 @@ class TestParse:
                 "b": parse_value("buckets!", basic_options),
             },
         }
-        assert sorted(parsed_data.data_types) == [
-            f"x.{DataType.STR}",
-            f"y.a.{DataType.STR}",
-            f"y.b.{DataType.STR}",
-            f"y.{DataType.DICT}",
+        assert parsed_data.data_types == [
+            dt("x", DataType.STR),
+            dt("y", DataType.DICT),
+            dt("y.a", DataType.STR),
+            dt("y.b", DataType.STR),
         ]
-        assert sorted(parsed_data.parsed_types) == [
-            f"x.{ParsedType.KEYWORD_CASE_INSENSITIVE}",
-            f"x.{ParsedType.KEYWORD_CASE_SENSITIVE}",
-            f"x.{ParsedType.TEXT}",
-            f"y.a.{ParsedType.KEYWORD_CASE_INSENSITIVE}",
-            f"y.a.{ParsedType.KEYWORD_CASE_SENSITIVE}",
-            f"y.a.{ParsedType.NUMBER}",
-            f"y.a.{ParsedType.TEXT}",
-            f"y.b.{ParsedType.KEYWORD_CASE_INSENSITIVE}",
-            f"y.b.{ParsedType.KEYWORD_CASE_SENSITIVE}",
-            f"y.b.{ParsedType.TEXT}",
+        assert parsed_data.parsed_types == [
+            pt("x"),
+            pt("y.a", ParsedType.NUMBER),
+            pt("y.b"),
         ]
 
     def test_nested_mix(self, basic_options: ParsingOptions):
@@ -176,21 +162,22 @@ class TestParse:
                 ]
             },
         }
-        assert sorted(parsed_data.data_types) == sorted(
-            [
-                f"x...a..{DataType.STR}",
-                f"x...a.{DataType.LIST}",
-                f"x...{DataType.DICT}",
-                f"x..{DataType.LIST}",
-                f"x..{DataType.STR}",
-                f"x.{DataType.LIST}",
-                f"y.{DataType.DICT}",
-                f"y.t..{DataType.DICT}",
-                f"y.t..x.{DataType.FLOAT}",
-                f"y.t..x.{DataType.INT}",
-                f"y.t.{DataType.LIST}",
-            ]
-        )
+        assert parsed_data.data_types == [
+            dt("x", DataType.LIST),
+            dt("x.", DataType.STR, DataType.LIST),
+            dt("x..", DataType.DICT),
+            dt("x...a", DataType.LIST),
+            dt("x...a.", DataType.STR),
+            dt("y", DataType.DICT),
+            dt("y.t", DataType.LIST),
+            dt("y.t.", DataType.DICT),
+            dt("y.t..x", DataType.INT, DataType.FLOAT),
+        ]
+        assert parsed_data.parsed_types == [
+            pt("x", ParsedType.NUMBER),
+            pt("x.a", ParsedType.NUMBER),
+            pt("y.t.x", ParsedType.NUMBER),
+        ]
 
     def test_geo_hinted_fields(self, basic_options: ParsingOptions):
         data = {
@@ -284,14 +271,10 @@ class TestParse:
         assert parsed_data.parsed == {"a": parse_value("hello", basic_options)}
         assert parsed_data.data_types == [
             f"a.{DataType.STR}",
-            f"b.{DataType.NULL}",
+            f"b.{DataType.NONE}",
             f"c.{DataType.STR}",
         ]
-        assert sorted(parsed_data.parsed_types) == [
-            f"a.{ParsedType.KEYWORD_CASE_INSENSITIVE}",
-            f"a.{ParsedType.KEYWORD_CASE_SENSITIVE}",
-            f"a.{ParsedType.TEXT}",
-        ]
+        assert parsed_data.parsed_types == [pt("a")]
 
     def test_list_with_nulls(self, basic_options: ParsingOptions):
         data = {"a": ["hello", None, ""]}
@@ -300,18 +283,11 @@ class TestParse:
         assert parsed_data.parsed == {
             "a": [parse_value("hello", basic_options), None, None]
         }
-        assert sorted(parsed_data.data_types) == sorted(
-            [
-                f"a.{DataType.LIST}",
-                f"a..{DataType.NULL}",
-                f"a..{DataType.STR}",
-            ]
-        )
-        assert sorted(parsed_data.parsed_types) == [
-            f"a.{ParsedType.KEYWORD_CASE_INSENSITIVE}",
-            f"a.{ParsedType.KEYWORD_CASE_SENSITIVE}",
-            f"a.{ParsedType.TEXT}",
+        assert parsed_data.data_types == [
+            dt("a", DataType.LIST),
+            dt("a.", DataType.NONE, DataType.STR),
         ]
+        assert parsed_data.parsed_types == [pt("a")]
 
 
 class TestParseValue:
@@ -510,45 +486,3 @@ class TestParseValue:
             ParsedType.GEO_POINT: from_wkt(wkt_holed_polygon).centroid.wkt,
             ParsedType.GEO_SHAPE: wkt_holed_polygon.upper(),
         }
-
-
-class TestTypeFor:
-    def test_str(self):
-        assert type_for("beans") == DataType.STR
-        assert type_for("") == DataType.STR
-
-    def test_int(self):
-        assert type_for(4) == DataType.INT
-
-    def test_float(self):
-        assert type_for(4.1) == DataType.FLOAT
-        assert type_for(4.0) == DataType.FLOAT
-
-    def test_bool(self):
-        assert type_for(True) == DataType.BOOL
-        assert type_for(False) == DataType.BOOL
-
-    def test_dict(self):
-        assert type_for({}) == DataType.DICT
-        assert type_for({"a": 5}) == DataType.DICT
-
-    def test_list(self):
-        assert type_for([]) == DataType.LIST
-        assert type_for([1, 2, 3]) == DataType.LIST
-
-    def test_none(self):
-        assert type_for(None) == DataType.NULL
-
-    def test_invalid(self):
-        invalid: List[Any] = [
-            # the sensible tests
-            datetime.now(),
-            tuple(),
-            # the not sensible tests
-            object(),
-            type("TestClass", (), {}),
-            ...,
-        ]
-        for value in invalid:
-            with pytest.raises(ValueError):
-                assert type_for(value) == DataType.NULL

@@ -1,9 +1,11 @@
 import time
+from collections import Counter
 from datetime import datetime, timezone
+from typing import List
 from unittest.mock import patch, MagicMock
 
 import pytest
-from elasticsearch_dsl import Search, Q
+from elasticsearch_dsl import Search
 from freezegun import freeze_time
 
 from splitgill.indexing.fields import (
@@ -24,7 +26,7 @@ from splitgill.manager import (
     SearchVersion,
 )
 from splitgill.model import Record, ParsingOptions
-from splitgill.search import create_version_query, number
+from splitgill.search import create_version_query, term_query
 from splitgill.utils import to_timestamp
 
 
@@ -568,311 +570,66 @@ def test_search(splitgill: SplitgillClient):
     assert database.search(version=5)._index == wildcard
     assert database.search(version=5)._using == client
     assert database.search(version=5).to_dict() == {
-        "query": {DataType.BOOL: {"filter": [create_version_query(5).to_dict()]}}
+        "query": {"bool": {"filter": [create_version_query(5).to_dict()]}}
     }
-
-
-class TestGetFieldsData:
-    def test_int(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        records = [
-            Record.new({"a": 5}),
-            Record.new({"a": 10}),
-            Record.new({"b": 15}),
-            Record.new({"b": -1}),
-            Record.new({"b": 1098}),
-            Record.new({"c": 33}),
-        ]
-        database.ingest(records, commit=True)
-        database.sync()
-
-        fields = database.get_fields()
-        assert len(list(fields.iter_data_fields())) == 3
-        assert fields.get_data_field("a") == DataField("a", {DataType.INT: 2})
-        assert fields.get_data_field("b") == DataField("b", {DataType.INT: 3})
-        assert fields.get_data_field("c") == DataField("c", {DataType.INT: 1})
-
-    def test_float(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        records = [
-            Record.new({"a": 5.4}),
-            Record.new({"a": 10.1}),
-            Record.new({"b": 15.0}),
-            Record.new({"b": -1.8}),
-            Record.new({"b": 1098.124235}),
-            Record.new({"c": 33.6}),
-        ]
-        database.ingest(records, commit=True)
-        database.sync()
-
-        fields = database.get_fields()
-        assert len(list(fields.iter_data_fields())) == 3
-        assert fields.get_data_field("a") == DataField("a", {DataType.FLOAT: 2})
-        assert fields.get_data_field("b") == DataField("b", {DataType.FLOAT: 3})
-        assert fields.get_data_field("c") == DataField("c", {DataType.FLOAT: 1})
-
-    def test_bool(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        records = [
-            Record.new({"a": True}),
-            Record.new({"a": False}),
-            Record.new({"b": True}),
-            Record.new({"b": True}),
-            Record.new({"b": False}),
-            Record.new({"c": False}),
-        ]
-        database.ingest(records, commit=True)
-        database.sync()
-
-        fields = database.get_fields()
-        assert len(list(fields.iter_data_fields())) == 3
-        assert fields.get_data_field("a") == DataField("a", {DataType.BOOL: 2})
-        assert fields.get_data_field("b") == DataField("b", {DataType.BOOL: 3})
-        assert fields.get_data_field("c") == DataField("c", {DataType.BOOL: 1})
-
-    def test_str(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        records = [
-            Record.new({"a": "beans"}),
-            Record.new({"a": "hammers"}),
-            Record.new({"b": "eggs"}),
-            Record.new({"b": "llamas"}),
-            Record.new({"b": "goats"}),
-            Record.new({"c": "books"}),
-        ]
-        database.ingest(records, commit=True)
-        database.sync()
-
-        fields = database.get_fields()
-        assert len(list(fields.iter_data_fields())) == 3
-        assert fields.get_data_field("a") == DataField("a", {DataType.STR: 2})
-        assert fields.get_data_field("b") == DataField("b", {DataType.STR: 3})
-        assert fields.get_data_field("c") == DataField("c", {DataType.STR: 1})
-
-    def test_dict(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        records = [
-            Record.new({"topA": {"a": 4}}),
-            Record.new({"topA": {"a": 5}}),
-            Record.new({"topB": {"a": 6}}),
-            Record.new({"topB": {"a": 7}}),
-            Record.new({"topB": {"a": 8}}),
-            Record.new({"topC": {"a": 9}}),
-        ]
-        database.ingest(records, commit=True)
-        database.sync()
-
-        fields = database.get_fields()
-        assert len(list(fields.iter_data_fields())) == 6
-        assert fields.get_data_field("topA") == DataField("topA", {DataType.DICT: 2})
-        assert fields.get_data_field("topB") == DataField("topB", {DataType.DICT: 3})
-        assert fields.get_data_field("topC") == DataField("topC", {DataType.DICT: 1})
-        assert fields.get_data_field("topA.a") == DataField("topA.a", {DataType.INT: 2})
-        assert fields.get_data_field("topB.a") == DataField("topB.a", {DataType.INT: 3})
-        assert fields.get_data_field("topC.a") == DataField("topC.a", {DataType.INT: 1})
-
-    def test_list(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        records = [
-            Record.new({"a": [1, 2, 3]}),
-            Record.new({"a": [1, "beans", 3]}),
-            Record.new({"a": [1, False, True]}),
-            Record.new({"a": [5.4]}),
-        ]
-        database.ingest(records, commit=True)
-        database.sync()
-
-        fields = database.get_fields()
-        assert len(list(fields.iter_data_fields())) == 2
-        assert fields.get_data_field("a") == DataField("a", {DataType.LIST: 4})
-        assert fields.get_data_field("a.") == DataField(
-            "a.",
-            {DataType.INT: 3, DataType.FLOAT: 1, DataType.STR: 1, DataType.BOOL: 1},
-        )
-        assert fields.get_data_field("a.").is_list_member
-
-    def test_mix(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        records = [
-            Record.new({"a": 5}),
-            Record.new({"a": 50.1}),
-            Record.new({"b": "beans!"}),
-            Record.new({"b": [1, 2, 3]}),
-            Record.new({"b": {"x": 5.4, "y": True}}),
-            Record.new({"b": {"x": "lemonade!", "y": False}}),
-        ]
-        database.ingest(records, commit=True)
-        database.sync()
-
-        fields = database.get_fields()
-        assert len(list(fields.iter_data_fields())) == 5
-
-        assert fields.get_data_field("a") == DataField(
-            "a", {DataType.INT: 1, DataType.FLOAT: 1}
-        )
-        assert fields.get_data_field("b") == DataField(
-            "b", {DataType.STR: 1, DataType.LIST: 1, DataType.DICT: 2}
-        )
-        assert fields.get_data_field(f"b.") == DataField("b.", {DataType.INT: 1})
-        assert fields.get_data_field("b.x") == DataField(
-            "b.x", {DataType.FLOAT: 1, DataType.STR: 1}
-        )
-        assert fields.get_data_field("b.y") == DataField("b.y", {DataType.BOOL: 2})
-
-    def test_list_of_dicts(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        records = [
-            Record.new({"a": [{"a": 5}, {"a": 5.4}, {"b": True}]}),
-            Record.new({"a": [{"a": "beans"}, {"a": 5.4}, {"b": 3.9}]}),
-        ]
-        database.ingest(records, commit=True)
-        database.sync()
-
-        fields = database.get_fields()
-        assert len(list(fields.iter_data_fields())) == 4
-        assert fields.get_data_field("a") == DataField("a", {DataType.LIST: 2})
-        assert fields.get_data_field("a.") == DataField("a.", {DataType.DICT: 2})
-        assert fields.get_data_field("a..a") == DataField(
-            "a..a",
-            {DataType.INT: 1, DataType.FLOAT: 2, DataType.STR: 1},
-        )
-        assert fields.get_data_field("a..b") == DataField(
-            "a..b", {DataType.FLOAT: 1, DataType.BOOL: 1}
-        )
-
-    def test_list_of_lists(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        records = [
-            Record.new({"a": [[1, 2, 3], [4, 5, 6], 9]}),
-            Record.new({"a": [[9, 8, 7], [6, 5, 4], "organs"]}),
-            Record.new({"a": [[1, 2, 3], [4, 5, 6], [True, False]]}),
-        ]
-        database.ingest(records, commit=True)
-        database.sync()
-
-        fields = database.get_fields()
-        assert len(list(fields.iter_data_fields())) == 3
-        assert fields.get_data_field("a") == DataField("a", {DataType.LIST: 3})
-        assert fields.get_data_field("a.") == DataField(
-            "a.", {DataType.LIST: 3, DataType.INT: 1, DataType.STR: 1}
-        )
-        assert fields.get_data_field("a..") == DataField(
-            "a..", {DataType.BOOL: 1, DataType.INT: 3}
-        )
-
-    def test_deep_nesting(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        # ew
-        records = [Record.new({"a": {"b": [[{"c": [{"d": 5}]}]]}})]
-        database.ingest(records, commit=True)
-        database.sync()
-
-        fields = database.get_fields()
-        assert len(list(fields.iter_data_fields())) == 7
-        assert fields.get_data_field("a") == DataField("a", {DataType.DICT: 1})
-        assert fields.get_data_field("a.b") == DataField("a.b", {DataType.LIST: 1})
-        assert fields.get_data_field("a.b.") == DataField("a.b.", {DataType.LIST: 1})
-        assert fields.get_data_field("a.b..") == DataField("a.b..", {DataType.DICT: 1})
-        assert fields.get_data_field(f"a.b...c") == DataField(
-            "a.b...c", {DataType.LIST: 1}
-        )
-        assert fields.get_data_field(f"a.b...c.") == DataField(
-            "a.b...c.",
-            {DataType.DICT: 1},
-        )
-        assert fields.get_data_field(f"a.b...c..d") == DataField(
-            "a.b...c..d",
-            {DataType.INT: 1},
-        )
-
-    def test_version(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-
-        # add some records with integer values
-        version_1_time = datetime(2020, 7, 2, tzinfo=timezone.utc)
-        version_1_records = [Record("r1", {"x": 5}), Record("r2", {"x": 10})]
-        with freeze_time(version_1_time):
-            database.ingest(version_1_records, commit=True)
-        database.sync()
-
-        # the next day all the record values become bools, wild stuff
-        version_2_time = datetime(2020, 7, 3, tzinfo=timezone.utc)
-        version_2_records = [Record("r1", {"x": True}), Record("r2", {"x": False})]
-        with freeze_time(version_2_time):
-            database.ingest(version_2_records, commit=True)
-        database.sync()
-
-        # check the latest version where the values are all bools
-        fields = database.get_fields()
-        assert len(list(fields.iter_data_fields())) == 1
-        assert fields.get_data_field("x") == DataField("x", {DataType.BOOL: 2})
-
-        # then check the old version where the values are ints
-        fields = database.get_fields(version=to_timestamp(version_1_time))
-        assert len(list(fields.iter_data_fields())) == 1
-        assert fields.get_data_field("x") == DataField("x", {DataType.INT: 2})
-
-    def test_with_filter(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        records = [
-            Record.new({"a": 1, "b": True}),
-            Record.new({"a": 2, "b": 5.3}),
-            Record.new({"a": 3, "b": "beans!"}),
-            Record.new({"a": 4, "b": "2014-05-21"}),
-        ]
-        database.ingest(records, commit=True)
-        database.sync()
-
-        # check the baseline
-        fields = database.get_fields()
-        assert len(list(fields.iter_data_fields())) == 2
-        assert fields.get_data_field("a") == DataField("a", {DataType.INT: 4})
-        assert fields.get_data_field("b") == DataField(
-            "b", {DataType.BOOL: 1, DataType.FLOAT: 1, DataType.STR: 2}
-        )
-
-        # now check with some filters
-        fields = database.get_fields(query=Q("term", **{number("a"): 1}))
-        assert len(list(fields.iter_data_fields())) == 2
-        assert fields.get_data_field("a") == DataField("a", {DataType.INT: 1})
-        assert fields.get_data_field("b") == DataField("b", {DataType.BOOL: 1})
-
-        fields = database.get_fields(query=Q("term", **{number("a"): 2}))
-        assert len(list(fields.iter_data_fields())) == 2
-        assert fields.get_data_field("a") == DataField("a", {DataType.INT: 1})
-        assert fields.get_data_field("b") == DataField("b", {DataType.FLOAT: 1})
-
-        fields = database.get_fields(query=Q("term", **{number("a"): 3}))
-        assert len(list(fields.iter_data_fields())) == 2
-        assert fields.get_data_field("a") == DataField("a", {DataType.INT: 1})
-        assert fields.get_data_field("b") == DataField("b", {DataType.STR: 1})
-
-        fields = database.get_fields(query=Q("term", **{number("a"): 4}))
-        assert len(list(fields.iter_data_fields())) == 2
-        assert fields.get_data_field("a") == DataField("a", {DataType.INT: 1})
-        assert fields.get_data_field("b") == DataField("b", {DataType.STR: 1})
 
 
 def pf(
-    *path: str, n: int = 0, d: int = 0, b: int = 0, t: int = 0, g: int = 0
+    path: str,
+    count: int,
+    n: int = 0,
+    d: int = 0,
+    b: int = 0,
+    t: int = 0,
+    g: int = 0,
 ) -> ParsedField:
     counts = {
-        ParsedType.NUMBER: n,
-        ParsedType.DATE: d,
         ParsedType.BOOLEAN: b,
-        ParsedType.TEXT: t,
-        ParsedType.KEYWORD_CASE_INSENSITIVE: t,
-        ParsedType.KEYWORD_CASE_SENSITIVE: t,
+        ParsedType.DATE: d,
         ParsedType.GEO_SHAPE: g,
         ParsedType.GEO_POINT: g,
+        ParsedType.KEYWORD_CASE_INSENSITIVE: t,
+        ParsedType.KEYWORD_CASE_SENSITIVE: t,
+        ParsedType.NUMBER: n,
+        ParsedType.TEXT: t,
     }
     counts = {parsed_type: count for parsed_type, count in counts.items() if count > 0}
-    return ParsedField(".".join(path), counts)
+    return ParsedField(path, count=count, type_counts=Counter(counts))
 
 
-class TestGetParsedFields:
-    def test_int(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+def df(
+    path: str,
+    count: int,
+    s: int = 0,
+    i: int = 0,
+    f: int = 0,
+    b: int = 0,
+    l: int = 0,
+    d: int = 0,
+    n: int = 0,
+) -> DataField:
+    counts = {
+        DataType.NONE: n,
+        DataType.STR: s,
+        DataType.INT: i,
+        DataType.FLOAT: f,
+        DataType.BOOL: b,
+        DataType.LIST: l,
+        DataType.DICT: d,
+    }
+    counts = {data_type: count for data_type, count in counts.items() if count > 0}
+    return DataField(path, count=count, type_counts=Counter(counts))
+
+
+def check_data_fields(actual: List[DataField], expected: List[DataField]):
+    for actual_df, expected_df in zip(actual, expected):
+        assert actual_df.path == expected_df.path
+        assert actual_df.count == expected_df.count
+        assert actual_df.type_counts == expected_df.type_counts
+
+
+class TestGetFieldsMethods:
+    def test_int(self, database: SplitgillDatabase):
         records = [
             Record.new({"a": 5}),
             Record.new({"a": 10}),
@@ -884,14 +641,19 @@ class TestGetParsedFields:
         database.ingest(records, commit=True)
         database.sync()
 
-        parsed_fields = list(database.get_fields().iter_parsed_fields())
-        assert len(parsed_fields) == 3
-        assert pf("a", n=2, t=2) in parsed_fields
-        assert pf("b", n=3, t=3) in parsed_fields
-        assert pf("c", n=1, t=1) in parsed_fields
+        data_fields = database.get_data_fields()
+        assert len(data_fields) == 3
+        assert data_fields == [df("b", 3, i=3), df("a", 2, i=2), df("c", 1, i=1)]
 
-    def test_float(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        parsed_fields = database.get_parsed_fields()
+        assert len(parsed_fields) == 3
+        assert parsed_fields == [
+            pf("b", 3, t=3, n=3),
+            pf("a", 2, t=2, n=2),
+            pf("c", 1, t=1, n=1),
+        ]
+
+    def test_float(self, database: SplitgillDatabase):
         records = [
             Record.new({"a": 5.4}),
             Record.new({"a": 10.1}),
@@ -903,14 +665,19 @@ class TestGetParsedFields:
         database.ingest(records, commit=True)
         database.sync()
 
-        parsed_fields = list(database.get_fields().iter_parsed_fields())
-        assert len(parsed_fields) == 3
-        assert pf("a", n=2, t=2) in parsed_fields
-        assert pf("b", n=3, t=3) in parsed_fields
-        assert pf("c", n=1, t=1) in parsed_fields
+        data_fields = database.get_data_fields()
+        assert len(data_fields) == 3
+        assert data_fields == [df("b", 3, f=3), df("a", 2, f=2), df("c", 1, f=1)]
 
-    def test_date(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        parsed_fields = database.get_parsed_fields()
+        assert len(parsed_fields) == 3
+        assert parsed_fields == [
+            pf("b", 3, t=3, n=3),
+            pf("a", 2, t=2, n=2),
+            pf("c", 1, t=1, n=1),
+        ]
+
+    def test_date(self, database: SplitgillDatabase):
         records = [
             Record.new({"a": "2010-01-06"}),
             Record.new({"a": "2010-01-06T13:11:47+05:00"}),
@@ -926,13 +693,15 @@ class TestGetParsedFields:
         )
         database.sync()
 
-        parsed_fields = list(database.get_fields().iter_parsed_fields())
-        assert len(parsed_fields) == 2
-        assert pf("a", d=2, t=2) in parsed_fields
-        assert pf("b", d=1, t=1) in parsed_fields
+        data_fields = database.get_data_fields()
+        assert len(data_fields) == 2
+        assert data_fields == [df("a", 2, s=2), df("b", 1, s=1)]
 
-    def test_bool(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        parsed_fields = database.get_parsed_fields()
+        assert len(parsed_fields) == 2
+        assert parsed_fields == [pf("a", 2, d=2, t=2), pf("b", 1, d=1, t=1)]
+
+    def test_bool(self, database: SplitgillDatabase):
         records = [
             Record.new({"a": True}),
             Record.new({"a": False}),
@@ -944,14 +713,19 @@ class TestGetParsedFields:
         database.ingest(records, commit=True)
         database.sync()
 
-        parsed_fields = list(database.get_fields().iter_parsed_fields())
-        assert len(parsed_fields) == 3
-        assert pf("a", b=2, t=2) in parsed_fields
-        assert pf("b", b=3, t=3) in parsed_fields
-        assert pf("c", b=1, t=1) in parsed_fields
+        data_fields = database.get_data_fields()
+        assert len(data_fields) == 3
+        assert data_fields == [df("b", 3, b=3), df("a", 2, b=2), df("c", 1, b=1)]
 
-    def test_str(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        parsed_fields = database.get_parsed_fields()
+        assert len(parsed_fields) == 3
+        assert parsed_fields == [
+            pf("b", 3, t=3, b=3),
+            pf("a", 2, t=2, b=2),
+            pf("c", 1, t=1, b=1),
+        ]
+
+    def test_str(self, database: SplitgillDatabase):
         records = [
             Record.new({"a": "beans"}),
             Record.new({"a": "hammers"}),
@@ -963,14 +737,19 @@ class TestGetParsedFields:
         database.ingest(records, commit=True)
         database.sync()
 
-        parsed_fields = list(database.get_fields().iter_parsed_fields())
-        assert len(parsed_fields) == 3
-        assert pf("a", t=2) in parsed_fields
-        assert pf("b", t=3) in parsed_fields
-        assert pf("c", t=1) in parsed_fields
+        data_fields = database.get_data_fields()
+        assert len(data_fields) == 3
+        assert data_fields == [df("b", 3, s=3), df("a", 2, s=2), df("c", 1, s=1)]
 
-    def test_dict(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        parsed_fields = database.get_parsed_fields()
+        assert len(parsed_fields) == 3
+        assert parsed_fields == [
+            pf("b", 3, t=3),
+            pf("a", 2, t=2),
+            pf("c", 1, t=1),
+        ]
+
+    def test_dict(self, database: SplitgillDatabase):
         records = [
             Record.new({"topA": {"a": 4}}),
             Record.new({"topA": {"a": 5}}),
@@ -982,14 +761,29 @@ class TestGetParsedFields:
         database.ingest(records, commit=True)
         database.sync()
 
-        parsed_fields = list(database.get_fields().iter_parsed_fields())
-        assert len(parsed_fields) == 3
-        assert pf("topA", "a", n=2, t=2) in parsed_fields
-        assert pf("topB", "a", n=3, t=3) in parsed_fields
-        assert pf("topC", "a", n=1, t=1) in parsed_fields
+        data_fields = database.get_data_fields()
+        assert len(data_fields) == 6
+        check_data_fields(
+            data_fields,
+            [
+                df("topB", 3, d=3),
+                df("topB.a", 3, i=3),
+                df("topA", 2, d=2),
+                df("topA.a", 2, i=2),
+                df("topC", 1, d=1),
+                df("topC.a", 1, i=1),
+            ],
+        )
 
-    def test_list(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        parsed_fields = database.get_parsed_fields()
+        assert len(parsed_fields) == 3
+        assert parsed_fields == [
+            pf("topB.a", 3, t=3, n=3),
+            pf("topA.a", 2, t=2, n=2),
+            pf("topC.a", 1, t=1, n=1),
+        ]
+
+    def test_list(self, database: SplitgillDatabase):
         records = [
             Record.new({"a": [1, 2, 3]}),
             Record.new({"a": [1, "beans", 3]}),
@@ -999,12 +793,21 @@ class TestGetParsedFields:
         database.ingest(records, commit=True)
         database.sync()
 
-        parsed_fields = list(database.get_fields().iter_parsed_fields())
-        assert len(parsed_fields) == 1
-        assert pf("a", n=4, t=4, b=1) in parsed_fields
+        data_fields = database.get_data_fields()
+        assert len(data_fields) == 2
+        check_data_fields(
+            data_fields,
+            [
+                df("a", 4, l=4),
+                df("a.", 4, i=3, f=1, s=1, b=1),
+            ],
+        )
 
-    def test_mix(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        parsed_fields = database.get_parsed_fields()
+        assert len(parsed_fields) == 1
+        assert parsed_fields == [pf("a", 4, t=4, n=4, b=1)]
+
+    def test_mix(self, database: SplitgillDatabase):
         records = [
             Record.new({"a": 5}),
             Record.new({"a": 50.1}),
@@ -1016,15 +819,29 @@ class TestGetParsedFields:
         database.ingest(records, commit=True)
         database.sync()
 
-        parsed_fields = list(database.get_fields().iter_parsed_fields())
-        assert len(parsed_fields) == 4
-        assert pf("a", n=2, t=2) in parsed_fields
-        assert pf("b", n=1, t=2) in parsed_fields
-        assert pf("b", "x", n=1, t=2) in parsed_fields
-        assert pf("b", "y", b=2, t=2) in parsed_fields
+        data_fields = database.get_data_fields()
+        assert len(data_fields) == 5
+        check_data_fields(
+            data_fields,
+            [
+                df("b", 4, s=1, l=1, d=2),
+                df("a", 2, i=1, f=1),
+                df("b.x", 2, f=1, s=1),
+                df("b.y", 2, b=2),
+                df("b.", 1, i=1),
+            ],
+        )
 
-    def test_list_of_dicts(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        parsed_fields = database.get_parsed_fields()
+        assert len(parsed_fields) == 4
+        assert parsed_fields == [
+            pf("a", 2, t=2, n=2),
+            pf("b", 2, t=2, n=1),
+            pf("b.x", 2, t=2, n=1),
+            pf("b.y", 2, t=2, b=2),
+        ]
+
+    def test_list_of_dicts(self, database: SplitgillDatabase):
         records = [
             Record.new({"a": [{"a": 5}, {"a": 5.4}, {"b": True}]}),
             Record.new({"a": [{"a": "beans"}, {"a": 5.4}, {"b": 3.9}]}),
@@ -1032,13 +849,26 @@ class TestGetParsedFields:
         database.ingest(records, commit=True)
         database.sync()
 
-        parsed_fields = list(database.get_fields().iter_parsed_fields())
-        assert len(parsed_fields) == 2
-        assert pf("a", "a", n=2, t=2) in parsed_fields
-        assert pf("a", "b", n=1, b=1, t=2) in parsed_fields
+        data_fields = database.get_data_fields()
+        assert len(data_fields) == 4
+        check_data_fields(
+            data_fields,
+            [
+                df("a", 2, l=2),
+                df("a.", 2, d=2),
+                df("a..a", 2, i=1, f=2, s=1),
+                df("a..b", 2, b=1, f=1),
+            ],
+        )
 
-    def test_list_of_lists(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        parsed_fields = database.get_parsed_fields()
+        assert len(parsed_fields) == 2
+        assert parsed_fields == [
+            pf("a.a", 2, t=2, n=2),
+            pf("a.b", 2, t=2, b=1, n=1),
+        ]
+
+    def test_list_of_lists(self, database: SplitgillDatabase):
         records = [
             Record.new({"a": [[1, 2, 3], [4, 5, 6], 9]}),
             Record.new({"a": [[9, 8, 7], [6, 5, 4], "organs"]}),
@@ -1047,53 +877,46 @@ class TestGetParsedFields:
         database.ingest(records, commit=True)
         database.sync()
 
-        parsed_fields = list(database.get_fields().iter_parsed_fields())
-        assert len(parsed_fields) == 1
-        assert pf("a", n=3, b=1, t=3) in parsed_fields
+        data_fields = database.get_data_fields()
+        assert len(data_fields) == 3
+        check_data_fields(
+            data_fields,
+            [
+                df("a", 3, l=3),
+                df("a.", 3, l=3, i=1, s=1),
+                df("a..", 3, b=1, i=3),
+            ],
+        )
 
-    def test_deep_nesting(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        parsed_fields = database.get_parsed_fields()
+        assert len(parsed_fields) == 1
+        assert parsed_fields == [pf("a", 3, t=3, n=3, b=1)]
+
+    def test_deep_nesting(self, database: SplitgillDatabase):
         # ew
         records = [Record.new({"a": {"b": [[{"c": [{"d": 5}]}]]}})]
         database.ingest(records, commit=True)
         database.sync()
 
-        parsed_fields = list(database.get_fields().iter_parsed_fields())
-        assert len(parsed_fields) == 1
-        assert pf("a", "b", "c", "d", n=1, t=1) in parsed_fields
-
-    def test_geo(self, splitgill: SplitgillClient, geojson_point: dict, wkt_point: str):
-        database = SplitgillDatabase("test", splitgill)
-        records = [
-            Record.new(
-                {
-                    "geojson": geojson_point,
-                    "wkt": wkt_point,
-                    "lat": 30,
-                    "lon": 60,
-                    "rad": 100,
-                }
-            ),
-        ]
-        database.ingest(records, commit=True)
-        database.update_options(
-            ParsingOptionsBuilder().with_geo_hint("lat", "lon", "rad").build()
+        data_fields = database.get_data_fields()
+        assert len(data_fields) == 7
+        check_data_fields(
+            data_fields,
+            [
+                df("a", 1, d=1),
+                df("a.b", 1, l=1),
+                df("a.b.", 1, l=1),
+                df("a.b..", 1, d=1),
+                df("a.b...c", 1, l=1),
+                df("a.b...c.", 1, d=1),
+                df("a.b...c..d", 1, i=1),
+            ],
         )
-        database.sync()
+        parsed_fields = database.get_parsed_fields()
+        assert len(parsed_fields) == 1
+        assert parsed_fields == [pf("a.b.c.d", 1, t=1, n=1)]
 
-        parsed_fields = list(database.get_fields().iter_parsed_fields())
-        assert len(parsed_fields) == 7
-        assert pf("geojson", g=1) in parsed_fields
-        assert pf("geojson", "type", t=1) in parsed_fields
-        assert pf("geojson", "coordinates", n=1, t=1) in parsed_fields
-        assert pf("wkt", g=1, t=1) in parsed_fields
-        assert pf("lat", g=1, t=1, n=1) in parsed_fields
-        assert pf("lon", t=1, n=1) in parsed_fields
-        assert pf("rad", t=1, n=1) in parsed_fields
-
-    def test_version(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-
+    def test_version(self, database: SplitgillDatabase):
         # add some records with integer values
         version_1_time = datetime(2020, 7, 2, tzinfo=timezone.utc)
         version_1_records = [Record("r1", {"x": 5}), Record("r2", {"x": 10})]
@@ -1109,75 +932,188 @@ class TestGetParsedFields:
         database.sync()
 
         # check the latest version where the values are all bools
-        parsed_fields = list(database.get_fields().iter_parsed_fields())
+        data_fields = database.get_data_fields()
+        assert len(data_fields) == 1
+        assert data_fields == [df("x", 2, b=2)]
+        parsed_fields = database.get_parsed_fields()
         assert len(parsed_fields) == 1
-        assert pf("x", b=2, t=2) in parsed_fields
+        assert parsed_fields == [pf("x", 2, t=2, b=2)]
 
         # then check the old version where the values are ints
-        parsed_fields = list(
-            database.get_fields(
-                version=to_timestamp(version_1_time)
-            ).iter_parsed_fields()
-        )
+        data_fields = database.get_data_fields(version=to_timestamp(version_1_time))
+        assert len(data_fields) == 1
+        assert data_fields == [df("x", 2, i=2)]
+        parsed_fields = database.get_parsed_fields(version=to_timestamp(version_1_time))
         assert len(parsed_fields) == 1
-        assert pf("x", n=2, t=2) in parsed_fields
+        assert parsed_fields == [pf("x", 2, t=2, n=2)]
 
-    def test_with_filter(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+    def test_with_filter(self, database: SplitgillDatabase):
         records = [
             Record.new({"a": 1, "b": True}),
             Record.new({"a": 2, "b": 5.3}),
             Record.new({"a": 3, "b": "beans!"}),
-            Record.new({"a": 4, "b": "2014-05-21"}),
+            Record.new({"a": 4, "b": "armpit"}),
         ]
         database.ingest(records, commit=True)
-        database.update_options(
-            ParsingOptionsBuilder().with_date_format("%Y-%m-%d").build()
-        )
         database.sync()
 
         # check the baseline
-        parsed_fields = list(database.get_fields().iter_parsed_fields())
+        data_fields = database.get_data_fields()
+        assert len(data_fields) == 2
+        assert data_fields == [df("a", 4, i=4), df("b", 4, f=1, b=1, s=2)]
+        parsed_fields = database.get_parsed_fields()
         assert len(parsed_fields) == 2
-        assert pf("a", n=4, t=4) in parsed_fields
-        assert pf("b", n=1, b=1, d=1, t=4) in parsed_fields
+        assert parsed_fields == [pf("a", 4, t=4, n=4), pf("b", 4, t=4, b=1, n=1)]
 
         # now check with some filters
-        parsed_fields = list(
-            database.get_fields(
-                query=Q("term", **{number("a"): 1})
-            ).iter_parsed_fields()
-        )
-        assert len(parsed_fields) == 2
-        assert pf("a", n=1, t=1) in parsed_fields
-        assert pf("b", b=1, t=1) in parsed_fields
+        query = term_query("a", 1)
+        data_fields = database.get_data_fields(query=query)
+        parsed_fields = database.get_parsed_fields(query=query)
+        assert data_fields == [df("a", 1, i=1), df("b", 1, b=1)]
+        assert parsed_fields == [pf("a", 1, t=1, n=1), pf("b", 1, t=1, b=1)]
 
-        parsed_fields = list(
-            database.get_fields(
-                query=Q("term", **{number("a"): 2})
-            ).iter_parsed_fields()
-        )
-        assert len(parsed_fields) == 2
-        assert pf("a", n=1, t=1) in parsed_fields
-        assert pf("b", n=1, t=1) in parsed_fields
+        query = term_query("a", 2)
+        data_fields = database.get_data_fields(query=query)
+        parsed_fields = database.get_parsed_fields(query=query)
+        assert data_fields == [df("a", 1, i=1), df("b", 1, f=1)]
+        assert parsed_fields == [pf("a", 1, t=1, n=1), pf("b", 1, t=1, n=1)]
 
-        parsed_fields = list(
-            database.get_fields(
-                query=Q("term", **{number("a"): 3})
-            ).iter_parsed_fields()
-        )
-        assert len(parsed_fields) == 2
-        assert pf("a", n=1, t=1) in parsed_fields
-        assert pf("b", t=1) in parsed_fields
+        query = term_query("a", 3)
+        data_fields = database.get_data_fields(query=query)
+        parsed_fields = database.get_parsed_fields(query=query)
+        assert data_fields == [df("a", 1, i=1), df("b", 1, s=1)]
+        assert parsed_fields == [pf("a", 1, t=1, n=1), pf("b", 1, t=1)]
 
-        parsed_fields = list(
-            database.get_fields(
-                query=Q("term", **{number("a"): 4})
-            ).iter_parsed_fields()
+        query = term_query("a", 4)
+        data_fields = database.get_data_fields(query=query)
+        parsed_fields = database.get_parsed_fields(query=query)
+        assert data_fields == [df("a", 1, i=1), df("b", 1, s=1)]
+        assert parsed_fields == [pf("a", 1, t=1, n=1), pf("b", 1, t=1)]
+
+    def test_geo_in_parsed_fields(
+        self, database: SplitgillDatabase, geojson_point: dict, wkt_point: str
+    ):
+        records = [
+            Record.new(
+                {
+                    "geojson": geojson_point,
+                    "wkt": wkt_point,
+                    "lat": 30,
+                    "lon": 60,
+                    "rad": 100,
+                }
+            ),
+        ]
+        database.ingest(records, commit=False)
+        database.update_options(
+            ParsingOptionsBuilder().with_geo_hint("lat", "lon", "rad").build(),
+            commit=False,
         )
-        assert len(parsed_fields) == 2
-        assert pf("a", n=1, t=1) in parsed_fields
-        assert pf("b", d=1, t=1) in parsed_fields
+        database.commit()
+        database.sync()
+
+        parsed_fields = database.get_parsed_fields()
+        assert len(parsed_fields) == 7
+        assert parsed_fields == [
+            pf("geojson", 1, g=1),
+            pf("geojson.coordinates", 1, n=1, t=1),
+            pf("geojson.type", 1, t=1),
+            pf("lat", 1, g=1, t=1, n=1),
+            pf("lon", 1, t=1, n=1),
+            pf("rad", 1, t=1, n=1),
+            pf("wkt", 1, g=1, t=1),
+        ]
+
+    def test_counts(self, database: SplitgillDatabase):
+        records = [
+            Record.new({"a": [1, True]}),
+            Record.new({"a": [1, 4.5]}),
+            Record.new({"a": "beans"}),
+        ]
+        database.ingest(records, commit=True)
+        database.sync()
+
+        data_fields = database.get_data_fields()
+        assert len(data_fields) == 2
+        check_data_fields(
+            data_fields,
+            [
+                # 3 fields have an "a" field
+                df("a", 3, l=2, s=1),
+                # 2 fields have lists under "a"
+                df("a.", 2, i=2, b=1, f=1),
+            ],
+        )
+
+        parsed_fields = database.get_parsed_fields()
+        assert len(parsed_fields) == 1
+        assert parsed_fields == [pf("a", 3, n=2, b=1, t=3)]
+
+    def test_hierarchy(self, database: SplitgillDatabase):
+        records = [
+            Record.new({"a": "beans"}),
+            Record.new({"b": {"c": 4, "d": True}}),
+            Record.new({"e": ["beans"]}),
+            Record.new({"f": [{"g": 3, "h": {"i": "beans"}}]}),
+        ]
+        database.ingest(records, commit=True)
+        database.sync()
+
+        # these are the data fields we expect
+        a = df("a", 1, s=1)
+        b = df("b", 1, d=1)
+        b_c = df("b.c", 1, i=1)
+        b_d = df("b.d", 1, b=1)
+        e = df("e", 1, l=1)
+        e_ = df("e.", 1, s=1)
+        f = df("f", 1, l=1)
+        f_ = df("f.", 1, d=1)
+        f__g = df("f..g", 1, i=1)
+        f__h = df("f..h", 1, d=1)
+        f__h_i = df("f..h.i", 1, s=1)
+
+        # these are the relationships we expect
+        b.children.append(b_c)
+        b.children.append(b_d)
+        b_c.parent = b
+        b_d.parent = b
+        e.children.append(e_)
+        e_.parent = e
+        f.children.append(f_)
+        f_.parent = f
+        f_.children.append(f__g)
+        f_.children.append(f__h)
+        f__g.parent = f
+        f__h.parent = f
+        f__h.children.append(f__h_i)
+        f__h_i.parent = f__h
+
+        data_fields = database.get_data_fields()
+        check_data_fields(
+            data_fields, [a, b, b_c, b_d, e, e_, f, f_, f__g, f__h, f__h_i]
+        )
+        assert all(
+            field.is_root_field
+            for field in [
+                data_fields[0],
+                data_fields[1],
+                data_fields[4],
+                data_fields[6],
+            ]
+        )
+        assert a.children == []
+
+        check_data_fields(data_fields[1].children, [b_c, b_d])
+        assert all(field.parent.path == b.path for field in data_fields[1].children)
+
+        check_data_fields(data_fields[4].children, [e_])
+        assert all(field.parent.path == e.path for field in data_fields[4].children)
+
+        check_data_fields(data_fields[6].children, [f_, f__g, f__h])
+        assert all(field.parent.path == f.path for field in data_fields[6].children)
+
+        check_data_fields(data_fields[9].children, [f__h_i])
+        assert all(field.parent.path == f__h.path for field in data_fields[9].children)
 
 
 def test_get_rounded_version(splitgill: SplitgillClient):
