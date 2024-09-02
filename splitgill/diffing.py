@@ -28,6 +28,8 @@ DATE_FORMAT = "%Y-%m-%d"
 # appear meaning we can't strptime with the same format. This is annoying, so here's a
 # strptime format that can parse this native result
 NAIVE_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%f"
+# a convenient tuple of all the datetime formats Splitgill uses internally
+SG_DATE_FORMATS = (DATETIME_FORMAT, DATE_FORMAT, NAIVE_DATETIME_FORMAT)
 
 # this regex matches invalid characters which we would like to remove from all string
 # values as they are ingested into the system. It matches unicode control characters
