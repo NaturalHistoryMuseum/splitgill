@@ -5,8 +5,10 @@ from typing import List
 from unittest.mock import patch, MagicMock
 
 import pytest
+from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search
 from freezegun import freeze_time
+from pymongo import MongoClient
 
 from splitgill.indexing.fields import (
     DocumentField,
@@ -20,7 +22,6 @@ from splitgill.indexing.parser import parse
 from splitgill.indexing.syncing import BulkOptions
 from splitgill.manager import (
     SplitgillClient,
-    MONGO_DATABASE_NAME,
     SplitgillDatabase,
     OPTIONS_COLLECTION_NAME,
     SearchVersion,
@@ -32,7 +33,15 @@ from splitgill.utils import to_timestamp, now
 
 class TestSplitgillClient:
     def test_database(self, splitgill: SplitgillClient):
-        assert splitgill.get_mongo_database().name == MONGO_DATABASE_NAME
+        assert splitgill.get_mongo_database().name == "sg"
+
+    def test_custom_database(
+        self, mongo_client: MongoClient, elasticsearch_client: Elasticsearch
+    ):
+        client = SplitgillClient(
+            mongo_client, elasticsearch_client, mongo_database_name="test"
+        )
+        assert client.get_mongo_database().name == "test"
 
     def test_get_data_collection(self, splitgill: SplitgillClient):
         name = "test"

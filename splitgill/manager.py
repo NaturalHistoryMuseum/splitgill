@@ -26,7 +26,6 @@ from splitgill.model import Record, MongoRecord, ParsingOptions, IngestResult
 from splitgill.search import create_version_query
 from splitgill.utils import partition, now
 
-MONGO_DATABASE_NAME = "sg"
 OPTIONS_COLLECTION_NAME = "options"
 LOCKS_COLLECTION_NAME = "locks"
 
@@ -37,9 +36,15 @@ class SplitgillClient:
     and any other general information Splitgill needs to manage the databases.
     """
 
-    def __init__(self, mongo: MongoClient, elasticsearch: Elasticsearch):
+    def __init__(
+        self,
+        mongo: MongoClient,
+        elasticsearch: Elasticsearch,
+        mongo_database_name: str = "sg",
+    ):
         self.mongo = mongo
         self.elasticsearch = elasticsearch
+        self.mongo_database_name = mongo_database_name
         self.lock_manager = LockManager(self.get_lock_collection())
 
     def get_database(self, name: str) -> "SplitgillDatabase":
@@ -57,7 +62,7 @@ class SplitgillClient:
 
         :return: a pymongo Database object
         """
-        return self.mongo.get_database(MONGO_DATABASE_NAME)
+        return self.mongo.get_database(self.mongo_database_name)
 
     def get_options_collection(self) -> Collection:
         """
