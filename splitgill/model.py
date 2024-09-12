@@ -224,5 +224,5 @@ class IngestResult:
         :param bulk_result: a BulkWriteResult object
         """
         self.inserted += bulk_result.inserted_count
-        self.updated += bulk_result.upserted_count
+        self.updated += bulk_result.modified_count
         self.deleted += bulk_result.deleted_count
