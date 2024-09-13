@@ -208,3 +208,30 @@ class ParsingOptionsBuilder:
         self._date_formats.add(DATE_FORMAT)
         self._date_formats.add(NAIVE_DATETIME_FORMAT)
         return self
+
+    def clear_true_values(self) -> "ParsingOptionsBuilder":
+        """
+        Clear out all true values in this builder.
+
+        :return: self
+        """
+        self._true_values.clear()
+        return self
+
+    def clear_false_values(self) -> "ParsingOptionsBuilder":
+        """
+        Clear out all false values in this builder.
+
+        :return: self
+        """
+        self._false_values.clear()
+        return self
+
+    def clear_geo_hints(self) -> "ParsingOptionsBuilder":
+        """
+        Clear out all geo hints in this builder.
+
+        :return: self
+        """
+        self._geo_hints.clear()
+        return self
