@@ -8,21 +8,6 @@ from elasticsearch_dsl import Search, A
 from strenum import LowercaseStrEnum, StrEnum
 
 
-def is_field_valid(name: str) -> bool:
-    """
-    Defines a valid field in user provided data.
-
-    :param name: the field name
-    :return: True if the field is valid, False otherwise
-    """
-    # todo: should we disallow fields that have a __ in them for elasticsearch-dsl?
-    # ^ is used in parsed type field names, and we use . in the parsed and data type
-    # fields. Additionally, using dots in names is probably going to result in confusing
-    # outcomes for users given elasticsearch will interpret them as flattened objects
-    # and expand them out
-    return name and "^" not in name and "." not in name
-
-
 class DocumentField(LowercaseStrEnum):
     """
     Enum representing the fields used in the indexed documents.

@@ -132,6 +132,12 @@ def test_prepare_field_name():
     assert prepare_field_name(".x.y.z.1.2.") == "_x_y_z_1_2_"
     # a mix of horrors
     assert prepare_field_name("\nx.\ty\r  \x07fowien") == "x_y  fowien"
+    # a ^
+    assert prepare_field_name("x^y") == "x_y"
+    # an empty name
+    assert prepare_field_name("") == "_"
+    # a name which becomes empty after removing all the junk
+    assert prepare_field_name("   \t   \x07   ") == "_"
 
 
 class TestDiff:

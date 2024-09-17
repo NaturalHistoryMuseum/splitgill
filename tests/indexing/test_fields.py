@@ -6,20 +6,11 @@ import pytest
 from splitgill.indexing.fields import (
     ParsedType,
     parsed_path,
-    is_field_valid,
     DocumentField,
     DataType,
     DataField,
     ParsedField,
 )
-
-
-def test_is_field_valid():
-    assert is_field_valid("egg")
-    assert is_field_valid("_egg")
-    assert not is_field_valid("")
-    assert not is_field_valid("egg^beans")
-    assert not is_field_valid("egg.beans")
 
 
 @pytest.mark.parametrize("parsed_type", ParsedType)

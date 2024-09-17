@@ -102,11 +102,23 @@ def prepare_field_name(name: Any) -> str:
         - convert the name to a str, MongoDB only accepts str keys in objects
         - remove any control characters from the str
         - replace . with _ as Elasticsearch doesn't like dots in keys
+        - replace ^ with _ as this is a reserved character we use in parsed field names
+
+    If after cleaning, the field name is an empty string, we return an underscore.
 
     :param name: the field name
     :return: a clean str field name
     """
-    return invalid_key_char_regex.sub("", str(name)).replace(".", "_").strip()
+    clean_name = (
+        invalid_key_char_regex.sub("", str(name))
+        .replace(".", "_")
+        .replace("^", "_")
+        .strip()
+    )
+    # if this results in the empty string, replace with an underscore
+    if not clean_name:
+        clean_name = "_"
+    return clean_name
 
 
 class DiffOp(NamedTuple):
