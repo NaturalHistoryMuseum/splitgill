@@ -15,6 +15,7 @@ DATA_TEMPLATE = {
                 }
             },
             "index": {
+                "codec": "best_compression",
                 "number_of_shards": 5,
                 "number_of_replicas": 1,
                 "mapping": {
