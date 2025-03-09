@@ -1,7 +1,12 @@
+from dataclasses import dataclass
 from datetime import datetime, timezone, date
 from itertools import islice
 from time import time
-from typing import Iterable, Union
+from typing import Iterable, Union, List, Any
+
+from cytoolz import get_in
+from elasticsearch_dsl import Search, A
+from elasticsearch_dsl.aggs import Agg
 
 
 def to_timestamp(moment: Union[datetime, date]) -> int:
@@ -66,3 +71,53 @@ def partition(iterable: Iterable, size: int) -> Iterable[list]:
     it = iter(iterable)
     while chunk := list(islice(it, size)):
         yield chunk
+
+
+@dataclass
+class Term:
+    """
+    Represents a bucket in a terms aggregation result.
+    """
+
+    # the field value
+    value: Union[str, int, float, bool]
+    # thue number of documents this value appeared in
+    count: int
+
+
+def iter_terms(search: Search, field: str, chunk_size: int = 50) -> Iterable[Term]:
+    """
+    Yields Term objects, each representing a value and the number of documents which
+    contain that value in the given field. The Terms are yielded in descending order of
+    value frequency.
+
+    :param search: a Search instance to use to run the aggregation
+    :param field: the name of the field to get the terms for
+    :param chunk_size: the number of buckets to retrieve per request
+    :return: yields Term objects
+    """
+    after = None
+    while True:
+        # this has a dual purpose, it ensures we don't get any search results
+        # when we don't need them, and it ensures we get a fresh copy of the
+        # search to work with
+        agg_search = search[:0]
+        agg_search.aggs.bucket(
+            "values",
+            "composite",
+            size=chunk_size,
+            sources={"value": A("terms", field=field)},
+        )
+        if after is not None:
+            agg_search.aggs["values"].after = after
+
+        result = agg_search.execute().aggs.to_dict()
+
+        buckets = get_in(("values", "buckets"), result, [])
+        after = get_in(("values", "after_key"), result, None)
+        if not buckets:
+            break
+        else:
+            yield from (
+                Term(bucket["key"]["value"], bucket["doc_count"]) for bucket in buckets
+            )

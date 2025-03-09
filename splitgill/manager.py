@@ -4,7 +4,7 @@ from typing import Optional, Iterable, List, Dict, Union
 
 from cytoolz.dicttoolz import get_in
 from elasticsearch import Elasticsearch
-from elasticsearch_dsl import Search, A
+from elasticsearch_dsl import Search
 from elasticsearch_dsl.query import Query
 from pymongo import MongoClient, IndexModel, ASCENDING, DESCENDING
 from pymongo.collection import Collection
@@ -13,7 +13,6 @@ from pymongo.database import Database
 from splitgill.indexing.fields import (
     DocumentField,
     DataField,
-    get_type_counts,
     ParsedField,
 )
 from splitgill.indexing.index import IndexNames, generate_index_ops
@@ -24,7 +23,7 @@ from splitgill.ingest import generate_ops, generate_rollback_ops
 from splitgill.locking import LockManager
 from splitgill.model import Record, MongoRecord, ParsingOptions, IngestResult
 from splitgill.search import create_version_query
-from splitgill.utils import partition, now
+from splitgill.utils import partition, now, iter_terms
 
 OPTIONS_COLLECTION_NAME = "options"
 LOCKS_COLLECTION_NAME = "locks"
@@ -542,6 +541,28 @@ class SplitgillDatabase:
 
         return search
 
+    def get_version_changed_counts(self) -> Dict[int, int]:
+        """
+        Retrieves the available versions and the number of documents that have changed
+        in the database with that version. Changes can be additions, modifications, or
+        deletions.
+
+        :return: versions and associated change counts
+        """
+        search = self.search(version=SearchVersion.all)
+
+        # aggregate over the version field first
+        versions = {
+            term.value: term.count for term in iter_terms(search, DocumentField.VERSION)
+        }
+
+        # then aggregate over the next field to catch deleted records and add those
+        versions.update(
+            {term.value: term.count for term in iter_terms(search, DocumentField.NEXT)}
+        )
+
+        return versions
+
     def get_versions(self) -> List[int]:
         """
         Returns a list of the available versions that have been indexed into
@@ -551,29 +572,7 @@ class SplitgillDatabase:
 
         :return: the available versions in ascending order
         """
-        versions = set()
-
-        # get all versions present in the version and next document fields
-        for field in (DocumentField.VERSION, DocumentField.NEXT):
-            after = None
-            while True:
-                search = self.search(version=SearchVersion.all)[:0]
-                search.aggs.bucket(
-                    "versions",
-                    "composite",
-                    size=50,
-                    sources={"version": A("terms", field=field, order="asc")},
-                )
-                if after is not None:
-                    search.aggs["versions"].after = after
-                result = search.execute().aggs.to_dict()
-                buckets = get_in(("versions", "buckets"), result, [])
-                after = get_in(("versions", "after_key"), result, None)
-                if not buckets:
-                    break
-                versions.update(bucket["key"]["version"] for bucket in buckets)
-
-        return sorted(versions)
+        return sorted(self.get_version_changed_counts().keys())
 
     def get_data_fields(
         self, version: Optional[int] = None, query: Optional[Query] = None
@@ -591,16 +590,15 @@ class SplitgillDatabase:
         search = self.search(version if version is not None else SearchVersion.latest)
         if query is not None:
             search = search.filter(query)
-        paths_and_counts = get_type_counts(DocumentField.DATA_TYPES, search)
 
         fields: Dict[str, DataField] = {}
 
         # create the basic field objects and add type counts
-        for path_and_type, count in paths_and_counts:
-            path, raw_types = path_and_type.rsplit(".", 1)
+        for term in iter_terms(search, DocumentField.DATA_TYPES):
+            path, raw_types = term.value.rsplit(".", 1)
             if path not in fields:
                 fields[path] = DataField(path)
-            fields[path].add(raw_types, count)
+            fields[path].add(raw_types, term.count)
 
         # go through each field and link it with other fields to create hierarchy
         for field in fields.values():
@@ -643,16 +641,15 @@ class SplitgillDatabase:
         search = self.search(version if version is not None else SearchVersion.latest)
         if query is not None:
             search = search.filter(query)
-        paths_and_counts = get_type_counts(DocumentField.PARSED_TYPES, search)
 
         fields: Dict[str, ParsedField] = {}
 
         # create the basic field objects and add type counts
-        for path_and_type, count in paths_and_counts:
-            path, raw_types = path_and_type.rsplit(".", 1)
+        for term in iter_terms(search, DocumentField.PARSED_TYPES):
+            path, raw_types = term.value.rsplit(".", 1)
             if path not in fields:
                 fields[path] = ParsedField(path)
-            fields[path].add(raw_types, count)
+            fields[path].add(raw_types, term.count)
 
         # return the parsed fields as a list in a specific order. Note that because
         # we're using multiple orderings in different directions, we do multiple sorts

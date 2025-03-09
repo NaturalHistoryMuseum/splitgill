@@ -1,10 +1,8 @@
 import dataclasses
 from collections import Counter
 from enum import auto
-from typing import Optional, List, Tuple, Counter as CounterType, Union
+from typing import Optional, List, Counter as CounterType, Union
 
-from cytoolz import get_in
-from elasticsearch_dsl import Search, A
 from strenum import LowercaseStrEnum, StrEnum
 
 
@@ -380,49 +378,3 @@ class ParsedField:
         # because records either get parsed without geo data or with geo point and geo
         # shape, we can just use geo point
         return self.type_counts[ParsedType.GEO_POINT]
-
-
-def get_type_counts(field: DocumentField, search: Search) -> List[Tuple[str, int]]:
-    """
-    Perform a terms aggregation on the given field using the given search as a basis for
-    the aggregation operation. Returns a list of tuples containing the string value
-    (which will be a combination of the field path and the field types) and the number
-    of records which had that combination.
-
-    :param field: which DocumentField to aggregate, must be data_types or parsed_types
-    :param search: a search to perform the aggregation with, this should have the
-                   client, index, and any filters set
-    :return: a list of tuples
-    """
-    if field not in (DocumentField.PARSED_TYPES, DocumentField.DATA_TYPES):
-        raise ValueError("Can only aggregate type counts on parsed_types or data_types")
-
-    paths_and_types = []
-    after = None
-    while True:
-        # this has a dual purpose, it ensures we don't get any search results
-        # when we don't need them, and it ensures we get a fresh copy of the
-        # search to work with
-        agg_search = search[:0]
-        agg_search.aggs.bucket(
-            "paths",
-            "composite",
-            # let's try and get all the fields in one go if we can
-            size=100,
-            sources={"path": A("terms", field=field)},
-        )
-        if after is not None:
-            agg_search.aggs["paths"].after = after
-
-        result = agg_search.execute().aggs.to_dict()
-
-        buckets = get_in(("paths", "buckets"), result, [])
-        after = get_in(("paths", "after_key"), result, None)
-        if not buckets:
-            break
-        else:
-            paths_and_types.extend(
-                (bucket["key"]["path"], bucket["doc_count"]) for bucket in buckets
-            )
-
-    return paths_and_types
