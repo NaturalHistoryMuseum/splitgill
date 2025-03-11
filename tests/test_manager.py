@@ -16,6 +16,7 @@ from splitgill.indexing.fields import (
     ParsedField,
     ParsedType,
     DataType,
+    DATA_ID_FIELD,
 )
 from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.indexing.parser import parse
@@ -608,6 +609,10 @@ def test_search(splitgill: SplitgillClient):
     assert not database.search(version=version).to_dict()
 
 
+def id_pf(count: int) -> ParsedField:
+    return pf(path=DATA_ID_FIELD, count=count, t=count)
+
+
 def pf(
     path: str,
     count: int,
@@ -629,6 +634,10 @@ def pf(
     }
     counts = {parsed_type: count for parsed_type, count in counts.items() if count > 0}
     return ParsedField(path, count=count, type_counts=Counter(counts))
+
+
+def id_df(count: int) -> DataField:
+    return df(path=DATA_ID_FIELD, count=count, s=count)
 
 
 def df(
@@ -676,12 +685,18 @@ class TestGetFieldsMethods:
         database.sync()
 
         data_fields = database.get_data_fields()
-        assert len(data_fields) == 3
-        assert data_fields == [df("b", 3, i=3), df("a", 2, i=2), df("c", 1, i=1)]
+        assert len(data_fields) == 4
+        assert data_fields == [
+            id_df(6),
+            df("b", 3, i=3),
+            df("a", 2, i=2),
+            df("c", 1, i=1),
+        ]
 
         parsed_fields = database.get_parsed_fields()
-        assert len(parsed_fields) == 3
+        assert len(parsed_fields) == 4
         assert parsed_fields == [
+            id_pf(6),
             pf("b", 3, t=3, n=3),
             pf("a", 2, t=2, n=2),
             pf("c", 1, t=1, n=1),
@@ -700,12 +715,18 @@ class TestGetFieldsMethods:
         database.sync()
 
         data_fields = database.get_data_fields()
-        assert len(data_fields) == 3
-        assert data_fields == [df("b", 3, f=3), df("a", 2, f=2), df("c", 1, f=1)]
+        assert len(data_fields) == 4
+        assert data_fields == [
+            id_df(6),
+            df("b", 3, f=3),
+            df("a", 2, f=2),
+            df("c", 1, f=1),
+        ]
 
         parsed_fields = database.get_parsed_fields()
-        assert len(parsed_fields) == 3
+        assert len(parsed_fields) == 4
         assert parsed_fields == [
+            id_pf(6),
             pf("b", 3, t=3, n=3),
             pf("a", 2, t=2, n=2),
             pf("c", 1, t=1, n=1),
@@ -728,12 +749,20 @@ class TestGetFieldsMethods:
         database.sync()
 
         data_fields = database.get_data_fields()
-        assert len(data_fields) == 2
-        assert data_fields == [df("a", 2, s=2), df("b", 1, s=1)]
+        assert len(data_fields) == 3
+        assert data_fields == [
+            id_df(3),
+            df("a", 2, s=2),
+            df("b", 1, s=1),
+        ]
 
         parsed_fields = database.get_parsed_fields()
-        assert len(parsed_fields) == 2
-        assert parsed_fields == [pf("a", 2, d=2, t=2), pf("b", 1, d=1, t=1)]
+        assert len(parsed_fields) == 3
+        assert parsed_fields == [
+            id_pf(3),
+            pf("a", 2, d=2, t=2),
+            pf("b", 1, d=1, t=1),
+        ]
 
     def test_bool(self, database: SplitgillDatabase):
         records = [
@@ -748,12 +777,18 @@ class TestGetFieldsMethods:
         database.sync()
 
         data_fields = database.get_data_fields()
-        assert len(data_fields) == 3
-        assert data_fields == [df("b", 3, b=3), df("a", 2, b=2), df("c", 1, b=1)]
+        assert len(data_fields) == 4
+        assert data_fields == [
+            id_df(6),
+            df("b", 3, b=3),
+            df("a", 2, b=2),
+            df("c", 1, b=1),
+        ]
 
         parsed_fields = database.get_parsed_fields()
-        assert len(parsed_fields) == 3
+        assert len(parsed_fields) == 4
         assert parsed_fields == [
+            id_pf(6),
             pf("b", 3, t=3, b=3),
             pf("a", 2, t=2, b=2),
             pf("c", 1, t=1, b=1),
@@ -772,12 +807,18 @@ class TestGetFieldsMethods:
         database.sync()
 
         data_fields = database.get_data_fields()
-        assert len(data_fields) == 3
-        assert data_fields == [df("b", 3, s=3), df("a", 2, s=2), df("c", 1, s=1)]
+        assert len(data_fields) == 4
+        assert data_fields == [
+            id_df(6),
+            df("b", 3, s=3),
+            df("a", 2, s=2),
+            df("c", 1, s=1),
+        ]
 
         parsed_fields = database.get_parsed_fields()
-        assert len(parsed_fields) == 3
+        assert len(parsed_fields) == 4
         assert parsed_fields == [
+            id_pf(6),
             pf("b", 3, t=3),
             pf("a", 2, t=2),
             pf("c", 1, t=1),
@@ -796,10 +837,11 @@ class TestGetFieldsMethods:
         database.sync()
 
         data_fields = database.get_data_fields()
-        assert len(data_fields) == 6
+        assert len(data_fields) == 7
         check_data_fields(
             data_fields,
             [
+                id_df(6),
                 df("topB", 3, d=3),
                 df("topB.a", 3, i=3),
                 df("topA", 2, d=2),
@@ -810,8 +852,9 @@ class TestGetFieldsMethods:
         )
 
         parsed_fields = database.get_parsed_fields()
-        assert len(parsed_fields) == 3
+        assert len(parsed_fields) == 4
         assert parsed_fields == [
+            id_pf(6),
             pf("topB.a", 3, t=3, n=3),
             pf("topA.a", 2, t=2, n=2),
             pf("topC.a", 1, t=1, n=1),
@@ -828,18 +871,22 @@ class TestGetFieldsMethods:
         database.sync()
 
         data_fields = database.get_data_fields()
-        assert len(data_fields) == 2
+        assert len(data_fields) == 3
         check_data_fields(
             data_fields,
             [
+                id_df(4),
                 df("a", 4, l=4),
                 df("a.", 4, i=3, f=1, s=1, b=1),
             ],
         )
 
         parsed_fields = database.get_parsed_fields()
-        assert len(parsed_fields) == 1
-        assert parsed_fields == [pf("a", 4, t=4, n=4, b=1)]
+        assert len(parsed_fields) == 2
+        assert parsed_fields == [
+            id_pf(4),
+            pf("a", 4, t=4, n=4, b=1),
+        ]
 
     def test_mix(self, database: SplitgillDatabase):
         records = [
@@ -854,10 +901,11 @@ class TestGetFieldsMethods:
         database.sync()
 
         data_fields = database.get_data_fields()
-        assert len(data_fields) == 5
+        assert len(data_fields) == 6
         check_data_fields(
             data_fields,
             [
+                id_df(6),
                 df("b", 4, s=1, l=1, d=2),
                 df("a", 2, i=1, f=1),
                 df("b.x", 2, f=1, s=1),
@@ -867,8 +915,9 @@ class TestGetFieldsMethods:
         )
 
         parsed_fields = database.get_parsed_fields()
-        assert len(parsed_fields) == 4
+        assert len(parsed_fields) == 5
         assert parsed_fields == [
+            id_pf(6),
             pf("a", 2, t=2, n=2),
             pf("b", 2, t=2, n=1),
             pf("b.x", 2, t=2, n=1),
@@ -884,10 +933,11 @@ class TestGetFieldsMethods:
         database.sync()
 
         data_fields = database.get_data_fields()
-        assert len(data_fields) == 4
+        assert len(data_fields) == 5
         check_data_fields(
             data_fields,
             [
+                id_df(2),
                 df("a", 2, l=2),
                 df("a.", 2, d=2),
                 df("a..a", 2, i=1, f=2, s=1),
@@ -896,8 +946,9 @@ class TestGetFieldsMethods:
         )
 
         parsed_fields = database.get_parsed_fields()
-        assert len(parsed_fields) == 2
+        assert len(parsed_fields) == 3
         assert parsed_fields == [
+            id_pf(2),
             pf("a.a", 2, t=2, n=2),
             pf("a.b", 2, t=2, b=1, n=1),
         ]
@@ -912,10 +963,11 @@ class TestGetFieldsMethods:
         database.sync()
 
         data_fields = database.get_data_fields()
-        assert len(data_fields) == 3
+        assert len(data_fields) == 4
         check_data_fields(
             data_fields,
             [
+                id_df(3),
                 df("a", 3, l=3),
                 df("a.", 3, l=3, i=1, s=1),
                 df("a..", 3, b=1, i=3),
@@ -923,8 +975,11 @@ class TestGetFieldsMethods:
         )
 
         parsed_fields = database.get_parsed_fields()
-        assert len(parsed_fields) == 1
-        assert parsed_fields == [pf("a", 3, t=3, n=3, b=1)]
+        assert len(parsed_fields) == 2
+        assert parsed_fields == [
+            id_pf(3),
+            pf("a", 3, t=3, n=3, b=1),
+        ]
 
     def test_deep_nesting(self, database: SplitgillDatabase):
         # ew
@@ -933,10 +988,11 @@ class TestGetFieldsMethods:
         database.sync()
 
         data_fields = database.get_data_fields()
-        assert len(data_fields) == 7
+        assert len(data_fields) == 8
         check_data_fields(
             data_fields,
             [
+                id_df(1),
                 df("a", 1, d=1),
                 df("a.b", 1, l=1),
                 df("a.b.", 1, l=1),
@@ -947,8 +1003,8 @@ class TestGetFieldsMethods:
             ],
         )
         parsed_fields = database.get_parsed_fields()
-        assert len(parsed_fields) == 1
-        assert parsed_fields == [pf("a.b.c.d", 1, t=1, n=1)]
+        assert len(parsed_fields) == 2
+        assert parsed_fields == [id_pf(1), pf("a.b.c.d", 1, t=1, n=1)]
 
     def test_version(self, database: SplitgillDatabase):
         # add some records with integer values
@@ -967,19 +1023,19 @@ class TestGetFieldsMethods:
 
         # check the latest version where the values are all bools
         data_fields = database.get_data_fields()
-        assert len(data_fields) == 1
-        assert data_fields == [df("x", 2, b=2)]
+        assert len(data_fields) == 2
+        assert data_fields == [id_df(2), df("x", 2, b=2)]
         parsed_fields = database.get_parsed_fields()
-        assert len(parsed_fields) == 1
-        assert parsed_fields == [pf("x", 2, t=2, b=2)]
+        assert len(parsed_fields) == 2
+        assert parsed_fields == [id_pf(2), pf("x", 2, t=2, b=2)]
 
         # then check the old version where the values are ints
         data_fields = database.get_data_fields(version=to_timestamp(version_1_time))
-        assert len(data_fields) == 1
-        assert data_fields == [df("x", 2, i=2)]
+        assert len(data_fields) == 2
+        assert data_fields == [id_df(2), df("x", 2, i=2)]
         parsed_fields = database.get_parsed_fields(version=to_timestamp(version_1_time))
-        assert len(parsed_fields) == 1
-        assert parsed_fields == [pf("x", 2, t=2, n=2)]
+        assert len(parsed_fields) == 2
+        assert parsed_fields == [id_pf(2), pf("x", 2, t=2, n=2)]
 
     def test_with_filter(self, database: SplitgillDatabase):
         records = [
@@ -993,36 +1049,44 @@ class TestGetFieldsMethods:
 
         # check the baseline
         data_fields = database.get_data_fields()
-        assert len(data_fields) == 2
-        assert data_fields == [df("a", 4, i=4), df("b", 4, f=1, b=1, s=2)]
+        assert len(data_fields) == 3
+        assert data_fields == [
+            id_df(4),
+            df("a", 4, i=4),
+            df("b", 4, f=1, b=1, s=2),
+        ]
         parsed_fields = database.get_parsed_fields()
-        assert len(parsed_fields) == 2
-        assert parsed_fields == [pf("a", 4, t=4, n=4), pf("b", 4, t=4, b=1, n=1)]
+        assert len(parsed_fields) == 3
+        assert parsed_fields == [
+            id_pf(4),
+            pf("a", 4, t=4, n=4),
+            pf("b", 4, t=4, b=1, n=1),
+        ]
 
         # now check with some filters
         query = term_query("a", 1)
         data_fields = database.get_data_fields(query=query)
         parsed_fields = database.get_parsed_fields(query=query)
-        assert data_fields == [df("a", 1, i=1), df("b", 1, b=1)]
-        assert parsed_fields == [pf("a", 1, t=1, n=1), pf("b", 1, t=1, b=1)]
+        assert data_fields == [id_df(1), df("a", 1, i=1), df("b", 1, b=1)]
+        assert parsed_fields == [id_pf(1), pf("a", 1, t=1, n=1), pf("b", 1, t=1, b=1)]
 
         query = term_query("a", 2)
         data_fields = database.get_data_fields(query=query)
         parsed_fields = database.get_parsed_fields(query=query)
-        assert data_fields == [df("a", 1, i=1), df("b", 1, f=1)]
-        assert parsed_fields == [pf("a", 1, t=1, n=1), pf("b", 1, t=1, n=1)]
+        assert data_fields == [id_df(1), df("a", 1, i=1), df("b", 1, f=1)]
+        assert parsed_fields == [id_pf(1), pf("a", 1, t=1, n=1), pf("b", 1, t=1, n=1)]
 
         query = term_query("a", 3)
         data_fields = database.get_data_fields(query=query)
         parsed_fields = database.get_parsed_fields(query=query)
-        assert data_fields == [df("a", 1, i=1), df("b", 1, s=1)]
-        assert parsed_fields == [pf("a", 1, t=1, n=1), pf("b", 1, t=1)]
+        assert data_fields == [id_df(1), df("a", 1, i=1), df("b", 1, s=1)]
+        assert parsed_fields == [id_pf(1), pf("a", 1, t=1, n=1), pf("b", 1, t=1)]
 
         query = term_query("a", 4)
         data_fields = database.get_data_fields(query=query)
         parsed_fields = database.get_parsed_fields(query=query)
-        assert data_fields == [df("a", 1, i=1), df("b", 1, s=1)]
-        assert parsed_fields == [pf("a", 1, t=1, n=1), pf("b", 1, t=1)]
+        assert data_fields == [id_df(1), df("a", 1, i=1), df("b", 1, s=1)]
+        assert parsed_fields == [id_pf(1), pf("a", 1, t=1, n=1), pf("b", 1, t=1)]
 
     def test_geo_in_parsed_fields(
         self, database: SplitgillDatabase, geojson_point: dict, wkt_point: str
@@ -1047,8 +1111,9 @@ class TestGetFieldsMethods:
         database.sync()
 
         parsed_fields = database.get_parsed_fields()
-        assert len(parsed_fields) == 7
+        assert len(parsed_fields) == 8
         assert parsed_fields == [
+            id_pf(1),
             pf("geojson", 1, g=1),
             pf("geojson.coordinates", 1, n=1, t=1),
             pf("geojson.type", 1, t=1),
@@ -1068,10 +1133,11 @@ class TestGetFieldsMethods:
         database.sync()
 
         data_fields = database.get_data_fields()
-        assert len(data_fields) == 2
+        assert len(data_fields) == 3
         check_data_fields(
             data_fields,
             [
+                id_df(3),
                 # 3 fields have an "a" field
                 df("a", 3, l=2, s=1),
                 # 2 fields have lists under "a"
@@ -1080,8 +1146,8 @@ class TestGetFieldsMethods:
         )
 
         parsed_fields = database.get_parsed_fields()
-        assert len(parsed_fields) == 1
-        assert parsed_fields == [pf("a", 3, n=2, b=1, t=3)]
+        assert len(parsed_fields) == 2
+        assert parsed_fields == [id_pf(3), pf("a", 3, n=2, b=1, t=3)]
 
     def test_hierarchy(self, database: SplitgillDatabase):
         records = [
@@ -1094,6 +1160,7 @@ class TestGetFieldsMethods:
         database.sync()
 
         # these are the data fields we expect
+        record_id = id_df(4)
         a = df("a", 1, s=1)
         b = df("b", 1, d=1)
         b_c = df("b.c", 1, i=1)
@@ -1124,29 +1191,30 @@ class TestGetFieldsMethods:
 
         data_fields = database.get_data_fields()
         check_data_fields(
-            data_fields, [a, b, b_c, b_d, e, e_, f, f_, f__g, f__h, f__h_i]
+            data_fields, [record_id, a, b, b_c, b_d, e, e_, f, f_, f__g, f__h, f__h_i]
         )
         assert all(
             field.is_root_field
             for field in [
                 data_fields[0],
                 data_fields[1],
-                data_fields[4],
-                data_fields[6],
+                data_fields[2],
+                data_fields[5],
+                data_fields[7],
             ]
         )
         assert a.children == []
 
-        check_data_fields(data_fields[1].children, [b_c, b_d])
+        check_data_fields(data_fields[2].children, [b_c, b_d])
         assert all(field.parent.path == b.path for field in data_fields[1].children)
 
-        check_data_fields(data_fields[4].children, [e_])
+        check_data_fields(data_fields[5].children, [e_])
         assert all(field.parent.path == e.path for field in data_fields[4].children)
 
-        check_data_fields(data_fields[6].children, [f_, f__g, f__h])
+        check_data_fields(data_fields[7].children, [f_, f__g, f__h])
         assert all(field.parent.path == f.path for field in data_fields[6].children)
 
-        check_data_fields(data_fields[9].children, [f__h_i])
+        check_data_fields(data_fields[10].children, [f__h_i])
         assert all(field.parent.path == f__h.path for field in data_fields[9].children)
 
 

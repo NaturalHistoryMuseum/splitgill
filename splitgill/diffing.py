@@ -99,25 +99,27 @@ def prepare_field_name(name: Any) -> str:
     """
     Cleans up a field name for ingestion into the system. There are a few steps to this:
 
-        - convert the name to a str, MongoDB only accepts str keys in objects
+        - convert the name to a str as MongoDB only accepts str keys in objects
         - remove any control characters from the str
         - replace . with _ as Elasticsearch doesn't like dots in keys
-        - replace ^ with _ as this is a reserved character we use in parsed field names
+        - replace any name starting _ with - as _ is a reserved character in Splitgill
+          that we use in special cases
 
-    If after cleaning, the field name is an empty string, we return an underscore.
+    If after cleaning, the field name is an empty string, we return a hyphen.
+
+    This function does not explicitly handle the _id field as it is assumed it will have
+    been removed before this function is called.
 
     :param name: the field name
     :return: a clean str field name
     """
-    clean_name = (
-        invalid_key_char_regex.sub("", str(name))
-        .replace(".", "_")
-        .replace("^", "_")
-        .strip()
-    )
-    # if this results in the empty string, replace with an underscore
+    clean_name = invalid_key_char_regex.sub("", str(name)).replace(".", "_").strip()
+    # if this results in the empty string, replace with a hyphen
     if not clean_name:
-        clean_name = "_"
+        return "-"
+
+    if clean_name[0] == "_":
+        clean_name = f"-{clean_name[1:]}"
     return clean_name
 
 

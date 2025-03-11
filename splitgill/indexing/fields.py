@@ -5,6 +5,11 @@ from typing import Optional, List, Counter as CounterType, Union
 
 from strenum import LowercaseStrEnum, StrEnum
 
+# special field containing the record's ID so that it can be used for searching etc.
+# Internally, Splitgill doesn't need this, but it's included for user convenience in
+# every record as data._id / parsed._id.
+DATA_ID_FIELD = "_id"
+
 
 class DocumentField(LowercaseStrEnum):
     """
@@ -50,21 +55,21 @@ class ParsedType(StrEnum):
     """
 
     # the number field
-    NUMBER = "^n"
+    NUMBER = "_n"
     # the date field
-    DATE = "^d"
+    DATE = "_d"
     # the boolean field
-    BOOLEAN = "^b"
+    BOOLEAN = "_b"
     # the text field
-    TEXT = "^t"
+    TEXT = "_t"
     # the keyword case-insensitive field
-    KEYWORD_CASE_INSENSITIVE = "^ki"
+    KEYWORD_CASE_INSENSITIVE = "_ki"
     # the keyword case-sensitive field
-    KEYWORD_CASE_SENSITIVE = "^ks"
+    KEYWORD_CASE_SENSITIVE = "_ks"
     # the geo point field (shape centroid, will always be a point)
-    GEO_POINT = "^gp"
+    GEO_POINT = "_gp"
     # the geo shape field (full shape, could be point, linestring, or polygon)
-    GEO_SHAPE = "^gs"
+    GEO_SHAPE = "_gs"
 
     def path_to(self, field: str, full: bool = True) -> str:
         """

@@ -6,7 +6,7 @@ from typing import Dict, Optional
 
 from freezegun import freeze_time
 
-from splitgill.indexing.fields import DocumentField
+from splitgill.indexing.fields import DocumentField, DATA_ID_FIELD
 from splitgill.indexing.index import (
     generate_index_ops,
     IndexNames,
@@ -110,6 +110,10 @@ def check_op(
     assert op.document[DocumentField.ID] == record_id
     assert op.document[DocumentField.VERSION] == version
     assert op.document[DocumentField.VERSIONS]["gte"] == version
+
+    # copy the data and add the record ID for checks
+    data = data.copy()
+    data[DATA_ID_FIELD] = record_id
     assert op.document[DocumentField.DATA] == data
 
     parsed_data = parse(data, options)

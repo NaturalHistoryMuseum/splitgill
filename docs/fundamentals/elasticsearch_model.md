@@ -133,21 +133,21 @@ The subfields all have short names to reduce storage requirements and because th
 only for internal use, so they have no need to be particularly readable.
 The subfields are:
 
-- `^t` - `text` type field, used for full-text searches.
-- `^ki` - `keyword` type field, use for sorting, aggregations, and term level queries.
+- `_t` - `text` type field, used for full-text searches.
+- `_ki` - `keyword` type field, use for sorting, aggregations, and term level queries.
   This field's data is indexed lowercase to allow case-insensitive queries on it.
   Only the first 256 characters are stored in this field to reduce storage requirements.
-- `^ks` - `keyword` type field, use for sorting, aggregations, and term level queries.
+- `_ks` - `keyword` type field, use for sorting, aggregations, and term level queries.
   This field's data is indexed without any changes to allow case-sensitive queries on
   it.
-- `^n` - `double` type field, used for number searches
-- `^d` - `date` type field, used for date searches.
+- `_n` - `double` type field, used for number searches
+- `_d` - `date` type field, used for date searches.
   This field's format is `epoch_millis` which means any queries on this field will use
   this by default, however, you can set a `format` to alter this when querying.
-- `^b` - `boolean` type field, used for boolean searches.
-- `^gp` - `geo_point` type field, used for latitude-longitude pairs marking a precise
+- `_b` - `boolean` type field, used for boolean searches.
+- `_gp` - `geo_point` type field, used for latitude-longitude pairs marking a precise
   point on Earth.
-- `^gs` - `geo_shape` type field, used for more complex geographical features such as
+- `_gs` - `geo_shape` type field, used for more complex geographical features such as
   lines and polygons, as well as points.
 
 More details about how data is parsed into these subfields can be found in the Parsing
@@ -169,21 +169,21 @@ An array of string values representing the fields found in the parsed data of th
 record version and the types found therein.
 The values in this array are used to by the `SplitgillDatabase.get_fields` method to
 provide data about the fields in the parsed data and the number of times each field has
-a certain type (`^n`, `^b`, `^gp` etc, see the `splitgill.indexing.fields.ParsedType`
+a certain type (`_n`, `_b`, `_gp` etc, see the `splitgill.indexing.fields.ParsedType`
 enum).
 This field is indexed as a `keyword`.
 
 ### all_text
 
-A `text` field into which all `^t` parsed data is copied on index (using a `copy_to`).
+A `text` field into which all `_t` parsed data is copied on index (using a `copy_to`).
 This field provides "search everything" functionality.
 
 This field is indexed but not stored.
 
 ### all_points
 
-A `geo_point` field into which all `^gp` parsed data is copied on index (using a
-`copy_to`, this is why the data in the `^gp` field is formatted using WKT as it allows
+A `geo_point` field into which all `_gp` parsed data is copied on index (using a
+`copy_to`, this is why the data in the `_gp` field is formatted using WKT as it allows
 us to use `copy_to` which doesn't work on complex data types (e.g. objects)).
 This field provides "search everything" functionality for geographic points and is the
 recommended field to use for geo grid aggregations for maps.
@@ -192,8 +192,8 @@ This field is indexed but not stored.
 
 ### all_shapes
 
-A `geo_shape` field into which all `^gs` parsed data is copied on index (using a
-`copy_to`, this is why the data in the `^gs` field is formatted using WKT as it allows
+A `geo_shape` field into which all `_gs` parsed data is copied on index (using a
+`copy_to`, this is why the data in the `_gs` field is formatted using WKT as it allows
 us to use `copy_to` which doesn't work on complex data types (e.g. objects)).
 This field provides "search everything" functionality for geographic shapes.
 
@@ -210,29 +210,29 @@ The details of exactly how data is parsed is presented in this section.
 
 #### Parsing rules
 
-- If the value is a `bool`, it will be parsed into `^b` directly.
+- If the value is a `bool`, it will be parsed into `_b` directly.
 - If the value is a `str` and matches one of the `true_values` in the parsing options
-  _when lowercased_, it will be parsed into `^b` with a `True` value.
+  _when lowercased_, it will be parsed into `_b` with a `True` value.
 - If the value is a `str` and matches one of the `false_values` in the parsing options
-  _when lowercased_, it will be parsed into `^b` with a `False` value.
+  _when lowercased_, it will be parsed into `_b` with a `False` value.
 
 #### String representation
 
-If the value is a `bool`, the string parsed fields (`^t`, `^ki`, and `^ks`) will be set
+If the value is a `bool`, the string parsed fields (`_t`, `_ki`, and `_ks`) will be set
 to `str(value)`, i.e. "True" and "False" for `True` and `False`.
 
 ### Number parsing
 
 #### Parsing rules
 
-- If the value is a `float` or an `int`, it will be parsed into `^n` directly.
+- If the value is a `float` or an `int`, it will be parsed into `_n` directly.
 - If the value is a `str` and can be parsed successfully
   by [`try_float`](https://fastnumbers.readthedocs.io/en/stable/api.html#fastnumbers.try_float)
-  it will be parsed into `^n` with the returned float value (NaN and inf are ignored).
+  it will be parsed into `_n` with the returned float value (NaN and inf are ignored).
 
 #### String representation
 
-If the value is an `int`, the string parsed fields (`^t`, `^ki`, and `^ks`) will be set
+If the value is an `int`, the string parsed fields (`_t`, `_ki`, and `_ks`) will be set
 to `str(value)`.
 
 If the values is a `float`, the `float_format` value from the parsing options will be
@@ -279,11 +279,11 @@ Splitgill and set the date formats in the parsing options as you see fit.
 #### Parsing rules
 
 - If the value is a `str` and can be parsed successfully by one of the date formats
-  specified in the parsing options, `^d` will be populated with the timestamp in
+  specified in the parsing options, `_d` will be populated with the timestamp in
   milliseconds since the UNIX epoch.
   If the result of parsing the string to a `datetime` gives us back a naive datetime, we
   replace the timezone with UTC to ensure stability between regenerations of the parsed
-  value (if the `datetime` was treated as naive, we'd end up with a different `^d`
+  value (if the `datetime` was treated as naive, we'd end up with a different `_d`
   value depending on whether the data was indexed in summer or not due to daylight
   savings time, for example.
   The `str` is parsed using `datetime.strptime` and only the first date format that
@@ -300,13 +300,13 @@ See the parsing rules sections from the other types for specific information abo
 
 There are three string representations:
 
-- `^t` (text)
-- `^cs` (keyword case-sensitive)
-- `^ci` (keyword case-insensitive)
+- `_t` (text)
+- `_cs` (keyword case-sensitive)
+- `_ci` (keyword case-insensitive)
 
-The `^t` representation of the `str` value is exactly the same as the value.
+The `_t` representation of the `str` value is exactly the same as the value.
 
-For `^cs` and `^ci`, the `str` value is truncated before passing it to Elasticsearch.
+For `_cs` and `_ci`, the `str` value is truncated before passing it to Elasticsearch.
 The length to truncate the value to is defined in the parsing options
 (`keyword_length`).
 This truncation occurs because Elasticsearch has some limitations on maximum keyword
@@ -356,7 +356,7 @@ There are three ways geographic data can be parsed:
 ##### Shape validity
 
 All shapes, regardless of how they are discovered, are checked for validity.
-If the shape fails the check, it is not indexed as `^gp` or `^gs`.
+If the shape fails the check, it is not indexed as `_gp` or `_gs`.
 
 To pass the checks the shape must:
 
@@ -397,12 +397,12 @@ It roughly equates to the number of triangles used to create the polygon, divide
 So a value of 16 will combine 64 triangles to make the circle.
 
 If no radius field is specified, or anything goes wrong when generating the circle (e.g.
-bad radius, bad segment value, some other error) then both the `^gp` and `^gs` are set
+bad radius, bad segment value, some other error) then both the `_gp` and `_gs` are set
 to the point.
-If the circle polygon is generated, then the `^gp` will be set to the point and `^gs`
+If the circle polygon is generated, then the `_gp` will be set to the point and `_gs`
 will be set to the circle polygon.
 
-The `^gp` and `^gs` fields are added as subfields to the latitude field, alongside any
+The `_gp` and `_gs` fields are added as subfields to the latitude field, alongside any
 other parsed types.
 This is for ease of access but means the latitude fields have to be unique amongst the
 geo hints specified.
@@ -442,14 +442,14 @@ The GeoJSON shape found will be checked for validity, including correct polygon 
 direction.
 See [RFC 7946](https://datatracker.ietf.org/doc/html/rfc7946#section-3.1.6) for details.
 
-When some GeoJSON is parsed, `^gs` is set to GeoJSON shape and `^gp` is set to the
+When some GeoJSON is parsed, `_gs` is set to GeoJSON shape and `_gp` is set to the
 middle of the shape using Shapely's centroid function.
 
-Because GeoJSON is matched on `dict` values, this means we have to add the `^gp` and
-`^gs` fields to the parsed version of the dict, at the same level as the other keys,
+Because GeoJSON is matched on `dict` values, this means we have to add the `_gp` and
+`_gs` fields to the parsed version of the dict, at the same level as the other keys,
 including the `"type"` and `"coordinates"` keys required by GeoJSON.
-This means to avoid overwriting a user-defined key, we disallow fields from containing
-the special `^` character.
+This means to avoid overwriting a user-defined key, we disallow fields from starting
+with the special `_` character (apart from `_id`).
 
 ##### WKT
 
@@ -465,13 +465,13 @@ Only certain features are supported, specifically the basic types:
 The WKT shape will be checked for validity, but not winding as WKT does not specify any
 rules in this regard.
 
-When some WKT is parsed, `^gs` is set to the WKT shape and `^gp` is set to the
+When some WKT is parsed, `_gs` is set to the WKT shape and `_gp` is set to the
 middle of the shape using Shapely's centroid function.
 
 #### String representation
 
-Regardless of the method of discovery, the `^gp` and `^gs` parsed field values will be
+Regardless of the method of discovery, the `_gp` and `_gs` parsed field values will be
 provided to Elasticsearch using WKT.
 This is probably more efficient than using GeoJSON but also allows us to use `copy_to`
-in the Elasticsearch data template to copy the values from `^gp` and `^gs` into
+in the Elasticsearch data template to copy the values from `_gp` and `_gs` into
 `all_points` and `all_shapes` respectively as it only works on simple values.
