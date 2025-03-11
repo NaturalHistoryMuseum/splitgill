@@ -114,12 +114,12 @@ class TestParsedField:
         pf = ParsedField("field")
         pf.add(",".join([ParsedType.NUMBER, ParsedType.DATE]), 3)
         pf.add(ParsedType.TEXT, 4)
-        pf.add(ParsedType.KEYWORD_CASE_INSENSITIVE, 24)
+        pf.add(ParsedType.KEYWORD, 24)
         assert pf.is_type(
             ParsedType.NUMBER,
             ParsedType.DATE,
             ParsedType.TEXT,
-            ParsedType.KEYWORD_CASE_INSENSITIVE,
+            ParsedType.KEYWORD,
         )
         assert pf.is_number
         assert pf.count_number == 3
@@ -127,8 +127,6 @@ class TestParsedField:
         assert pf.count_text == 4
         assert pf.is_date
         assert pf.count_date == 3
-        assert pf.is_keyword_case_insensitive
-        assert pf.count_keyword_case_insensitive == 24
-        assert pf.is_keyword(False)
-        assert pf.count_keyword(False) == 24
+        assert pf.is_keyword
+        assert pf.count_keyword == 24
         assert pf.count == 3 + 4 + 24

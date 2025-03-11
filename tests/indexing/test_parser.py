@@ -38,8 +38,7 @@ def test_in_and_out_of_dates():
 def pt(path: str, *types: ParsedType, include_text: bool = True) -> str:
     types = list(types)
     if include_text:
-        types.append(ParsedType.KEYWORD_CASE_INSENSITIVE)
-        types.append(ParsedType.KEYWORD_CASE_SENSITIVE)
+        types.append(ParsedType.KEYWORD)
         types.append(ParsedType.TEXT)
     return f"{path}.{','.join(sorted(types))}"
 
@@ -294,8 +293,7 @@ class TestParseValue:
     def test_normal_text(self, basic_options: ParsingOptions):
         assert parse_value("banana", basic_options) == {
             ParsedType.TEXT: "banana",
-            ParsedType.KEYWORD_CASE_INSENSITIVE: "banana",
-            ParsedType.KEYWORD_CASE_SENSITIVE: "banana",
+            ParsedType.KEYWORD: "banana",
         }
 
     def test_bools(self, basic_options: ParsingOptions):
@@ -304,8 +302,7 @@ class TestParseValue:
         ):
             assert parse_value(value, basic_options) == {
                 ParsedType.TEXT: value,
-                ParsedType.KEYWORD_CASE_INSENSITIVE: value,
-                ParsedType.KEYWORD_CASE_SENSITIVE: value,
+                ParsedType.KEYWORD: value,
                 ParsedType.BOOLEAN: True,
             }
         for value in chain(
@@ -313,52 +310,44 @@ class TestParseValue:
         ):
             assert parse_value(value, basic_options) == {
                 ParsedType.TEXT: value,
-                ParsedType.KEYWORD_CASE_INSENSITIVE: value,
-                ParsedType.KEYWORD_CASE_SENSITIVE: value,
+                ParsedType.KEYWORD: value,
                 ParsedType.BOOLEAN: False,
             }
 
     def test_number(self, basic_options: ParsingOptions):
         assert parse_value("5.3", basic_options) == {
             ParsedType.TEXT: "5.3",
-            ParsedType.KEYWORD_CASE_INSENSITIVE: "5.3",
-            ParsedType.KEYWORD_CASE_SENSITIVE: "5.3",
+            ParsedType.KEYWORD: "5.3",
             ParsedType.NUMBER: 5.3,
         }
         assert parse_value("70", basic_options) == {
             ParsedType.TEXT: "70",
-            ParsedType.KEYWORD_CASE_INSENSITIVE: "70",
-            ParsedType.KEYWORD_CASE_SENSITIVE: "70",
+            ParsedType.KEYWORD: "70",
             ParsedType.NUMBER: 70.0,
         }
         assert parse_value("70.0", basic_options) == {
             ParsedType.TEXT: "70.0",
-            ParsedType.KEYWORD_CASE_INSENSITIVE: "70.0",
-            ParsedType.KEYWORD_CASE_SENSITIVE: "70.0",
+            ParsedType.KEYWORD: "70.0",
             ParsedType.NUMBER: 70.0,
         }
         assert parse_value(4, basic_options) == {
             ParsedType.TEXT: "4",
-            ParsedType.KEYWORD_CASE_INSENSITIVE: "4",
-            ParsedType.KEYWORD_CASE_SENSITIVE: "4",
+            ParsedType.KEYWORD: "4",
             ParsedType.NUMBER: 4,
         }
         assert parse_value(16.04, basic_options) == {
             ParsedType.TEXT: "16.04",
-            ParsedType.KEYWORD_CASE_INSENSITIVE: "16.04",
-            ParsedType.KEYWORD_CASE_SENSITIVE: "16.04",
+            ParsedType.KEYWORD: "16.04",
             ParsedType.NUMBER: 16.04,
         }
         assert parse_value(16.042245342119813456, basic_options) == {
             ParsedType.TEXT: "16.0422453421198",
-            ParsedType.KEYWORD_CASE_INSENSITIVE: "16.0422453421198",
-            ParsedType.KEYWORD_CASE_SENSITIVE: "16.0422453421198",
+            ParsedType.KEYWORD: "16.0422453421198",
             ParsedType.NUMBER: 16.042245342119813456,
         }
         assert parse_value("1.2312e-20", basic_options) == {
             ParsedType.TEXT: "1.2312e-20",
-            ParsedType.KEYWORD_CASE_INSENSITIVE: "1.2312e-20",
-            ParsedType.KEYWORD_CASE_SENSITIVE: "1.2312e-20",
+            ParsedType.KEYWORD: "1.2312e-20",
             ParsedType.NUMBER: 1.2312e-20,
         }
 
@@ -372,8 +361,7 @@ class TestParseValue:
 
         assert parse_value(value, basic_options) == {
             ParsedType.TEXT: value,
-            ParsedType.KEYWORD_CASE_INSENSITIVE: value,
-            ParsedType.KEYWORD_CASE_SENSITIVE: value,
+            ParsedType.KEYWORD: value,
             ParsedType.DATE: to_timestamp(
                 # check the timestamp is converted correctly, it'll be UTC so add +00:00
                 datetime.fromisoformat(f"{value}+00:00")
@@ -383,8 +371,7 @@ class TestParseValue:
     def test_date_date_and_time_and_tz(self, basic_options: ParsingOptions):
         assert parse_value("2005-07-02 20:16:47.103+05:00", basic_options) == {
             ParsedType.TEXT: "2005-07-02 20:16:47.103+05:00",
-            ParsedType.KEYWORD_CASE_INSENSITIVE: "2005-07-02 20:16:47.103+05:00",
-            ParsedType.KEYWORD_CASE_SENSITIVE: "2005-07-02 20:16:47.103+05:00",
+            ParsedType.KEYWORD: "2005-07-02 20:16:47.103+05:00",
             ParsedType.DATE: to_timestamp(
                 datetime.fromisoformat("2005-07-02T20:16:47.103000+05:00")
             ),
@@ -395,8 +382,7 @@ class TestParseValue:
 
         assert parse_value(value, basic_options) == {
             ParsedType.TEXT: value,
-            ParsedType.KEYWORD_CASE_INSENSITIVE: value,
-            ParsedType.KEYWORD_CASE_SENSITIVE: value,
+            ParsedType.KEYWORD: value,
             ParsedType.DATE: to_timestamp(
                 # use midnight UTC
                 datetime.fromisoformat(f"{value}T00:00:00+00:00")
@@ -449,8 +435,7 @@ class TestParseValue:
         result = parse_value(wkt_point, basic_options)
         assert result == {
             ParsedType.TEXT: wkt_point,
-            ParsedType.KEYWORD_CASE_INSENSITIVE: wkt_point,
-            ParsedType.KEYWORD_CASE_SENSITIVE: wkt_point,
+            ParsedType.KEYWORD: wkt_point,
             ParsedType.GEO_POINT: wkt_point,
             ParsedType.GEO_SHAPE: wkt_point,
         }
@@ -459,8 +444,7 @@ class TestParseValue:
         result = parse_value(wkt_linestring, basic_options)
         assert result == {
             ParsedType.TEXT: wkt_linestring,
-            ParsedType.KEYWORD_CASE_INSENSITIVE: wkt_linestring,
-            ParsedType.KEYWORD_CASE_SENSITIVE: wkt_linestring,
+            ParsedType.KEYWORD: wkt_linestring,
             ParsedType.GEO_POINT: from_wkt(wkt_linestring).centroid.wkt,
             ParsedType.GEO_SHAPE: wkt_linestring,
         }
@@ -469,8 +453,7 @@ class TestParseValue:
         result = parse_value(wkt_polygon, basic_options)
         assert result == {
             ParsedType.TEXT: wkt_polygon,
-            ParsedType.KEYWORD_CASE_INSENSITIVE: wkt_polygon,
-            ParsedType.KEYWORD_CASE_SENSITIVE: wkt_polygon,
+            ParsedType.KEYWORD: wkt_polygon,
             ParsedType.GEO_POINT: from_wkt(wkt_polygon).centroid.wkt,
             ParsedType.GEO_SHAPE: wkt_polygon.upper(),
         }
@@ -481,8 +464,7 @@ class TestParseValue:
         result = parse_value(wkt_holed_polygon, basic_options)
         assert result == {
             ParsedType.TEXT: wkt_holed_polygon,
-            ParsedType.KEYWORD_CASE_INSENSITIVE: wkt_holed_polygon,
-            ParsedType.KEYWORD_CASE_SENSITIVE: wkt_holed_polygon,
+            ParsedType.KEYWORD: wkt_holed_polygon,
             ParsedType.GEO_POINT: from_wkt(wkt_holed_polygon).centroid.wkt,
             ParsedType.GEO_SHAPE: wkt_holed_polygon.upper(),
         }

@@ -159,8 +159,7 @@ def parse_value(value: Union[int, str, bool, float], options: ParsingOptions) ->
     # the always included values are used to set up the returned dict
     parsed = {
         ParsedType.TEXT: str_value,
-        ParsedType.KEYWORD_CASE_SENSITIVE: str_value[: options.keyword_length],
-        ParsedType.KEYWORD_CASE_INSENSITIVE: str_value[: options.keyword_length],
+        ParsedType.KEYWORD: str_value[: options.keyword_length],
     }
 
     # check if the value is WKT geo data

@@ -63,9 +63,7 @@ class ParsedType(StrEnum):
     # the text field
     TEXT = "_t"
     # the keyword case-insensitive field
-    KEYWORD_CASE_INSENSITIVE = "_ki"
-    # the keyword case-sensitive field
-    KEYWORD_CASE_SENSITIVE = "_ks"
+    KEYWORD = "_k"
     # the geo point field (shape centroid, will always be a point)
     GEO_POINT = "_gp"
     # the geo shape field (full shape, could be point, linestring, or polygon)
@@ -320,33 +318,13 @@ class ParsedField:
     def count_text(self) -> int:
         return self.type_counts[ParsedType.TEXT]
 
-    def is_keyword(self, case_sensitive: bool) -> bool:
-        if case_sensitive:
-            return self.is_keyword_case_sensitive
-        else:
-            return self.is_keyword_case_insensitive
-
-    def count_keyword(self, case_sensitive: bool) -> int:
-        if case_sensitive:
-            return self.count_keyword_case_sensitive
-        else:
-            return self.count_keyword_case_insensitive
+    @property
+    def is_keyword(self) -> bool:
+        return self.type_counts[ParsedType.KEYWORD] > 0
 
     @property
-    def is_keyword_case_insensitive(self) -> bool:
-        return self.type_counts[ParsedType.KEYWORD_CASE_INSENSITIVE] > 0
-
-    @property
-    def count_keyword_case_insensitive(self) -> int:
-        return self.type_counts[ParsedType.KEYWORD_CASE_INSENSITIVE]
-
-    @property
-    def is_keyword_case_sensitive(self) -> bool:
-        return self.type_counts[ParsedType.KEYWORD_CASE_SENSITIVE] > 0
-
-    @property
-    def count_keyword_case_sensitive(self) -> int:
-        return self.type_counts[ParsedType.KEYWORD_CASE_SENSITIVE]
+    def count_keyword(self) -> int:
+        return self.type_counts[ParsedType.KEYWORD]
 
     @property
     def is_number(self) -> bool:

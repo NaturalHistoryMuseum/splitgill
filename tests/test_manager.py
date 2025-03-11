@@ -627,8 +627,7 @@ def pf(
         ParsedType.DATE: d,
         ParsedType.GEO_SHAPE: g,
         ParsedType.GEO_POINT: g,
-        ParsedType.KEYWORD_CASE_INSENSITIVE: t,
-        ParsedType.KEYWORD_CASE_SENSITIVE: t,
+        ParsedType.KEYWORD: t,
         ParsedType.NUMBER: n,
         ParsedType.TEXT: t,
     }

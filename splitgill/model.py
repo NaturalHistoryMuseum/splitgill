@@ -161,8 +161,8 @@ class ParsingOptions:
     # GeoFieldHint objects which can be used to test if a record contains any geographic
     # coordinate data
     geo_hints: FrozenSet[GeoFieldHint]
-    # the maximum length of keyword strings (both case-sensitive and case-insensitive).
-    # Strings will be truncated to this length before indexing
+    # the maximum length of keyword strings. Strings will be truncated to this length
+    # before indexing
     keyword_length: int
     # the format to use to convert a float to a string for indexing. The string will
     # have format() called on it with the float value passed as the only parameter,

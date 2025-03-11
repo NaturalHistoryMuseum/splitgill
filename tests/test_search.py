@@ -8,8 +8,7 @@ from splitgill.search import (
     number,
     date,
     boolean,
-    keyword_ci,
-    keyword_cs,
+    keyword,
     match_query,
     ALL_TEXT,
     text,
@@ -17,17 +16,6 @@ from splitgill.search import (
     range_query,
 )
 from splitgill.utils import to_timestamp
-
-
-def test_keyword():
-    assert keyword("beans", case_sensitive=False) == keyword_ci("beans")
-    assert keyword("beans", case_sensitive=False, full=False) == keyword_ci(
-        "beans", full=False
-    )
-    assert keyword("beans", case_sensitive=True) == keyword_cs("beans")
-    assert keyword("beans", case_sensitive=True, full=False) == keyword_cs(
-        "beans", full=False
-    )
 
 
 class TestTermQuery:
@@ -78,10 +66,7 @@ class TestTermQuery:
 
     def test_infer_str(self):
         assert term_query("beans.toast", "hello!").to_dict() == {
-            "term": {keyword_ci("beans.toast"): "hello!"}
-        }
-        assert term_query("beans.toast", "hello!", case_sensitive=True).to_dict() == {
-            "term": {keyword_cs("beans.toast"): "hello!"}
+            "term": {keyword("beans.toast"): "hello!"}
         }
 
     def test_bad_type(self):

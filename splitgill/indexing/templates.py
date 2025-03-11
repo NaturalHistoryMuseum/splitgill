@@ -119,26 +119,15 @@ DATA_TEMPLATE = {
                     },
                 },
                 {
-                    "parsed_keyword_case_insensitive": {
+                    "parsed_keyword": {
                         "match_pattern": "simple",
-                        "path_match": ParsedType.KEYWORD_CASE_INSENSITIVE.path_to(
-                            "*", full=True
-                        ),
+                        "path_match": ParsedType.KEYWORD.path_to("*", full=True),
                         "mapping": {
                             "type": "keyword",
                             # lowercase the text when storing it, this allows
                             # case-insensitive usage
                             "normalizer": "lowercase_normalizer",
                         },
-                    },
-                },
-                {
-                    "parsed_keyword_case_sensitive": {
-                        "match_pattern": "simple",
-                        "path_match": ParsedType.KEYWORD_CASE_SENSITIVE.path_to(
-                            "*", full=True
-                        ),
-                        "mapping": {"type": "keyword"},
                     },
                 },
                 {

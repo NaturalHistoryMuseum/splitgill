@@ -19,31 +19,12 @@ ALL_POINTS = DocumentField.ALL_POINTS
 
 # convenient access for parsed type path functions
 text = ParsedType.TEXT.path_to
-keyword_ci = ParsedType.KEYWORD_CASE_INSENSITIVE.path_to
-keyword_cs = ParsedType.KEYWORD_CASE_SENSITIVE.path_to
+keyword = ParsedType.KEYWORD.path_to
 boolean = ParsedType.BOOLEAN.path_to
 number = ParsedType.NUMBER.path_to
 date = ParsedType.DATE.path_to
 point = ParsedType.GEO_POINT.path_to
 shape = ParsedType.GEO_SHAPE.path_to
-
-
-def keyword(field: str, case_sensitive: bool, full: bool = True) -> str:
-    """
-    A convenience function for creating a keyword path where the case sensitivity can be
-    set using a boolean.
-
-    :param field: the name (including dots if needed) of the field
-    :param case_sensitive: where the path should be to the case-sensitive (True) or
-                           case-insensitive (False) version of the field's string value
-    :param full: whether to prepend the parsed field name to the path or not (default:
-                 True)
-    :return: the path to the field
-    """
-    if case_sensitive:
-        return keyword_cs(field, full)
-    else:
-        return keyword_ci(field, full)
 
 
 def create_version_query(version: int) -> Query:
@@ -122,7 +103,6 @@ def exists_query(field: str) -> Query:
 
 def infer_parsed_type(
     value: Union[int, float, str, bool, datetime.date, datetime.datetime],
-    case_sensitive=False,
 ) -> ParsedType:
     """
     Given a value, infer the ParsedType based on the type of the value.
@@ -130,16 +110,10 @@ def infer_parsed_type(
     If no ParsedType can be matched, a ValueError is raised.
 
     :param value: the value
-    :param case_sensitive: if the value is a str either keyword ParsedType would work,
-                           this parameter provides a way of choosing which keyword type
-                           should be inferred (default: False)
     :return: a ParsedType
     """
     if isinstance(value, str):
-        if case_sensitive:
-            return ParsedType.KEYWORD_CASE_SENSITIVE
-        else:
-            return ParsedType.KEYWORD_CASE_INSENSITIVE
+        return ParsedType.KEYWORD
     elif isinstance(value, bool):
         return ParsedType.BOOLEAN
     elif isinstance(value, (int, float)):
@@ -154,7 +128,6 @@ def term_query(
     field: str,
     value: Union[int, float, str, bool, datetime.date, datetime.datetime],
     parsed_type: Optional[ParsedType] = None,
-    case_sensitive: bool = False,
 ) -> Query:
     """
     Create and return a term query which will find documents that have an exact value
@@ -164,12 +137,10 @@ def term_query(
     :param field: the field match
     :param value: the value to match
     :param parsed_type: the parsed type of the field to use, or None to infer from value
-    :param case_sensitive: only applicable for inferred str values, specifies whether
-                           the search should be case-sensitive or not (default: False)
     :return: a Q object
     """
     if parsed_type is None:
-        parsed_type = infer_parsed_type(value, case_sensitive)
+        parsed_type = infer_parsed_type(value)
 
     # date is the parent class of datetime so this check is ok
     if parsed_type == ParsedType.DATE and isinstance(value, datetime.date):
@@ -203,7 +174,6 @@ def range_query(
     gt: Union[int, float, str, datetime.date, datetime.datetime] = None,
     lte: Union[int, float, str, datetime.date, datetime.datetime] = None,
     parsed_type: Optional[ParsedType] = None,
-    case_sensitive: bool = False,
     **range_kwargs,
 ) -> Query:
     """
@@ -218,8 +188,6 @@ def range_query(
     :param gt: the greater than value
     :param lte: the less than or equal to value
     :param parsed_type: the parsed type of the field to use, or None to infer from value
-    :param case_sensitive: only applicable for inferred str values, specifies whether
-                           the search should be case-sensitive or not (default: False)
     :param range_kwargs: additional options for the range query
     :return: a Query object
     """
@@ -240,7 +208,7 @@ def range_query(
         raise ValueError("You must provide at least one of the lt/lte/gt/gte values")
 
     if parsed_type is None:
-        parsed_type = infer_parsed_type(for_inference, case_sensitive)
+        parsed_type = infer_parsed_type(for_inference)
 
     range_inner.update(range_kwargs)
 

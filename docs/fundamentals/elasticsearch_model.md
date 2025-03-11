@@ -134,12 +134,8 @@ only for internal use, so they have no need to be particularly readable.
 The subfields are:
 
 - `_t` - `text` type field, used for full-text searches.
-- `_ki` - `keyword` type field, use for sorting, aggregations, and term level queries.
+- `_k` - `keyword` type field, use for sorting, aggregations, and term level queries.
   This field's data is indexed lowercase to allow case-insensitive queries on it.
-  Only the first 256 characters are stored in this field to reduce storage requirements.
-- `_ks` - `keyword` type field, use for sorting, aggregations, and term level queries.
-  This field's data is indexed without any changes to allow case-sensitive queries on
-  it.
 - `_n` - `double` type field, used for number searches
 - `_d` - `date` type field, used for date searches.
   This field's format is `epoch_millis` which means any queries on this field will use
@@ -298,15 +294,14 @@ See the parsing rules sections from the other types for specific information abo
 
 #### String representation
 
-There are three string representations:
+There are two string representations:
 
 - `_t` (text)
-- `_cs` (keyword case-sensitive)
-- `_ci` (keyword case-insensitive)
+- `_k` (keyword case-insensitive)
 
 The `_t` representation of the `str` value is exactly the same as the value.
 
-For `_cs` and `_ci`, the `str` value is truncated before passing it to Elasticsearch.
+For `_k`, the `str` value is truncated before passing it to Elasticsearch.
 The length to truncate the value to is defined in the parsing options
 (`keyword_length`).
 This truncation occurs because Elasticsearch has some limitations on maximum keyword
