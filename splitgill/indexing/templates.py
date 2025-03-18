@@ -115,6 +115,7 @@ DATA_TEMPLATE = {
                             "type": "text",
                             # copy the text value of this field into the all text field
                             "copy_to": DocumentField.ALL_TEXT,
+                            "store": True,
                         },
                     },
                 },
@@ -127,6 +128,7 @@ DATA_TEMPLATE = {
                             # lowercase the text when storing it, this allows
                             # case-insensitive usage
                             "normalizer": "lowercase_normalizer",
+                            "store": True,
                         },
                     },
                 },
