@@ -261,7 +261,7 @@ class TestIngest:
 
         database.ingest([record], commit=True)
         added_record = database.data_collection.find_one({"id": "r1"})
-        assert added_record["data"] == record.data
+        assert added_record["data"] == {**record.data, DATA_ID_FIELD: "r1"}
         assert "diffs" not in added_record
 
         # add the same record again
@@ -272,7 +272,7 @@ class TestIngest:
     def test_same_record_tuples_and_lists(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
         record = Record("r1", {"x": (1, 2, 3)})
-        clean_data = {"x": [1, 2, 3]}
+        clean_data = {"x": [1, 2, 3], DATA_ID_FIELD: "r1"}
 
         database.ingest([record], commit=True)
         added_record = database.data_collection.find_one({"id": "r1"})

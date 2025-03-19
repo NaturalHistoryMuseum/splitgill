@@ -5,7 +5,7 @@ from typing import Optional, Iterable, Dict
 
 from orjson import dumps, OPT_NON_STR_KEYS
 
-from splitgill.indexing.fields import DocumentField, DATA_ID_FIELD
+from splitgill.indexing.fields import DocumentField
 from splitgill.indexing.parser import parse
 from splitgill.model import MongoRecord, ParsingOptions
 
@@ -192,9 +192,6 @@ def generate_index_ops(
                 if next_version is None:
                     yield DeleteOp(latest_index, record.id)
             else:
-                # add the record ID to a copy of the data
-                data = data.copy()
-                data[DATA_ID_FIELD] = record.id
                 parsed_data = parse(data, options)
                 # only yield an op if there is a change. Every data version should
                 # trigger an op to be yielded, but options versions can result in the

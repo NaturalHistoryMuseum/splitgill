@@ -12,19 +12,24 @@ from splitgill.utils import partition
 MongoBulkOp = Union[InsertOne, UpdateOne, DeleteOne]
 
 
-def prepare_record_data(data: dict) -> dict:
+def prepare_record_data(record: Record) -> dict:
     """
     Prepare a record's data for insertion into MongoDB. This does some light-ish touch
     type management, value validation, and field name checking.
 
-    :param data: the data to prepare
+    :param record: the record to prepare
     :return: the prepared data
     """
-    # _id is a special splitgill field which allows the record's ID to be part of the
-    # record's data. We already have the ID stored on the record so pop it from the
-    # record if it's present
-    data.pop(DATA_ID_FIELD, None)
-    return {prepare_field_name(key): prepare_data(value) for key, value in data.items()}
+    if record.is_delete:
+        return {}
+    data = {
+        prepare_field_name(key): prepare_data(value)
+        for key, value in record.data.items()
+    }
+    # _id is a special splitgill field which is used to have the record's ID as part of
+    # the record's data. Make sure it's added to the data before ingesting.
+    data[DATA_ID_FIELD] = prepare_data(record.id)
+    return data
 
 
 def generate_ops(
@@ -86,7 +91,7 @@ def generate_ops(
                 InsertOne(
                     {
                         "id": record.id,
-                        "data": prepare_record_data(record.data),
+                        "data": prepare_record_data(record),
                         "version": None,
                     }
                 )
@@ -102,7 +107,7 @@ def generate_ops(
 
             # prepare the record's data, we will use this as both the record's new data
             # that we actually store in Mongo and also to diff against any existing data
-            new_data = prepare_record_data(record.data)
+            new_data = prepare_record_data(record)
 
             if record_id not in existing:
                 # the record is new, insert and carry on to the next

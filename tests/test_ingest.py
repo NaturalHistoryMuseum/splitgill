@@ -4,8 +4,9 @@ from uuid import uuid4
 from pymongo import InsertOne, UpdateOne
 from pymongo.collection import Collection
 
-from splitgill.diffing import prepare_data, diff
-from splitgill.ingest import generate_ops
+from splitgill.diffing import diff
+from splitgill.indexing.fields import DATA_ID_FIELD
+from splitgill.ingest import generate_ops, prepare_record_data
 from splitgill.model import Record
 
 
@@ -34,7 +35,7 @@ class TestGenerateOps:
         for record, op in zip(records, ops):
             assert op._doc["id"] == record.id
             assert op._doc["version"] is None
-            assert op._doc["data"] == prepare_data(record.data)
+            assert op._doc["data"] == prepare_record_data(record)
 
     def test_with_all_new_but_some_repeating_records(
         self, mongo_collection: Collection
@@ -53,7 +54,7 @@ class TestGenerateOps:
         for record, op in zip((records[0], records[4], records[3]), ops):
             assert op._doc["id"] == record.id
             assert op._doc["version"] is None
-            assert op._doc["data"] == prepare_data(record.data)
+            assert op._doc["data"] == prepare_record_data(record)
 
     def test_update_existing_records(self, mongo_collection: Collection):
         # add some records
@@ -90,12 +91,12 @@ class TestGenerateOps:
             assert new_record.id == old_record.id
             doc = mongo_collection.find_one({"id": new_record.id})
             assert doc["version"] is None
-            assert doc["data"] == prepare_data(new_record.data)
+            assert doc["data"] == prepare_record_data(new_record)
             # to compare the diff we have to convert the tuples into lists
             assert doc["diffs"][str(old_version)] == [
                 [list(diff_op.path), diff_op.ops]
                 for diff_op in diff(
-                    prepare_data(new_record.data), prepare_data(old_record.data)
+                    prepare_record_data(new_record), prepare_record_data(old_record)
                 )
             ]
 
@@ -110,7 +111,7 @@ class TestGenerateOps:
         for record, op in zip(records, ops):
             assert op._doc["id"] == record.id
             assert op._doc["version"] is None
-            assert op._doc["data"] == prepare_data(record.data)
+            assert op._doc["data"] == prepare_record_data(record)
 
     def test_delete_of_non_existent_record(self, mongo_collection: Collection):
         records = [Record.new({})]
@@ -130,7 +131,10 @@ class TestGenerateOps:
         record.data["x"] = 5
         mongo_collection.bulk_write(list(generate_ops(mongo_collection, [record])))
         assert mongo_collection.count_documents({}) == 1
-        assert mongo_collection.find_one({"id": "1"})["data"] == {"x": 5}
+        assert mongo_collection.find_one({"id": "1"})["data"] == {
+            DATA_ID_FIELD: "1",
+            "x": 5,
+        }
         assert mongo_collection.find_one({"id": "1"})["version"] is None
         assert "diffs" not in mongo_collection.find_one({"id": "1"})
 
@@ -153,7 +157,10 @@ class TestGenerateOps:
         record.data["x"] = 4
         mongo_collection.bulk_write(list(generate_ops(mongo_collection, [record])))
         assert mongo_collection.count_documents({}) == 1
-        assert mongo_collection.find_one({"id": "1"})["data"] == {"x": 4}
+        assert mongo_collection.find_one({"id": "1"})["data"] == {
+            DATA_ID_FIELD: "1",
+            "x": 4,
+        }
         assert mongo_collection.find_one({"id": "1"})["version"] == 6
         assert "diffs" not in mongo_collection.find_one({"id": "1"})
 
@@ -192,11 +199,11 @@ class TestGenerateOps:
             assert new_record.id == old_record.id
             doc = mongo_collection.find_one({"id": new_record.id})
             assert doc["version"] is None
-            assert doc["data"] == prepare_data(new_record.data)
+            assert doc["data"] == prepare_record_data(new_record)
             # to compare the diff we have to convert the tuples into lists
             assert doc["diffs"][str(old_version)] == [
                 [list(diff_op.path), diff_op.ops]
                 for diff_op in diff(
-                    prepare_data(new_record.data), prepare_data(old_record.data)
+                    prepare_record_data(new_record), prepare_record_data(old_record)
                 )
             ]

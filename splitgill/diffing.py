@@ -20,6 +20,8 @@ from typing import (
 
 import regex as rx
 
+from splitgill.indexing.fields import DATA_ID_FIELD
+
 # strftime formats used to turn datetime and date objects into strings before data
 # enters MongoDB (see prepare_data), these are based on ISO 8601
 DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%f%z"
@@ -107,8 +109,7 @@ def prepare_field_name(name: Any) -> str:
 
     If after cleaning, the field name is an empty string, we return a hyphen.
 
-    This function does not explicitly handle the _id field as it is assumed it will have
-    been removed before this function is called.
+    This function explicitly handles the _id field by just returning it if encountered.
 
     :param name: the field name
     :return: a clean str field name
@@ -117,6 +118,9 @@ def prepare_field_name(name: Any) -> str:
     # if this results in the empty string, replace with a hyphen
     if not clean_name:
         return "-"
+
+    if name == DATA_ID_FIELD:
+        return DATA_ID_FIELD
 
     if clean_name[0] == "_":
         clean_name = f"-{clean_name[1:]}"
