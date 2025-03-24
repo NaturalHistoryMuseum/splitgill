@@ -5,7 +5,12 @@ from typing import Dict, Union, Optional
 from elasticsearch_dsl import Q
 from elasticsearch_dsl.query import Bool, Query
 
-from splitgill.indexing.fields import DocumentField, ParsedType, parsed_path
+from splitgill.indexing.fields import (
+    DocumentField,
+    ParsedType,
+    parsed_path,
+    DATA_ID_FIELD,
+)
 from splitgill.utils import to_timestamp
 
 # the all fields text field which contains all data for easy full record searching
@@ -215,3 +220,44 @@ def range_query(
     return Q(
         "range", **{parsed_path(field, parsed_type=parsed_type, full=True): range_inner}
     )
+
+
+def rebuild_data(parsed_data: dict) -> dict:
+    """
+    Rebuild the original data from the parsed version of the data created by the parse
+    function above.
+
+    :param parsed_data: the parsed dict
+    :return: the rebuilt data dict
+    """
+    # this doesn't need _ checks because you can't currently have parsed types at the
+    # root level of the data dict
+    return {key: rebuild_dict_or_list(value) for key, value in parsed_data.items()}
+
+
+def rebuild_dict_or_list(
+    value: Union[dict, list]
+) -> Union[int, str, bool, float, dict, list]:
+    """
+    Rebuild a dict or a list inside the parsed dict.
+
+    :param value: a dict which can either be for structure or a value, or a list of
+                  either value or structure dicts
+    :return: a dict, list, or value
+    """
+    if isinstance(value, dict):
+        if ParsedType.UNPARSED in value:
+            # this is a value dict, return the original value
+            return value[ParsedType.UNPARSED]
+        else:
+            # this is a structural dict, pass each value through this function but
+            # filter out fields that start with an underscore, unless they are the
+            # special _id field
+            return {
+                key: rebuild_dict_or_list(value)
+                for key, value in value.items()
+                if not key.startswith("_") or key == DATA_ID_FIELD
+            }
+    else:
+        # pass each element of the list through this function
+        return [rebuild_dict_or_list(element) for element in value]

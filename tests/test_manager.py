@@ -621,6 +621,7 @@ def pf(
     b: int = 0,
     t: int = 0,
     g: int = 0,
+    has_original: bool = True,
 ) -> ParsedField:
     counts = {
         ParsedType.BOOLEAN: b,
@@ -632,6 +633,8 @@ def pf(
         ParsedType.TEXT: t,
     }
     counts = {parsed_type: count for parsed_type, count in counts.items() if count > 0}
+    if has_original:
+        counts[ParsedType.UNPARSED] = count
     return ParsedField(path, count=count, type_counts=Counter(counts))
 
 
@@ -1113,7 +1116,7 @@ class TestGetFieldsMethods:
         assert len(parsed_fields) == 8
         assert parsed_fields == [
             id_pf(1),
-            pf("geojson", 1, g=1),
+            pf("geojson", 1, g=1, has_original=False),
             pf("geojson.coordinates", 1, n=1, t=1),
             pf("geojson.type", 1, t=1),
             pf("lat", 1, g=1, t=1, n=1),

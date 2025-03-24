@@ -25,10 +25,8 @@ class DocumentField(LowercaseStrEnum):
     # the range of versions this record is valid for. The lower bound is the same value
     # as the version field and the upper bound is the same value as the next field
     VERSIONS = auto()
-    # the record's data, not indexed
+    # the record's data parsed for indexing
     DATA = auto()
-    # the parsed version of the data for searching
-    PARSED = auto()
     # type information about the fields found in the data
     DATA_TYPES = auto()
     # type information about the fields found in the parsed data
@@ -54,6 +52,8 @@ class ParsedType(StrEnum):
     functions defined later in this module or in the search module.
     """
 
+    # the unparsed raw field value
+    UNPARSED = "_u"
     # the number field
     NUMBER = "_n"
     # the date field
@@ -102,7 +102,7 @@ def parsed_path(
         path = field
 
     if full:
-        return f"{DocumentField.PARSED}.{path}"
+        return f"{DocumentField.DATA}.{path}"
     else:
         return path
 

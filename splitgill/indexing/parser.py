@@ -83,7 +83,11 @@ def parse_dict(data: dict, options: ParsingOptions, check_geojson: bool) -> Pars
             data_types.extend(f"{key}.{dt}" for dt in dts)
             parsed_types.extend(f"{key}.{pt}" for pt in pts)
         else:
-            if value is None or not str(value):
+            if value is None:
+                parsed[key] = {ParsedType.UNPARSED: None}
+                continue
+            if not str(value):
+                parsed[key] = {ParsedType.UNPARSED: ""}
                 continue
             parsed_value = parse_value(value, options)
             parsed[key] = parsed_value
@@ -158,6 +162,7 @@ def parse_value(value: Union[int, str, bool, float], options: ParsingOptions) ->
 
     # the always included values are used to set up the returned dict
     parsed = {
+        ParsedType.UNPARSED: value,
         ParsedType.TEXT: str_value,
         ParsedType.KEYWORD: str_value[: options.keyword_length],
     }

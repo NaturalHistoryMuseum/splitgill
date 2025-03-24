@@ -17,7 +17,7 @@ from splitgill.indexing.fields import (
 def test_parsed_path(parsed_type: ParsedType):
     field = "a.field.in.the.record"
 
-    full = f"{DocumentField.PARSED}.{field}.{parsed_type}"
+    full = f"{DocumentField.DATA}.{field}.{parsed_type}"
     relative = f"{field}.{parsed_type}"
 
     assert parsed_path(field, parsed_type=parsed_type, full=True) == full

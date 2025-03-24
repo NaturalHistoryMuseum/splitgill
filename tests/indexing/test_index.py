@@ -114,10 +114,8 @@ def check_op(
     # copy the data and add the record ID for checks
     data = data.copy()
     data[DATA_ID_FIELD] = record_id
-    assert op.document[DocumentField.DATA] == data
-
     parsed_data = parse(data, options)
-    assert op.document[DocumentField.PARSED] == parsed_data.parsed
+    assert op.document[DocumentField.DATA] == parsed_data.parsed
     assert op.document[DocumentField.DATA_TYPES] == parsed_data.data_types
     assert op.document[DocumentField.PARSED_TYPES] == parsed_data.parsed_types
 

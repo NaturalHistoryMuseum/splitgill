@@ -3,17 +3,19 @@ from datetime import datetime, timezone
 import pytest
 
 from splitgill.indexing.fields import ParsedType
+from splitgill.indexing.options import ParsingOptionsBuilder
+from splitgill.indexing.parser import parse
 from splitgill.search import (
     term_query,
     number,
     date,
     boolean,
-    keyword,
     match_query,
     ALL_TEXT,
     text,
     keyword,
     range_query,
+    rebuild_data,
 )
 from splitgill.utils import to_timestamp
 
@@ -190,3 +192,31 @@ class TestRangeQuery:
                 }
             }
         }
+
+
+rebuild_data_scenarios = [
+    {"_id": "1", "x": 4, "y": None, "z": ""},
+    {"_id": "1", "x": 4},
+    {"_id": "2", "x": 4.2394823749823798423},
+    {"_id": "3", "x": [1, 2, 3]},
+    {"_id": "4", "x": [[1, 2, 3], [4, 5, 6], [7, 8, 9]]},
+    {"_id": "5", "x": {"y": 5, "z": 4.6}},
+    {"_id": "6", "x": {"y": [1, 2, 3], "z": [4, 5, 6, [7, 8, 9, {"y": "beans"}]]}},
+    {"_id": "7", "a geojson point": {"type": "Point", "coordinates": [30, 10]}},
+    {
+        "_id": "8",
+        "anicelistofgeojson": [
+            {"type": "Point", "coordinates": [30, 10]},
+            {"type": "Point", "coordinates": [20, 20]},
+            {"type": "Point", "coordinates": [10, 30]},
+        ],
+    },
+]
+
+
+@pytest.mark.parametrize("data", rebuild_data_scenarios)
+def test_rebuild(data: dict):
+    options = ParsingOptionsBuilder().build()
+    parsed = parse(data, options)
+    rebuilt_data = rebuild_data(parsed.parsed)
+    assert rebuilt_data == data

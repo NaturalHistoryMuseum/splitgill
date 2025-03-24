@@ -205,8 +205,7 @@ def generate_index_ops(
                         DocumentField.ID: record.id,
                         DocumentField.VERSION: version,
                         DocumentField.VERSIONS: {"gte": version},
-                        DocumentField.DATA: data,
-                        DocumentField.PARSED: parsed_data.parsed,
+                        DocumentField.DATA: parsed_data.parsed,
                         DocumentField.DATA_TYPES: parsed_data.data_types,
                         DocumentField.PARSED_TYPES: parsed_data.parsed_types,
                     }

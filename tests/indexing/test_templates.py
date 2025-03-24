@@ -1,5 +1,6 @@
 import pytest
 from elasticsearch import Elasticsearch
+from elasticsearch_dsl import Search
 
 from splitgill.indexing.fields import DocumentField
 from splitgill.indexing.templates import DATA_TEMPLATE

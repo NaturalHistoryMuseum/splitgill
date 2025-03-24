@@ -103,36 +103,33 @@ This field is indexed as a `date_range` using the `epoch_millis` format.
 
 ### data
 
-This object contains the actual source data of the record at the version this document
-represents.
+This object contains the actual record data at the version this document represents.
+It also contains each field parsed into any of the available parsed types.
 Nested structures of any depth are allowed (objects containing objects, lists of lists,
 lists of objects etc).
-The data stored under this object is not indexed but is stored and therefore can't be
-used in queries (use `parsed`, see the next section) but will be returned in the
-results.
 
-### parsed
+The object stored in this field is structured in the same way as the source record data
+but at each point where a non-container value (i.e. not a list, nor a nested object)
+exists, an object is inserted.
+This object contains the unparsed field value (so that the original source record data
+can be rebuilt), as well as potentially many different versions of the field's data,
+parsed into different types.
+The parsing is based on the value type as well as the parsing options.
 
-This object contains a parsed version of the record's data.
-This field is indexed but not stored.
-It is the primary way a record's data should be queried.
-
-Nested objects and lists are allowed, but all non-container values are converted into an
-object containing several fields based on the type of the value and the parsing options.
-These fields allow type changes between data versions and facilitate advanced
+These additional fields allow type changes between data versions and facilitate advanced
 searching on the data.
 For example, in version 1 a field has a value of 10 but in version 2 this is changed to
 "banana".
-If the field had a type in Elasticsearch of "integer" in version 1 but then in version 2
-a value of "banana", this would break the mapping as the field can't be indexed as both
-an integer and a string type at the same time.
-The way Splitgill handles this is with multiple fields defined, allowing complex
-searches without upfront type hinting and maximum flexibility.
+If the field was stored directly and had a type in Elasticsearch of "integer" in version
+1 but then in version 2 a value of "banana", this would break the mapping as the field
+can't be indexed as both an integer and a string type at the same time.
+The way Splitgill handles this is with these multiple fields, allowing complex searches
+without upfront type hinting.
+This provides maximum flexibility.
 
-The subfields all have short names to reduce storage requirements and because they are
-only for internal use, so they have no need to be particularly readable.
-The subfields are:
+These "parsed fields" all have short names to reduce storage requirements:
 
+- `_u` - the source field value, this is not indexed and not unsearchable.
 - `_t` - `text` type field, used for full-text searches.
 - `_k` - `keyword` type field, use for sorting, aggregations, and term level queries.
   This field's data is indexed lowercase to allow case-insensitive queries on it.
@@ -146,8 +143,14 @@ The subfields are:
 - `_gs` - `geo_shape` type field, used for more complex geographical features such as
   lines and polygons, as well as points.
 
-More details about how data is parsed into these subfields can be found in the Parsing
-section below.
+More details about how data is parsed into these "parsed fields" can be found in the
+Parsing section below.
+
+Because the object in this field does not match the source record data it has to be
+converted back to the source data representation for use by users.
+This can be done using the `splitgill.search.rebuild_data` function which takes the
+value of this `data` field as input and returns the rebuilt original record data.
+
 
 ### data_types
 
@@ -197,7 +200,7 @@ This field is indexed but not stored.
 
 ## Parsing
 
-The record data is parsed into the `parsed` field before indexing into Elasticsearch.
+The object stored in the `data` field is parsed before indexing into Elasticsearch.
 Some parts of this logic are hard coded into Splitgill and some parts can be affected by
 the parsing options.
 The details of exactly how data is parsed is presented in this section.

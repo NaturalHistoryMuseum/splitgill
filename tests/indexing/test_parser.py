@@ -37,6 +37,8 @@ def test_in_and_out_of_dates():
 
 def pt(path: str, *types: ParsedType, include_text: bool = True) -> str:
     types = list(types)
+    # original is always there
+    types.append(ParsedType.UNPARSED)
     if include_text:
         types.append(ParsedType.KEYWORD)
         types.append(ParsedType.TEXT)
@@ -267,7 +269,11 @@ class TestParse:
         data = {"a": "hello", "b": None, "c": ""}
         parsed_data = parse(data, basic_options)
 
-        assert parsed_data.parsed == {"a": parse_value("hello", basic_options)}
+        assert parsed_data.parsed == {
+            "a": parse_value("hello", basic_options),
+            "b": {ParsedType.UNPARSED: None},
+            "c": {ParsedType.UNPARSED: ""},
+        }
         assert parsed_data.data_types == [
             f"a.{DataType.STR}",
             f"b.{DataType.NONE}",
@@ -292,6 +298,7 @@ class TestParse:
 class TestParseValue:
     def test_normal_text(self, basic_options: ParsingOptions):
         assert parse_value("banana", basic_options) == {
+            ParsedType.UNPARSED: "banana",
             ParsedType.TEXT: "banana",
             ParsedType.KEYWORD: "banana",
         }
@@ -301,6 +308,7 @@ class TestParseValue:
             basic_options.true_values, [o.upper() for o in basic_options.true_values]
         ):
             assert parse_value(value, basic_options) == {
+                ParsedType.UNPARSED: value,
                 ParsedType.TEXT: value,
                 ParsedType.KEYWORD: value,
                 ParsedType.BOOLEAN: True,
@@ -309,6 +317,7 @@ class TestParseValue:
             basic_options.false_values, [o.upper() for o in basic_options.false_values]
         ):
             assert parse_value(value, basic_options) == {
+                ParsedType.UNPARSED: value,
                 ParsedType.TEXT: value,
                 ParsedType.KEYWORD: value,
                 ParsedType.BOOLEAN: False,
@@ -316,36 +325,43 @@ class TestParseValue:
 
     def test_number(self, basic_options: ParsingOptions):
         assert parse_value("5.3", basic_options) == {
+            ParsedType.UNPARSED: "5.3",
             ParsedType.TEXT: "5.3",
             ParsedType.KEYWORD: "5.3",
             ParsedType.NUMBER: 5.3,
         }
         assert parse_value("70", basic_options) == {
+            ParsedType.UNPARSED: "70",
             ParsedType.TEXT: "70",
             ParsedType.KEYWORD: "70",
             ParsedType.NUMBER: 70.0,
         }
         assert parse_value("70.0", basic_options) == {
+            ParsedType.UNPARSED: "70.0",
             ParsedType.TEXT: "70.0",
             ParsedType.KEYWORD: "70.0",
             ParsedType.NUMBER: 70.0,
         }
         assert parse_value(4, basic_options) == {
+            ParsedType.UNPARSED: 4,
             ParsedType.TEXT: "4",
             ParsedType.KEYWORD: "4",
             ParsedType.NUMBER: 4,
         }
         assert parse_value(16.04, basic_options) == {
+            ParsedType.UNPARSED: 16.04,
             ParsedType.TEXT: "16.04",
             ParsedType.KEYWORD: "16.04",
             ParsedType.NUMBER: 16.04,
         }
         assert parse_value(16.042245342119813456, basic_options) == {
+            ParsedType.UNPARSED: 16.042245342119813456,
             ParsedType.TEXT: "16.0422453421198",
             ParsedType.KEYWORD: "16.0422453421198",
             ParsedType.NUMBER: 16.042245342119813456,
         }
         assert parse_value("1.2312e-20", basic_options) == {
+            ParsedType.UNPARSED: "1.2312e-20",
             ParsedType.TEXT: "1.2312e-20",
             ParsedType.KEYWORD: "1.2312e-20",
             ParsedType.NUMBER: 1.2312e-20,
@@ -360,6 +376,7 @@ class TestParseValue:
         value = "2005-07-02 20:16:47.458301"
 
         assert parse_value(value, basic_options) == {
+            ParsedType.UNPARSED: value,
             ParsedType.TEXT: value,
             ParsedType.KEYWORD: value,
             ParsedType.DATE: to_timestamp(
@@ -370,6 +387,7 @@ class TestParseValue:
 
     def test_date_date_and_time_and_tz(self, basic_options: ParsingOptions):
         assert parse_value("2005-07-02 20:16:47.103+05:00", basic_options) == {
+            ParsedType.UNPARSED: "2005-07-02 20:16:47.103+05:00",
             ParsedType.TEXT: "2005-07-02 20:16:47.103+05:00",
             ParsedType.KEYWORD: "2005-07-02 20:16:47.103+05:00",
             ParsedType.DATE: to_timestamp(
@@ -381,6 +399,7 @@ class TestParseValue:
         value = "2005-07-02"
 
         assert parse_value(value, basic_options) == {
+            ParsedType.UNPARSED: value,
             ParsedType.TEXT: value,
             ParsedType.KEYWORD: value,
             ParsedType.DATE: to_timestamp(
@@ -434,6 +453,7 @@ class TestParseValue:
     def test_wkt_point(self, wkt_point: str, basic_options: ParsingOptions):
         result = parse_value(wkt_point, basic_options)
         assert result == {
+            ParsedType.UNPARSED: wkt_point,
             ParsedType.TEXT: wkt_point,
             ParsedType.KEYWORD: wkt_point,
             ParsedType.GEO_POINT: wkt_point,
@@ -443,6 +463,7 @@ class TestParseValue:
     def test_wkt_linestring(self, wkt_linestring: str, basic_options: ParsingOptions):
         result = parse_value(wkt_linestring, basic_options)
         assert result == {
+            ParsedType.UNPARSED: wkt_linestring,
             ParsedType.TEXT: wkt_linestring,
             ParsedType.KEYWORD: wkt_linestring,
             ParsedType.GEO_POINT: from_wkt(wkt_linestring).centroid.wkt,
@@ -452,6 +473,7 @@ class TestParseValue:
     def test_wkt_polygon(self, wkt_polygon: str, basic_options: ParsingOptions):
         result = parse_value(wkt_polygon, basic_options)
         assert result == {
+            ParsedType.UNPARSED: wkt_polygon,
             ParsedType.TEXT: wkt_polygon,
             ParsedType.KEYWORD: wkt_polygon,
             ParsedType.GEO_POINT: from_wkt(wkt_polygon).centroid.wkt,
@@ -463,6 +485,7 @@ class TestParseValue:
     ):
         result = parse_value(wkt_holed_polygon, basic_options)
         assert result == {
+            ParsedType.UNPARSED: wkt_holed_polygon,
             ParsedType.TEXT: wkt_holed_polygon,
             ParsedType.KEYWORD: wkt_holed_polygon,
             ParsedType.GEO_POINT: from_wkt(wkt_holed_polygon).centroid.wkt,
