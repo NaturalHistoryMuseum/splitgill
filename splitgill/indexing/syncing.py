@@ -46,7 +46,17 @@ class WriteResult:
     Elasticsearch.
     """
 
-    def __init__(self, worker_counts: Optional[Iterable[Tuple[int, int]]] = None):
+    def __init__(
+        self,
+        worker_counts: Optional[Iterable[Tuple[int, int]]] = None,
+        indices: Optional[Set[str]] = None,
+    ):
+        """
+        :param worker_counts: optional iterable of tuples containing the insert and
+                              delete counts from each worker
+        :param indices: optional set of indices operated by the workers during the load
+        """
+        self.indices = [] if indices is None else sorted(indices)
         if not worker_counts:
             self.indexed = 0
             self.deleted = 0
@@ -75,7 +85,35 @@ def write_ops(
     node_configs = [node.config for node in client.transport.node_pool.all()]
     if options is None:
         options = BulkOptions()
-    return run(write_ops_async(node_configs, op_stream, options))
+
+    result = run(write_ops_async(node_configs, op_stream, options))
+
+    # refresh all indices to make the changes visible all at once
+    client.indices.refresh(index=result.indices)
+    # return the indices back to their original settings as defined in the template
+    client.indices.put_settings(
+        body={"index": {"refresh_interval": None, "number_of_replicas": None}},
+        index=result.indices,
+    )
+
+    return result
+
+
+async def setup_indices(client: AsyncElasticsearch, indices: Iterable[str]):
+    """
+    Sets up the given Elasticsearch indices with settings for optimal bulk indexing. Any
+    index that doesn't exist, will be created.
+
+    :param client: an AsyncElasticsearch object
+    :param indices: the indices to set up
+    """
+    for index in indices:
+        if not await client.indices.exists(index=index):
+            await client.indices.create(index=index)
+        await client.indices.put_settings(
+            body={"index": {"refresh_interval": -1, "number_of_replicas": 0}},
+            index=index,
+        )
 
 
 async def write_ops_async(
@@ -99,7 +137,15 @@ async def write_ops_async(
             create_task(worker(client, task_queue)) for _ in range(options.worker_count)
         }
 
+        indices_seen = set()
+
         for chunk in partition(op_stream, options.chunk_size):
+            # track the indices we come across so that we can set up the optimal index
+            # settings for ingestion
+            new_indices = {op.index for op in chunk if op.index not in indices_seen}
+            if new_indices:
+                indices_seen.update(new_indices)
+                await setup_indices(client, new_indices)
             # relinquish control so that the workers can do some work
             await sleep(0)
             # put the next task on the queue
@@ -114,7 +160,7 @@ async def write_ops_async(
 
         # collect the worker results up and return
         worker_counts = await gather(*workers)
-        return WriteResult(worker_counts)
+        return WriteResult(worker_counts, indices_seen)
     finally:
         await client.close()
 

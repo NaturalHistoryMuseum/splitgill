@@ -1,19 +1,40 @@
+from uuid import uuid4
+
 import pytest
 from elasticsearch import Elasticsearch
-from elasticsearch_dsl import Search
 
 from splitgill.indexing.fields import DocumentField
-from splitgill.indexing.templates import DATA_TEMPLATE
+from splitgill.indexing.templates import create_templates
 from splitgill.manager import SplitgillClient, SplitgillDatabase
 from splitgill.model import Record
 from splitgill.search import match_query
 
 
-def test_date_index_template_is_valid(elasticsearch_client: Elasticsearch):
-    # this is a simple test, it just confirms that the data index template is valid
-    elasticsearch_client.indices.put_index_template(
-        name="data-template", body=DATA_TEMPLATE
+def test_data_index_template_is_valid(elasticsearch_client: Elasticsearch):
+    # this is a simple test, it just confirms that the index templates are valid
+    create_templates(elasticsearch_client)
+
+
+def test_index_template_usage(elasticsearch_client: Elasticsearch):
+    create_templates(elasticsearch_client)
+
+    # the two template patterns clash so we use priorities to ensure the right one is
+    # picked. This index name hits this clash and therefore checks that the priorities
+    # have been set up correctly and the correct template is chosen.
+    resp1 = elasticsearch_client.indices.simulate_index_template(
+        name="data-beans-arc-latest"
     )
+    assert resp1.body["template"]["settings"]["index"]["codec"] == "default"
+
+    # normal index names
+    resp2 = elasticsearch_client.indices.simulate_index_template(
+        name="data-5788f3e2-6e71-4ecb-aa04-cfba6da1a691-latest"
+    )
+    assert resp2.body["template"]["settings"]["index"]["codec"] == "default"
+    resp3 = elasticsearch_client.indices.simulate_index_template(
+        name="data-5788f3e2-6e71-4ecb-aa04-cfba6da1a691-arc-0"
+    )
+    assert resp3.body["template"]["settings"]["index"]["codec"] == "best_compression"
 
 
 def test_all_text(splitgill: SplitgillClient):
@@ -60,7 +81,7 @@ class TestAllPoints:
                         "top_left": [9, -11],
                         "bottom_right": [18, -18],
                     }
-                }
+                },
             )
             .execute()
         )
@@ -80,7 +101,7 @@ class TestAllPoints:
                         "top_left": [7, 23],
                         "bottom_right": [15, 11],
                     }
-                }
+                },
             )
             .execute()
         )
@@ -99,7 +120,7 @@ class TestAllPoints:
                         "top_left": [1.7, 24.1],
                         "bottom_right": [13.8, 2.6],
                     }
-                }
+                },
             )
             .execute()
         )
@@ -122,7 +143,7 @@ class TestAllShapes:
                         "top_left": [9, -11],
                         "bottom_right": [18, -18],
                     }
-                }
+                },
             )
             .execute()
         )
@@ -140,7 +161,7 @@ class TestAllShapes:
                         "top_left": [7, 23],
                         "bottom_right": [15, 11],
                     }
-                }
+                },
             )
             .execute()
         )

@@ -15,10 +15,10 @@ from splitgill.indexing.fields import (
     DataField,
     ParsedField,
 )
-from splitgill.indexing.index import IndexNames, generate_index_ops
+from splitgill.indexing.index import IndexNames, generate_index_ops, ArcStatus
 from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.indexing.syncing import write_ops, WriteResult, BulkOptions
-from splitgill.indexing.templates import DATA_TEMPLATE
+from splitgill.indexing.templates import create_templates
 from splitgill.ingest import generate_ops, generate_rollback_ops
 from splitgill.locking import LockManager
 from splitgill.model import Record, MongoRecord, ParsingOptions, IngestResult
@@ -118,12 +118,46 @@ class SplitgillDatabase:
         """
         self.name = name
         self._client = client
-        # Mongo collection objects
         self.data_collection = self._client.get_data_collection(self.name)
         self.options_collection = self._client.get_options_collection()
-        # index names
         self.indices = IndexNames(self.name)
         self.locker = self._client.lock_manager
+
+    def get_current_indices(self) -> List[str]:
+        """
+        Returns a list of the indices currently in use by this database in Elasticsearch
+        sorted in ascending alphabetical order.
+
+        :return: a list of index names
+        """
+        res = self._client.elasticsearch.indices.get_alias(index=self.indices.wildcard)
+        return sorted(res.keys())
+
+    def get_arc_status(self) -> ArcStatus:
+        """
+        Get the status of the latest archive index in use by this database in
+        Elasticsearch. Old versions of records are stored in the archive (arc) indices
+        using an append strategy. This starts with arc-0 and after this arc is filled
+        moves on to arc-1 and so on. This method returns the index of the most recently
+        used arc (i.e. the arc with the highest index number) and the number of
+        documents in it.
+
+        :return: an ArcStatus object
+        """
+        # get all arc index names for this database
+        result = self._client.elasticsearch.indices.get_alias(
+            index=self.indices.arc_wildcard
+        )
+        if result:
+            latest_arc_index = max(
+                int(arc_index_name.split("-")[-1]) for arc_index_name in result.keys()
+            )
+            count_result = self._client.elasticsearch.count(
+                index=self.indices.get_arc(latest_arc_index)
+            )
+            return ArcStatus(latest_arc_index, count_result["count"])
+        else:
+            return ArcStatus(0, 0)
 
     def get_committed_version(self) -> Optional[int]:
         """
@@ -455,45 +489,19 @@ class SplitgillDatabase:
                 # find all the updated records that haven't had their updates synced yet
                 find_filter = {"version": {"$gt": last_sync}}
 
-        client = self._client.elasticsearch
+        create_templates(self._client.elasticsearch)
 
-        client.indices.put_index_template(name="data-template", body=DATA_TEMPLATE)
-        for index in self.indices.all:
-            if not client.indices.exists(index=index):
-                client.indices.create(index=index)
-
-        # apply optimal indexing settings to all the indices we may update
-        client.indices.put_settings(
-            body={"index": {"refresh_interval": -1, "number_of_replicas": 0}},
-            index=self.indices.all,
-        )
-
-        result = write_ops(
-            client,
+        return write_ops(
+            self._client.elasticsearch,
             generate_index_ops(
                 self.indices,
+                self.get_arc_status(),
                 self.iter_records(filter=find_filter),
                 all_options,
                 last_sync,
             ),
             bulk_options,
         )
-
-        # refresh all indices to make the changes visible all at once
-        client.indices.refresh(index=self.indices.all)
-
-        # reset the settings we changed (None forces them to revert to defaults)
-        client.indices.put_settings(
-            body={"index": {"refresh_interval": None, "number_of_replicas": None}},
-            index=self.indices.all,
-        )
-
-        # do a bit of a tidy up by deleting any indexes without docs
-        for index in self.indices.all:
-            if not any(client.search(index=index, size=1)["hits"]["hits"]):
-                client.indices.delete(index=index)
-
-        return result
 
     def search(
         self, version: Union[SearchVersion, int] = SearchVersion.latest
@@ -507,18 +515,18 @@ class SplitgillDatabase:
         If a version number is passed as the version parameter, it will be checked
         against the latest version available in Elasticsearch. If it is below the latest
         version available in Elasticsearch, all indices will be searched and a term
-        filter will be used to get the right data. if the version is equal to or above
+        filter will be used to get the right data. If the version is equal to or above
         the latest version available in Elasticsearch, the latest index will be searched
         and no version term filter will be used. This is for Elasticsearch performance
         and caching.
 
+        If version is not an int but is instead a SearchVersion, this is used to set the
+        index on the search object. SearchVersion.latest sets the index to this
+        database's latest index, whereas SearchVersion.all sets the index to a wildcard
+        to search on all indices used by this database.
+
         :param version: the version to search at, this should either be a SearchVersion
-                        enum option or an int. SearchVersion.latest will result in a
-                        search on the latest index with no version filter thus searching
-                        the latest data. SearchVersion.all will result in a search on
-                        all indices using a wildcard and no version filter. Passing an
-                        int version will search at the given timestamp. The default is
-                        SearchVersion.latest.
+                        enum option or an int version.
         :return: a Search DSL object
         """
         search = Search(using=self._client.elasticsearch)

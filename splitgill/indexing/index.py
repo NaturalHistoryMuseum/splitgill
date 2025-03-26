@@ -1,7 +1,7 @@
 import abc
 import math
 from dataclasses import dataclass
-from typing import Optional, Iterable, Dict
+from typing import Optional, Iterable, Dict, NamedTuple
 
 from orjson import dumps, OPT_NON_STR_KEYS
 
@@ -10,26 +10,38 @@ from splitgill.indexing.parser import parse
 from splitgill.model import MongoRecord, ParsingOptions
 
 
+# the maximum number of documents to store in an arc index before creating a new one
+MAX_DOCS_PER_ARC = 2_000_000
+
+
+class ArcStatus(NamedTuple):
+    """
+    Named tuple representing the status of the archive indices in a database by
+    detailing the index of the last arc index and the number documents in it.
+
+    The last arc is the arc which has most recently been used.
+    """
+
+    index: int
+    count: int
+
+
 class IndexNames:
     """
     A class holding index names and index wildcard patterns for the various index names
     used to store the data from the given named database in Elasticsearch.
 
-    For each database, the following index names are valid:
-
-        - data-database_name-latest
-        - data-database_name-arc-000
-        - data-database_name-arc-001
-        - data-database_name-arc-002
-        - data-database_name-arc-003
-        - data-database_name-arc-004
+    For each database, an index called data-{name}-latest is likely to exist* and then,
+    depending on how many versions of the data there are, a series of archive
+    indices called data-{name}-arc-{index}. The highest indexed archive index holds the
+    most recent data which isn't latest, while the lowest holds the oldest.
 
     This means you can use:
 
-        - data-database_name-* for all data in database_name
-        - data-database_name-latest for the latest data in database_name
-        - data-database_name-arc-* for all archived data in database_name
-        - data-* for all data in all indices
+        - data-{name}-* for all data in the database with {name}
+        - data-{name}-latest for the latest data in the database with {name}
+        - data-{name}-arc-* for all archived data in the database with {name}
+        - data-* for all data in all databases
         - data-*-latest for all latest data
         - data-*-arc for all archived data
 
@@ -39,46 +51,35 @@ class IndexNames:
 
     def __init__(self, name: str):
         self.name = name
-        # this shouldn't be changed without thought in case it breaks stuff. It should
-        # be safe to increase this number without causing problems as long as nothing
-        # downstream is assuming the location of documents based on the previous count,
-        # but lowering it will break stuff as we'll end up ignoring previously used arc
-        # indices without reallocating the documents
-        self.arc_count = 5
         # the base name of all indices for this database
         self.base = f"data-{name}"
         # the latest index name
         self.latest = f"{self.base}-latest"
         # the archive indices base name
         self.arc_base = f"{self.base}-arc"
-        # the names of the archive indices
-        self.arcs = tuple(
-            f"{self.arc_base}-{i % self.arc_count:03}" for i in range(self.arc_count)
-        )
         # wildcard name to catch all data indices (so both latest and all arcs)
         self.wildcard = f"{self.base}-*"
         # wildcard name to catch all arc indices
         self.arc_wildcard = f"{self.arc_base}-*"
-        # a tuple of all index names
-        self.all = (self.latest, *self.arcs)
 
-    def get_arc(self, record_id: str) -> str:
+    def get_arc(self, index: int) -> str:
         """
-        Returns the name of the archive index that should contain the data for this
-        record ID. This function is designed to spread data around across the data
-        archive indices evenly, but keep all data for each record in the same index.
+        Creates the name of the archive database with the given index and returns it.
 
-        :param record_id: the record ID
+        :param index: the archive index
         :return: the index name
         """
-        return self.arcs[sum(map(ord, record_id)) % self.arc_count]
+        return f"{self.arc_base}-{index}"
 
 
+@dataclass
 class BulkOp(abc.ABC):
     """
-    Abstract class (really this is an interface) representing a bulk Elasticsearch
-    operation.
+    Abstract class representing a bulk Elasticsearch operation.
     """
+
+    index: str
+    doc_id: str
 
     def serialise(self) -> str:
         """
@@ -95,8 +96,6 @@ class IndexOp(BulkOp):
     An index bulk operation.
     """
 
-    index: str
-    doc_id: str
     document: dict
 
     def serialise(self) -> str:
@@ -116,9 +115,6 @@ class DeleteOp(BulkOp):
     An delete bulk operation.
     """
 
-    index: str
-    doc_id: str
-
     def serialise(self) -> str:
         # delete ops are only one line of JSON, for speed build it directly as a str
         return f'{{"delete":{{"_index":"{self.index}","_id":"{self.doc_id}"}}}}'
@@ -126,6 +122,7 @@ class DeleteOp(BulkOp):
 
 def generate_index_ops(
     indices: IndexNames,
+    arc_status: ArcStatus,
     records: Iterable[MongoRecord],
     all_options: Dict[int, ParsingOptions],
     after: Optional[int],
@@ -147,6 +144,7 @@ def generate_index_ops(
     latest index coming first and then the other index's ops following.
 
     :param indices: an IndexNames object for the database
+    :param arc_status: the current arc status
     :param records: the records to update from
     :param after: the exclusive start version to produce index operations from, None if
                   all versions should be indexed
@@ -155,6 +153,8 @@ def generate_index_ops(
                         after parameter (if it's even provided)
     :return: yields BulkOp objects
     """
+    # initialise these based off the ArcStatus we are provided
+    arc_index, arc_count = arc_status
     # pre-sort the options in reverse version order
     sorted_options = [
         (option_version, all_options[option_version])
@@ -182,7 +182,6 @@ def generate_index_ops(
         version = max(data_version, options_version)
         next_version = None
         last_parsed_data = None
-        data_arc_index = indices.get_arc(record.id)
 
         while True:
             if not data:
@@ -213,9 +212,17 @@ def generate_index_ops(
                         index_name = latest_index
                         doc_id = record.id
                     else:
+                        # add some stuff to the document
                         document[DocumentField.NEXT] = next_version
                         document[DocumentField.VERSIONS]["lt"] = next_version
-                        index_name = data_arc_index
+
+                        # figure out which arc we need to put this document in
+                        if arc_count >= MAX_DOCS_PER_ARC:
+                            arc_index += 1
+                            arc_count = 0
+                        index_name = indices.get_arc(arc_index)
+                        arc_count += 1
+
                         doc_id = f"{record.id}:{version}"
                     yield IndexOp(index_name, doc_id, document)
 

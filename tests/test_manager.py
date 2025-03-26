@@ -18,6 +18,7 @@ from splitgill.indexing.fields import (
     DataType,
     DATA_ID_FIELD,
 )
+from splitgill.indexing.index import ArcStatus
 from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.indexing.parser import parse
 from splitgill.indexing.syncing import BulkOptions
@@ -323,6 +324,7 @@ class TestSync:
 
         assert not splitgill.elasticsearch.indices.exists(index=database.indices.latest)
         assert result.total == 0
+        assert not result.indices
 
     def test_everything_to_sync_many_workers(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
@@ -335,8 +337,9 @@ class TestSync:
 
         assert result.indexed == len(records)
         assert splitgill.elasticsearch.indices.exists(index=database.indices.latest)
-        assert not splitgill.elasticsearch.indices.exists(index=database.indices.all)
+        assert database.get_current_indices() == [database.indices.latest]
         assert database.search().count() == len(records)
+        assert result.indices == [database.indices.latest]
 
     def test_one_sync_then_another(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
@@ -356,7 +359,7 @@ class TestSync:
         assert (
             splitgill.elasticsearch.count(index=database.indices.latest)["count"] == 5
         )
-        assert not splitgill.elasticsearch.indices.exists(index=database.indices.all)
+        assert database.get_current_indices() == [database.indices.latest]
 
         # the next day...
         version_2_time = datetime(2020, 7, 3, tzinfo=timezone.utc)
@@ -369,14 +372,22 @@ class TestSync:
         # update the records
         with freeze_time(version_2_time):
             database.ingest(version_2_records, commit=True)
-        database.sync()
+        result = database.sync()
+        assert result.indices == [
+            database.indices.get_arc(0),
+            database.indices.latest,
+        ]
         assert database.search().count() == 6
         assert (
             Search(
-                using=splitgill.elasticsearch, index=database.indices.get_arc("r1")
+                using=splitgill.elasticsearch, index=database.indices.get_arc(0)
             ).count()
             == 1
         )
+        assert database.get_current_indices() == [
+            database.indices.get_arc(0),
+            database.indices.latest,
+        ]
 
     def test_sync_with_delete(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
@@ -394,7 +405,9 @@ class TestSync:
             database.ingest(version_1_records, commit=True)
         database.sync()
         assert database.search().count() == 5
-        assert not splitgill.elasticsearch.indices.exists(index=database.indices.all)
+
+        indices = database.get_current_indices()
+        assert indices == [database.indices.latest]
 
         # the next day...
         version_2_time = datetime(2020, 7, 3, tzinfo=timezone.utc)
@@ -411,10 +424,15 @@ class TestSync:
         assert database.search().count() == 5
         assert (
             Search(
-                using=splitgill.elasticsearch, index=database.indices.get_arc("r2")
+                using=splitgill.elasticsearch, index=database.indices.get_arc(0)
             ).count()
             == 1
         )
+        after_delete_indices = database.get_current_indices()
+        assert after_delete_indices == [
+            database.indices.get_arc(0),
+            database.indices.latest,
+        ]
 
         # the second record shouldn't be in the latest index
         assert not splitgill.elasticsearch.exists(
@@ -423,7 +441,7 @@ class TestSync:
         # but it should be in the old index
         assert splitgill.elasticsearch.exists(
             id=f"r2:{to_timestamp(version_1_time)}",
-            index=database.indices.get_arc("r2"),
+            index=database.indices.get_arc(0),
         )
 
     def test_sync_delete_non_existent(self, splitgill: SplitgillClient):
@@ -1283,3 +1301,73 @@ def test_get_versions(splitgill: SplitgillClient):
 
     # now there are versions, including the deleted version
     assert database.get_versions() == [4, 5, 7, 9, 15]
+
+
+class TestArcStatus:
+    def test_empty(self, splitgill: SplitgillClient):
+        database = splitgill.get_database("test")
+        status = database.get_arc_status()
+        assert status.index == 0
+        assert status.count == 0
+
+    def test_basic(self, splitgill: SplitgillClient):
+        database = splitgill.get_database("test")
+
+        record_id = "r-1"
+        # this will go into arc-0
+        database.ingest([Record(record_id, {"a": 4})], commit=True)
+        # this will go into arc-0
+        database.ingest([Record(record_id, {"a": 7})], commit=True)
+        # this will go into arc-0
+        database.ingest([Record(record_id, {"a": 9})], commit=True)
+        # this will go into arc-1
+        database.ingest([Record(record_id, {"a": 3})], commit=True)
+        # this'll be the latest record
+        database.ingest([Record(record_id, {"a": 8})], commit=True)
+
+        with patch("splitgill.indexing.index.MAX_DOCS_PER_ARC", 3):
+            database.sync()
+
+        status = database.get_arc_status()
+        assert status.index == 1
+        assert status.count == 1
+
+        search = Search(using=splitgill.elasticsearch)
+        assert search.index(database.indices.latest).count() == 1
+        assert search.index(database.indices.get_arc(0)).count() == 3
+        assert search.index(database.indices.get_arc(1)).count() == 1
+        assert not splitgill.elasticsearch.indices.exists(
+            index=database.indices.get_arc(2)
+        )
+
+    def test_repeat_ingest(self, splitgill: SplitgillClient):
+        database = splitgill.get_database("test")
+
+        record_id = "r-1"
+        # this will go into arc-0
+        database.ingest([Record(record_id, {"a": 4})], commit=True)
+        # this will go into arc-0
+        database.ingest([Record(record_id, {"a": 7})], commit=True)
+        # this will go into arc-0
+        database.ingest([Record(record_id, {"a": 9})], commit=True)
+        # this will go into arc-1
+        database.ingest([Record(record_id, {"a": 3})], commit=True)
+        # this will go into arc-1
+        database.ingest([Record(record_id, {"a": 8})], commit=True)
+
+        with patch("splitgill.indexing.index.MAX_DOCS_PER_ARC", 3):
+            database.sync()
+
+        # this will go into arc-1
+        database.ingest([Record(record_id, {"a": 1})], commit=True)
+        # this will go into arc-2
+        database.ingest([Record(record_id, {"a": 4})], commit=True)
+        # this will go into arc-2
+        database.ingest([Record(record_id, {"a": 9})], commit=True)
+        # this will go into latest
+        database.ingest([Record(record_id, {"a": 2})], commit=True)
+
+        with patch("splitgill.indexing.index.MAX_DOCS_PER_ARC", 3):
+            database.sync()
+
+        assert database.get_arc_status() == ArcStatus(2, 2)
