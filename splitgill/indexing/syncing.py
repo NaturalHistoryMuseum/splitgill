@@ -68,6 +68,26 @@ class WriteResult:
         return self.indexed + self.deleted
 
 
+def refresh(client: Elasticsearch, indices: List[str], attempts: int = 3):
+    """
+    Given an Elasticsearch client and a list of indices, call refresh on the indices. If
+    the request gets a connection timeout from Elasticsearch, the operation will be
+    retried up to `attempts` times.
+
+    :param client: the Elasticsearch client to use
+    :param indices: the indices to refresh
+    :param attempts: the number of times to attempt before raising an exception
+    """
+    while True:
+        try:
+            client.indices.refresh(index=indices)
+            break
+        except ConnectionTimeout as e:
+            attempts -= 1
+            if attempts == 0:
+                raise e
+
+
 def write_ops(
     client: Elasticsearch, op_stream: Iterable[BulkOp], options: BulkOptions
 ) -> WriteResult:
@@ -89,7 +109,8 @@ def write_ops(
     result = run(write_ops_async(node_configs, op_stream, options))
 
     # refresh all indices to make the changes visible all at once
-    client.indices.refresh(index=result.indices)
+    refresh(client, result.indices)
+
     # return the indices back to their original settings as defined in the template
     client.indices.put_settings(
         body={"index": {"refresh_interval": None, "number_of_replicas": None}},

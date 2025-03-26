@@ -1,5 +1,5 @@
 from asyncio import Queue, sleep, create_task, gather
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from elastic_transport import ConnectionTimeout
@@ -10,6 +10,7 @@ from splitgill.indexing.syncing import (
     worker,
     BulkOpException,
     check_for_errors,
+    refresh,
 )
 
 
@@ -115,6 +116,17 @@ class TestCheckForErrors:
             check_for_errors(tasks)
         # make sure we don't leave any tasks hanging around
         await gather(task_1, task_2)
+
+
+def test_refresh_attempts():
+    mock_client = MagicMock(
+        indices=MagicMock(refresh=MagicMock(side_effect=ConnectionTimeout("nope")))
+    )
+    attempts = 9
+    with pytest.raises(ConnectionTimeout):
+        refresh(mock_client, [], attempts=attempts)
+
+    assert mock_client.indices.refresh.call_count == attempts
 
 
 # todo: some more tests would be nice, although the coverage from integration tests is
