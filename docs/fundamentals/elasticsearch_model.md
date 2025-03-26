@@ -11,49 +11,49 @@ The version must be a UNIX epoch timestamp in milliseconds.
 ### Data Index Sharding
 
 For performance reasons, not all data from a single `database` goes into a single index.
-as data is somewhat sharded using the version and record ID.
 
-Two types of index are used to hold the data, though both have exactly the same schema:
+Two types of index are used to hold the data, both based off of the same index template
+with small variations:
 
 - A hot `latest` index contains the current data for each record
-- 0 or more cold "archive" (known as `arc`) indices hold the data for every version
+- 0 or more colder "archive" (known as `arc`) indices hold the data for every version
   before the current version of each record
 
 The version of the document determines whether the data appears in the `latest` or an
-`arc` index, and then the record ID is used to place documents into one of the `arc`
-indices.
-
-Currently, 5 `arc` indices are used meaning each `database` has 6 indexes in total.
-The documents representing all previous versions of a record will be stored in the same
 `arc` index.
-The `arc` index chosen for a document is determined by roughly the following code:
-
-```python
-# this will produce arc_index = "data-some-guid-arc-003"
-
-database_id = "some-guid"
-arc_count = 5
-record_id = "record-1"
-i = sum(map(ord, record_id)) % arc_count
-arc_index = f"data-{database_id}-arc-{i:03}"
-```
-
-The real logic can be found in the `splitgill.indexing.index.IndexNames` class.
+The `arc` indices are then populated in by adding the older versions of the records in
+the order they are encountered.
+`arc` indices have a maximum number of documents they are allowed to contain (currently
+set to 2 million documents).
+Once this limit is reached, a new `arc` is created and used.
+This means that the number of `arc` indices depends on how many records and how many
+versions a database has.
+`arc-0` will always hold the oldest versions with the highest index `arc` containing the
+most recent (e.g. you could have `arc-0`, `arc-1`, `arc-2` etc).
 
 By splitting the indices like this we allow Elasticsearch to keep the hot `latest` index
-in memory and (most likely) push the cold `arc` indices to disk.
+in memory and (most likely) push the colder `arc` indices to disk.
 Of course, this is dependent on how the Elasticsearch cluster is configured and what
 access patterns are likely to occur most commonly.
 Additionally, this splitting allows the possibility of actually having hot and cold
 nodes in the cluster using different resources with different performance requirements.
-This configuration is outside the scope of Splitgill though, but the `latest` and `arc`
-indices at least allow for some control over the access patterns in an Elasticsearch
-cluster.
+This configuration is somewhat outside the scope of Splitgill, but the `latest` and
+`arc` indices at least allow for some control over the access patterns in an
+Elasticsearch cluster.
 
 These indices are named like so:
 
 - `data-{name}-latest`
-- `data-{name}-arc-{index:03}`
+- `data-{name}-arc-{index}`
+
+The `latest` and `arc` indices use the same base schema but have a few differences:
+
+- the `latest` schema uses the `default` compression while the `arc` indices use the
+  `best_compression`
+- the `latest` schema uses 5 shards while the `arc` indices use 1
+
+These are the only differences currently between the index templates and the differences
+make no difference in the way they are searched or data is inserted into them.
 
 ## Document Fields
 
