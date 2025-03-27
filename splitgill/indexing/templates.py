@@ -22,17 +22,14 @@ def create_templates(client: Elasticsearch):
 def get_latest_template() -> dict:
     """
     Returns the template to use for the archive (arc) indices. This template is the same
-    as the base template but with:
-
-        - default compression to maximise search speed
-        - 5 shards per index to help search throughput and because the latest index
-          could be large if the database has a large number of records
+    as the base template but with 5 shards per index to help search throughput and
+    because the latest index could be large if the database has a large number of
+    records.
 
     :return: the template as a dict
     """
     return _get_template(
         pattern="data-*-latest",
-        compression="default",
         shards=5,
         # must be higher priority than the arc template otherwise the patterns can't be
         # resolved when they both match an index name
@@ -43,23 +40,19 @@ def get_latest_template() -> dict:
 def get_arc_template() -> dict:
     """
     Returns the template to use for the archive (arc) indices. This template is the same
-    as the base template but with:
-
-        - best compression to maximise storage efficiency
-        - a single shard per index as we limit the size of the index by record count,
-          and therefore it's enough to just use a single shard
+    as the base template but with a single shard per index as we limit the size of the
+    index by record count, and therefore it's enough to just use a single shard.
 
     :return: the template as a dict
     """
     return _get_template(
         pattern="data-*-arc-*",
-        compression="best_compression",
         shards=1,
         priority=700,
     )
 
 
-def _get_template(pattern: str, compression: str, shards: int, priority: int) -> dict:
+def _get_template(pattern: str, shards: int, priority: int) -> dict:
     return {
         "index_patterns": [pattern],
         "priority": priority,
@@ -75,7 +68,7 @@ def _get_template(pattern: str, compression: str, shards: int, priority: int) ->
                     }
                 },
                 "index": {
-                    "codec": compression,
+                    "codec": "best_compression",
                     "number_of_shards": shards,
                     "number_of_replicas": 1,
                     "mapping": {
