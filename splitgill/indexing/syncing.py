@@ -89,7 +89,7 @@ def refresh(client: Elasticsearch, indices: List[str], attempts: int = 3):
 
 
 def write_ops(
-    client: Elasticsearch, op_stream: Iterable[BulkOp], options: BulkOptions
+    client: Elasticsearch, op_stream: Iterable[BulkOp], options: Optional[BulkOptions]
 ) -> WriteResult:
     """
     Write the given iterable of bulk index operations to Elasticsearch.
