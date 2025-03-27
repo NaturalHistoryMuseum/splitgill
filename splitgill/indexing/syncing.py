@@ -1,3 +1,4 @@
+import time
 from asyncio import Queue, run, sleep, create_task, gather, Task
 from dataclasses import dataclass
 from typing import Iterable, List, Set, Tuple, Optional
@@ -72,12 +73,13 @@ def refresh(client: Elasticsearch, indices: List[str], attempts: int = 3):
     """
     Given an Elasticsearch client and a list of indices, call refresh on the indices. If
     the request gets a connection timeout from Elasticsearch, the operation will be
-    retried up to `attempts` times.
+    retried up to `attempts` times with an increasing timeout after each failure.
 
     :param client: the Elasticsearch client to use
     :param indices: the indices to refresh
     :param attempts: the number of times to attempt before raising an exception
     """
+    sleep_duration = 1
     while True:
         try:
             client.indices.refresh(index=indices)
@@ -86,6 +88,9 @@ def refresh(client: Elasticsearch, indices: List[str], attempts: int = 3):
             attempts -= 1
             if attempts == 0:
                 raise e
+            else:
+                time.sleep(sleep_duration)
+                sleep_duration *= 1.5
 
 
 def write_ops(
