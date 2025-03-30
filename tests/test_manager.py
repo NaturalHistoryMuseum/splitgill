@@ -29,7 +29,7 @@ from splitgill.manager import (
     SearchVersion,
 )
 from splitgill.model import Record, ParsingOptions
-from splitgill.search import create_version_query, term_query
+from splitgill.search import version_query, term_query
 from splitgill.utils import to_timestamp, now
 
 
@@ -442,7 +442,7 @@ class TestSync:
         assert (
             database.search(SearchVersion.all)
             .filter(term_query("_id", "r2"))
-            .filter(create_version_query(to_timestamp(version_1_time)))
+            .filter(version_query(to_timestamp(version_1_time)))
             .count()
             == 1
         )
@@ -632,7 +632,7 @@ def test_search(splitgill: SplitgillClient):
     assert database.search(version=5)._index == wildcard
     assert database.search(version=5)._using == client
     assert database.search(version=5).to_dict() == {
-        "query": {"bool": {"filter": [create_version_query(5).to_dict()]}}
+        "query": {"bool": {"filter": [version_query(5).to_dict()]}}
     }
 
     # data in index and 5 is less than latest, so should create a search over everything
@@ -643,7 +643,7 @@ def test_search(splitgill: SplitgillClient):
     assert database.search(version=5)._index == wildcard
     assert database.search(version=5)._using == client
     assert database.search(version=5).to_dict() == {
-        "query": {"bool": {"filter": [create_version_query(5).to_dict()]}}
+        "query": {"bool": {"filter": [version_query(5).to_dict()]}}
     }
 
     # data in index and version requested is above latest so should just use latest

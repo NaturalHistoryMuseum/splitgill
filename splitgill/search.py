@@ -32,7 +32,7 @@ point = ParsedType.GEO_POINT.path_to
 shape = ParsedType.GEO_SHAPE.path_to
 
 
-def create_version_query(version: int) -> Query:
+def version_query(version: int) -> Query:
     """
     Creates the elasticsearch-dsl term necessary to find the correct data from some
     searched records given a version. You probably want to use the result of this
@@ -44,7 +44,7 @@ def create_version_query(version: int) -> Query:
     return Q("term", **{DocumentField.VERSIONS: version})
 
 
-def create_index_specific_version_filter(indexes_and_versions: Dict[str, int]) -> Query:
+def index_specific_version_filter(indexes_and_versions: Dict[str, int]) -> Query:
     """
     Creates the elasticsearch-dsl Bool object necessary to query the given indexes at
     the given specific versions. If there are multiple indexes that require the same
@@ -67,11 +67,11 @@ def create_index_specific_version_filter(indexes_and_versions: Dict[str, int]) -
     if len(by_version) == 1:
         # there's only one version, just use it in a single meta.versions check with no
         # indexes
-        return create_version_query(next(iter(by_version.keys())))
+        return version_query(next(iter(by_version.keys())))
     else:
         filters = []
         for version, indexes in by_version.items():
-            version_filter = create_version_query(version)
+            version_filter = version_query(version)
             if len(indexes) == 1:
                 # there's only one index requiring this version so use a term query
                 filters.append(

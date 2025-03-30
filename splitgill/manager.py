@@ -22,7 +22,7 @@ from splitgill.indexing.templates import create_templates
 from splitgill.ingest import generate_ops, generate_rollback_ops
 from splitgill.locking import LockManager
 from splitgill.model import Record, MongoRecord, ParsingOptions, IngestResult
-from splitgill.search import create_version_query
+from splitgill.search import version_query
 from splitgill.utils import partition, now, iter_terms
 
 OPTIONS_COLLECTION_NAME = "options"
@@ -553,7 +553,7 @@ class SplitgillDatabase:
                 search = search.index(self.indices.latest)
             else:
                 search = search.index(self.indices.wildcard)
-                search = search.filter(create_version_query(version))
+                search = search.filter(version_query(version))
         else:
             if version == SearchVersion.latest:
                 search = search.index(self.indices.latest)
