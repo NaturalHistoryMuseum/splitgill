@@ -24,17 +24,17 @@ def test_index_template_usage(elasticsearch_client: Elasticsearch):
     resp1 = elasticsearch_client.indices.simulate_index_template(
         name="data-beans-arc-latest"
     )
-    assert resp1.body["template"]["settings"]["index"]["codec"] == "default"
+    assert resp1.body["template"]["settings"]["index"]["number_of_shards"] == "5"
 
     # normal index names
     resp2 = elasticsearch_client.indices.simulate_index_template(
         name="data-5788f3e2-6e71-4ecb-aa04-cfba6da1a691-latest"
     )
-    assert resp2.body["template"]["settings"]["index"]["codec"] == "default"
+    assert resp2.body["template"]["settings"]["index"]["number_of_shards"] == "5"
     resp3 = elasticsearch_client.indices.simulate_index_template(
         name="data-5788f3e2-6e71-4ecb-aa04-cfba6da1a691-arc-0"
     )
-    assert resp3.body["template"]["settings"]["index"]["codec"] == "best_compression"
+    assert resp3.body["template"]["settings"]["index"]["number_of_shards"] == "1"
 
 
 def test_all_text(splitgill: SplitgillClient):
