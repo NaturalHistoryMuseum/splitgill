@@ -496,11 +496,11 @@ class SplitgillDatabase:
 
         if resync:
             # delete all arcs
-            arc_status = self.get_arc_status()
-            for arc_index in range(0, arc_status.index + 1):
-                self._client.elasticsearch.indices.delete(
-                    index=self.indices.get_arc(arc_index)
-                )
+            res = self._client.elasticsearch.indices.get_alias(
+                index=self.indices.arc_wildcard
+            )
+            for arc_index in res.keys():
+                self._client.elasticsearch.indices.delete(index=arc_index)
 
         create_templates(self._client.elasticsearch)
 
