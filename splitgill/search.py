@@ -32,6 +32,17 @@ point = ParsedType.GEO_POINT.path_to
 shape = ParsedType.GEO_SHAPE.path_to
 
 
+def id_query(record_id: str) -> Query:
+    """
+    Returns a term query on the _id field in the record's data with the record_id value
+    passed. This uses the data's _id not the documents ID root field.
+
+    :param record_id: the record's ID
+    :return: a term query
+    """
+    return term_query(DATA_ID_FIELD, record_id, ParsedType.KEYWORD)
+
+
 def version_query(version: int) -> Query:
     """
     Creates the elasticsearch-dsl term necessary to find the correct data from some

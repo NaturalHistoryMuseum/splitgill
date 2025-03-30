@@ -21,7 +21,7 @@ from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.indexing.parser import parse
 from splitgill.manager import SplitgillClient, SplitgillDatabase, SearchVersion
 from splitgill.model import Record, ParsingOptions
-from splitgill.search import term_query
+from splitgill.search import term_query, id_query
 
 
 def test_index_names():
@@ -482,9 +482,7 @@ class TestGenerateIndexOps:
             assert splitgill.elasticsearch.count(index=index)["count"] == arc_max_size
 
         assert (
-            database.search(version=SearchVersion.all)
-            .filter(term_query("_id", "r-123"))
-            .count()
+            database.search(version=SearchVersion.all).filter(id_query("r-123")).count()
             == versions
         )
 

@@ -29,7 +29,7 @@ from splitgill.manager import (
     SearchVersion,
 )
 from splitgill.model import Record, ParsingOptions
-from splitgill.search import version_query, term_query
+from splitgill.search import version_query, term_query, id_query
 from splitgill.utils import to_timestamp, now
 
 
@@ -441,7 +441,7 @@ class TestSync:
         # but it should be in the old index
         assert (
             database.search(SearchVersion.all)
-            .filter(term_query("_id", "r2"))
+            .filter(id_query("r2"))
             .filter(version_query(to_timestamp(version_1_time)))
             .count()
             == 1
