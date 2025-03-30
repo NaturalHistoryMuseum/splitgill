@@ -439,9 +439,12 @@ class TestSync:
             id="r2", index=database.indices.latest
         )
         # but it should be in the old index
-        assert splitgill.elasticsearch.exists(
-            id=f"r2:{to_timestamp(version_1_time)}",
-            index=database.indices.get_arc(0),
+        assert (
+            database.search(SearchVersion.all)
+            .filter(term_query("_id", "r2"))
+            .filter(create_version_query(to_timestamp(version_1_time)))
+            .count()
+            == 1
         )
 
     def test_sync_delete_non_existent(self, splitgill: SplitgillClient):
@@ -553,7 +556,7 @@ class TestSync:
         # by elasticsearch. It should definitely be less than 4!
         assert database.search().count() < 4
 
-    def test_resync(self, splitgill: SplitgillClient):
+    def test_resync_rogue_deletions(self, splitgill: SplitgillClient):
         database = SplitgillDatabase("test", splitgill)
         records = [
             Record.new({"x": 5}),
@@ -577,6 +580,36 @@ class TestSync:
         # sync them back in
         database.sync(resync=True)
         assert database.search().count() == len(records)
+
+    def test_resync_over_existing(self, splitgill: SplitgillClient):
+        database = SplitgillDatabase("test", splitgill)
+        records = [
+            Record("r1", {"x": 5}),
+            Record("r2", {"x": 10}),
+            Record("r3", {"x": 15}),
+            Record("r4", {"x": -1}),
+            Record("r5", {"x": 1098}),
+        ]
+        database.ingest(records, commit=True)
+
+        new_records = [
+            Record("r2", {"x": "arms!"}),
+            Record("r5", {"x": "egg!"}),
+        ]
+        database.ingest(new_records, commit=True)
+
+        # force the sync to create arc-0 and arc-1 so that we can test all the arcs get
+        # deleted when we resync
+        with patch("splitgill.indexing.index.MAX_DOCS_PER_ARC", 1):
+            database.sync(resync=False)
+
+        assert database.search().count() == 5
+        assert database.search(SearchVersion.all).count() == 7
+
+        # resync
+        database.sync(resync=True)
+        assert database.search().count() == 5
+        assert database.search(SearchVersion.all).count() == 7
 
 
 def test_search(splitgill: SplitgillClient):

@@ -84,7 +84,6 @@ def check_op(
     if next_version is not None:
         assert op.document[DocumentField.NEXT] == next_version
         assert op.document[DocumentField.VERSIONS]["lt"] == next_version
-        assert op.doc_id == f"{record_id}:{version}"
         assert op.index == index_names.get_arc(0)
     else:
         assert DocumentField.NEXT not in op.document

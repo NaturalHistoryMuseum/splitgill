@@ -460,11 +460,16 @@ class SplitgillDatabase:
         and a refresh is called. This means that if this function returns successfully,
         the data updated by it will be immediately available for searches.
 
+        Note that if resync=True, the arc indices will be deleted before reindexing
+        begins! The latest index is not deleted as the documents in the latest index
+        have IDs so can be directly replaced.
+
         :param bulk_options: options determining how the bulk operations are sent to
                              Elasticsearch
         :param resync: whether to resync all records with Elasticsearch regardless of
-                       the currently synced version. This won't delete any data first
-                       and just replaces documents in Elasticsearch as needed.
+                       the currently synced version. This won't delete any data in the
+                       latest index as those records are replaced during resync, but any
+                       arc indices will be deleted prior to re-indexing.
         :return: a WriteResult object
         """
         if not self.has_data():
@@ -488,6 +493,14 @@ class SplitgillDatabase:
             else:
                 # find all the updated records that haven't had their updates synced yet
                 find_filter = {"version": {"$gt": last_sync}}
+
+        if resync:
+            # delete all arcs
+            arc_status = self.get_arc_status()
+            for arc_index in range(0, arc_status.index + 1):
+                self._client.elasticsearch.indices.delete(
+                    index=self.indices.get_arc(arc_index)
+                )
 
         create_templates(self._client.elasticsearch)
 

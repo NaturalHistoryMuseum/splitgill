@@ -79,7 +79,8 @@ class BulkOp(abc.ABC):
     """
 
     index: str
-    doc_id: str
+    # if doc_id is set to None, Elasticsearch will create an ID for the document
+    doc_id: Optional[str]
 
     def serialise(self) -> str:
         """
@@ -212,6 +213,10 @@ def generate_index_ops(
                         index_name = latest_index
                         doc_id = record.id
                     else:
+                        # set the doc's ID to None to force Elasticsearch to create it,
+                        # this is an ingestion speed optimisation
+                        doc_id = None
+
                         # add some stuff to the document
                         document[DocumentField.NEXT] = next_version
                         document[DocumentField.VERSIONS]["lt"] = next_version
@@ -223,7 +228,6 @@ def generate_index_ops(
                         index_name = indices.get_arc(arc_index)
                         arc_count += 1
 
-                        doc_id = f"{record.id}:{version}"
                     yield IndexOp(index_name, doc_id, document)
 
             # update state variables
