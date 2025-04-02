@@ -211,6 +211,7 @@ rebuild_data_scenarios = [
             {"type": "Point", "coordinates": [10, 30]},
         ],
     },
+    {"_id": "9", "egg": [1, None, 3]},
 ]
 
 
