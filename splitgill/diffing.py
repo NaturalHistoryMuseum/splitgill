@@ -1,217 +1,375 @@
 import abc
-import marshal
+from collections import deque
+from dataclasses import dataclass
+from datetime import datetime, date
+from itertools import zip_longest
+from typing import (
+    Iterable,
+    Tuple,
+    Any,
+    Union,
+    NamedTuple,
+    Dict,
+    Deque,
+    List,
+    TypeVar,
+    Generic,
+    Optional,
+    Collection,
+)
 
-import dictdiffer
-import six
+import regex as rx
+
+from splitgill.indexing.fields import DATA_ID_FIELD
+
+# strftime formats used to turn datetime and date objects into strings before data
+# enters MongoDB (see prepare_data), these are based on ISO 8601
+DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%f%z"
+DATE_FORMAT = "%Y-%m-%d"
+# when we turn a naive datetime into a string using the DATETIME_FORMAT above, %z won't
+# appear meaning we can't strptime with the same format. This is annoying, so here's a
+# strptime format that can parse this native result
+NAIVE_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%f"
+# a convenient tuple of all the datetime formats Splitgill uses internally
+SG_DATE_FORMATS = (DATETIME_FORMAT, DATE_FORMAT, NAIVE_DATETIME_FORMAT)
+
+# this regex matches invalid characters which we would like to remove from all string
+# values as they are ingested into the system. It matches unicode control characters
+# (i.e. category C*) but not \n, \r, or \t).
+invalid_value_char_regex = rx.compile(r"[^\P{C}\n\r\t]")
+# this regex matches invalid characters which we would like to remove from all field
+# names as they are ingested into the system. It matches all unicode control characters,
+# so it's a bit stricter than the value regex which allows new lines and tabs
+invalid_key_char_regex = rx.compile(r"[^\P{C}]")
 
 
-def format_diff(differ, diff):
+def prepare_data(
+    value: Any,
+) -> Union[str, dict, list, int, float, bool, None]:
     """
-    Formats the given differ and diff for mongo storage.
+    Prepares the given value for storage in MongoDB. Conversions are completed like so:
 
-    :param differ: the differ object
-    :param diff: the diff
-    :return: a dict for storage
+        - None values are just returned as is
+        - str values have invalid characters removed and are then returned. The
+          characters are currently all unicode control characters except \n, \r, and \t.
+        - int, float, bool, and None values are returned with no changes made
+        - datetime and date values are converted to strings using strftime with the
+          specific formats DATETIME_FORMAT and DATE_FORMAT.
+        - dict values are returned as a new dict instance, with all the keys converted
+          to strings and all the values recursively prepared using this function.
+        - lists, sets, and tuples are converted to lists with each element of the value
+          prepared by this function.
+
+    :param value: the value to be stored in MongoDB
+    :return: None, str, int, float, bool, tuple, or dict depending on the input value
     """
-    return {u'id': differ.differ_id, u'd': diff}
+    if value is None:
+        return None
+
+    if isinstance(value, str):
+        # replace any invalid characters in the string with the empty string
+        return invalid_value_char_regex.sub("", value)
+
+    if isinstance(value, (int, float, bool)):
+        return value
+
+    if isinstance(value, dict):
+        return {
+            prepare_field_name(key): prepare_data(value) for key, value in value.items()
+        }
+
+    if isinstance(value, (list, set, tuple)):
+        return list(map(prepare_data, value))
+
+    # check datetime first as datetime is a subclass of date
+    if isinstance(value, datetime):
+        # stringifying this ensures the tz info is recorded and won't change going
+        # in/out mongo
+        return value.strftime(DATETIME_FORMAT)
+
+    # now check date as we've covered off datetimes
+    if isinstance(value, date):
+        # stringify to simplify handling of dates to mirror datetime pattern even though
+        # the same timezone issue doesn't exist here
+        return value.strftime(DATE_FORMAT)
+
+    # fallback
+    return str(value)
 
 
-def extract_diff(raw_diff):
+def prepare_field_name(name: Any) -> str:
     """
-    Given a diff from mongo storage, return the differ object used and the diff itself.
+    Cleans up a field name for ingestion into the system. There are a few steps to this:
 
-    :param raw_diff: the diff from mongo
-    :return: a 2-tuple of the differ object used to create the diff and the diff itself
+        - convert the name to a str as MongoDB only accepts str keys in objects
+        - remove any control characters from the str
+        - replace . with _ as Elasticsearch doesn't like dots in keys
+        - replace any name starting _ with - as _ is a reserved character in Splitgill
+          that we use in special cases
+
+    If after cleaning, the field name is an empty string, we return a hyphen.
+
+    This function explicitly handles the _id field by just returning it if encountered.
+
+    :param name: the field name
+    :return: a clean str field name
     """
-    return differs[raw_diff[u'id']], raw_diff[u'd']
+    clean_name = invalid_key_char_regex.sub("", str(name)).replace(".", "_").strip()
+    # if this results in the empty string, replace with a hyphen
+    if not clean_name:
+        return "-"
+
+    if name == DATA_ID_FIELD:
+        return DATA_ID_FIELD
+
+    if clean_name[0] == "_":
+        clean_name = f"-{clean_name[1:]}"
+    return clean_name
 
 
-@six.add_metaclass(abc.ABCMeta)
-class Differ(object):
+class DiffOp(NamedTuple):
     """
-    Abstract class defining the Differ interface methods.
+    A namedtuple describing the differences found by the diff function.
     """
 
-    def __init__(self, differ_id):
-        """
-        :param differ_id: the id of the differ, this will be stored alongside the diffs produced
-        """
-        self.differ_id = differ_id
+    # the path where the changes should be applied at in the root dict
+    path: Tuple[Union[str, int], ...]
+    # a dict of the changes made at that path
+    ops: Dict[str, Any]
+
+
+_T = TypeVar("_T")
+
+
+@dataclass
+class Comparison(abc.ABC, Generic[_T]):
+    """
+    A comparison between two objects of the same type.
+    """
+
+    path: Tuple[Union[str, int], ...]
+    left: _T
+    right: _T
 
     @abc.abstractmethod
-    def can_diff(self, data):
+    def compare(self) -> Tuple[Optional[DiffOp], List["Comparison"]]:
         """
-        Whether this differ can diff the given data.
+        Compare the two objects and return a 2-tuple containing a DiffOp and a list of
+        further comparisons which need to be handled. If no differences are found, then
+        the first element of the returned 2-tuple will be None.
 
-        :param data: the data to check
-        :return: True or False
+        :return: A 2-tuple containing a DiffOp and a list of further Comparison objects
         """
         pass
 
-    @abc.abstractmethod
-    def diff(self, old, new, ignore=None):
-        """
-        Produce a diff that when provided to the patch function can modify the old data
-        state to the new data state. If ignore is provided then the keys within it will
-        be ignored during the diff.
 
-        :param old: the old data
-        :param new: the new data
-        :param ignore: the keys to ignore. This should be a list or a set.
-        :return: the diff
-        """
-        pass
-
-    @abc.abstractmethod
-    def patch(self, diff_result, old, in_place=False):
-        """
-        Given the return from the diff function and some data, apply the diff to patch
-        the old data. If the in_place parameter is True then the patch will be applied
-        in place and the old data passed in will be returned. If in_place is False (the
-        default) then the old data is copied before applying the patch.
-
-        :param diff_result: the diff to apply
-        :param old: the old data
-        :param in_place: whether to update the old data in place or not (default: False)
-        :return: the updated data
-        """
-        pass
-
-
-class DictDifferDiffer(Differ):
+class DictComparison(Comparison[dict]):
     """
-    A Differ that uses the dictdiffer lib to diff the dicts.
-
-    The ID used for this differ is 'dd'.
+    A comparison between two dicts.
     """
 
-    def __init__(self):
-        super(DictDifferDiffer, self).__init__(u'dd')
-
-    def can_diff(self, data):
+    def compare(self) -> Tuple[Optional[DiffOp], List["Comparison"]]:
         """
-        We can diff any dict! Wee!
+        Compares the two dicts and return a 2-tuple containing a DiffOp and a list of
+        further comparisons which need to be handled. If no differences are found, then
+        the first element of the returned 2-tuple will be None.
 
-        :param data: the data to check
-        :return: True
+        :return: A 2-tuple containing a DiffOp and a list of further Comparison objects
         """
-        return True
+        missing = object()
+        ops = {}
+        further_comparisons = []
 
-    def diff(self, old, new, ignore=None):
-        """
-        Diffs the two data dicts using dictdiffer and returns the diff as a list. The
-        ignore parameter is passed straight through to dictdiffer.diff so refer to that
-        doc for information on how it should be provided.
+        new_values = {
+            key: value for key, value in self.right.items() if key not in self.left
+        }
+        if new_values:
+            ops["dn"] = new_values
 
-        :param old: the old data
-        :param new: the new data
-        :param ignore: the keys to ignore
-        :return: the diff as a list
-        """
-        return list(dictdiffer.diff(old, new, ignore=ignore))
-
-    def patch(self, diff_result, old, in_place=False):
-        """
-        Given a dictdiffer diff result and some data, apply the diff to patch the old
-        data. If the in_place parameter is True then the patch will be applied in place
-        and the old data passed in will be returned. If in_place is False (the default)
-        then the old data is copied before applying the patch. The copy is done using
-        marshall rather than copy.deepcopy (as it is in the dictdiffer lib) as it is the
-        fastest way to copy an object.
-
-        :param diff_result: the diff to apply
-        :param old: the old data
-        :param in_place: whether to update the old data in place or not (default: False)
-        :return: the updated data
-        """
-
-        if not in_place:
-            old = marshal.loads(marshal.dumps(old))
-        return dictdiffer.patch(diff_result, old, in_place=True)
-
-
-class ShallowDiffer(Differ):
-    """
-    A Differ that only works on dicts that don't have nested dicts.
-
-    Assuming this allows it to use dict.update to patch the old data dict to the new
-    which is really quick! The ID used for this differ is 'sd'.
-    """
-
-    def __init__(self):
-        super(ShallowDiffer, self).__init__(u'sd')
-
-    def can_diff(self, data):
-        """
-        We can only diff the data if it doesn't contain any nested dicts.
-
-        :param data: the data to check
-        :return: True if the data dict passed contains no nested dicts
-        """
-        return all(not isinstance(value, dict) for value in data.values())
-
-    def diff(self, old, new, ignore=None):
-        """
-        Diffs the two data dicts and returns the diff as a dict containing two keys:
-
-            - 'r':  a list of keys that were removed
-            - 'c': a dict of changes made
-
-        Any keys present in the ignored parameter are ignored in the diff.
-
-        :param old: the old data
-        :param new: the new data
-        :param ignore: the keys to ignore
-        """
-        diff = {}
-        if ignore is None:
-            ignore = []
-        new_keys = set(new.keys()) - set(ignore)
-
-        removes = set(old.keys()) - new_keys
-        if removes:
-            diff[u'r'] = list(removes)
+        deleted_keys = [key for key in self.left if key not in self.right]
+        if deleted_keys:
+            ops["dd"] = deleted_keys
 
         changes = {}
-        for key in new_keys:
-            if key in old:
-                if old[key] != new[key]:
-                    # a value has changed
-                    changes[key] = new[key]
+        for key, left_value in self.left.items():
+            right_value = self.right.get(key, missing)
+
+            # deletion or equality, nothing to do
+            if right_value is missing or left_value == right_value:
+                continue
+
+            # check for nested container objects and add Comparison objects to the list
+            # if any are found of the same types
+            if isinstance(left_value, dict) and isinstance(right_value, dict):
+                further_comparisons.append(
+                    DictComparison((*self.path, key), left_value, right_value)
+                )
+            elif isinstance(left_value, list) and isinstance(right_value, list):
+                further_comparisons.append(
+                    ListComparison((*self.path, key), left_value, right_value)
+                )
             else:
-                # a new value has been added
-                changes[key] = new[key]
+                changes[key] = right_value
         if changes:
-            diff[u'c'] = changes
+            ops["dc"] = changes
 
-        return diff
+        return DiffOp(self.path, ops) if ops else None, further_comparisons
 
-    def patch(self, diff_result, old, in_place=False):
+
+@dataclass
+class ListComparison(Comparison[list]):
+    """
+    A comparison between two lists.
+    """
+
+    def compare(self) -> Tuple[DiffOp, List["Comparison"]]:
         """
-        Given a diff result from this differs diff function and some data, apply the
-        diff to patch the old data using the dict.update function and `del` to remove
-        the removed keys.
+        Compares the two lists and return a 2-tuple containing a DiffOp and a list of
+        further comparisons which need to be handled. If no differences are found, then
+        the first element of the returned 2-tuple will be None.
 
-        If the in_place parameter is True then the patch will be applied in place and the old data
-        passed in will be returned. If in_place is False (the default) then the old data is copied
-        before applying the patch. The copy is done using marshall rather for speed.
-
-        :param diff_result: the diff to apply
-        :param old: the old data
-        :param in_place: whether to update the old data in place or not (default: False)
-        :return: the updated data
+        :return: A 2-tuple containing a DiffOp and a list of further Comparison objects
         """
-        if not in_place:
-            old = marshal.loads(marshal.dumps(old))
-        for key in diff_result.get(u'r', []):
-            del old[key]
-        old.update(diff_result.get(u'c', {}))
-        return old
+        missing = object()
+        ops = {}
+        further_comparisons = []
+
+        changes = []
+        for index, (left_value, right_value) in enumerate(
+            zip_longest(self.left, self.right, fillvalue=missing)
+        ):
+            if left_value == right_value:
+                continue
+
+            if left_value is missing:
+                # the right list is longer, so store all the new values so that they can
+                # just be added to the left list to patch it, and stop
+                ops["ln"] = self.right[index:]
+                break
+            elif right_value is missing:
+                # the left value is longer, so store the index from which elements in
+                # the left list will be deleted to shorten it to the length of the right
+                # list, and stop
+                ops["ld"] = index
+                break
+            else:
+                # a change in the values at this index in each list, check for nested
+                # container objects and add Comparison objects to the list if any are
+                # found of the same types
+                if isinstance(left_value, dict) and isinstance(right_value, dict):
+                    further_comparisons.append(
+                        DictComparison((*self.path, index), left_value, right_value)
+                    )
+                elif isinstance(left_value, list) and isinstance(right_value, list):
+                    further_comparisons.append(
+                        ListComparison((*self.path, index), left_value, right_value)
+                    )
+                else:
+                    changes.append((index, right_value))
+        if changes:
+            ops["lc"] = changes
+
+        return DiffOp(self.path, ops) if ops else None, further_comparisons
 
 
-# the differs, instantiated globally for ease of use
-SHALLOW_DIFFER = ShallowDiffer()
-DICT_DIFFER_DIFFER = DictDifferDiffer()
+class DiffingTypeComparisonException(Exception):
+    """
+    Exception raised if the base type and the new type passed to the diff function below
+    are not both dicts.
+    """
 
-# a dict of all the differs, instantiated and keyed by their ids
-differs = {differ.differ_id: differ for differ in [SHALLOW_DIFFER, DICT_DIFFER_DIFFER]}
+    pass
+
+
+def diff(base: dict, new: dict) -> Iterable[DiffOp]:
+    """
+    Finds the differences between the two dicts, yielding DiffOps. Each DiffOp describes
+    specific differences between the base dict and the new dict. By applying them all
+    using the patch function below, the new dict can be recreated from the base dict.
+
+    For efficiency, the DiffOps represent all the changes at a container level (e.g. a
+    dict or list) not each specific change to every version at a specific key or index.
+    This saves not only database space, but also allows for a faster patch function as
+    changes can be applied en masse instead of individually.
+
+    :param base: the base dict
+    :param new: the new version of the base dict
+    :return: yields DiffOps (if any changes are found)
+    """
+    if base == new:
+        return
+
+    if not isinstance(base, dict) or not isinstance(new, dict):
+        raise DiffingTypeComparisonException("Both base and new must be dicts")
+
+    # todo: we could write a shortcut when one of the dicts is empty
+
+    queue: Deque[Comparison] = deque([DictComparison(tuple(), base, new)])
+    while queue:
+        comparison: Comparison = queue.popleft()
+        diff_op, further_comparisons = comparison.compare()
+        if diff_op:
+            yield diff_op
+        if further_comparisons:
+            queue.extend(further_comparisons)
+
+
+# # dynamically figure out the typing of the DiffOp based on it's annotations
+# _diff_op_typing = get_type_hints(DiffOp)
+# _DiffOpType = Tuple[_diff_op_typing["path"], _diff_op_typing["ops"]]
+
+
+def patch(base: dict, ops: Collection[DiffOp]) -> dict:
+    """
+    Applies the operations in the ops iterable to the base dict, returning a new dict.
+    If there are no operations to apply, the base dict is returned unchanged.
+
+    Note that although the returned dict is new, the nested container values in it may
+    or may not be new and could reference the same exact object as in the passed base
+    dict. A nested container will be copied to avoid modifying the same container
+    referenced in the base dict if there are any modifications made to it directly, or
+    to any nested containers below it at any depth. If the nested container contains no
+    changes to itself or its nested containers, it is not copied and the original
+    reference to it from the base dict is used.
+
+    :param base: the starting dict
+    :param ops: the DiffOps to apply to the base dict (can be pure tuples, doesn't have
+                to be DiffOp namedtuples)
+    :return: a new dict with the changes applied
+    """
+    # nothing to do
+    if len(ops) == 0:
+        return base
+
+    # create a copy of the base dict so that we don't modify it and can return a new one
+    new = base.copy()
+
+    for path, op in ops:
+        # loop through the path finding the target of the operations we're going to
+        # perform. At every point in the path, replace the container with a copy to
+        # ensure we don't modify the container object from the base.
+        target = new
+        for key_or_index in path:
+            target_copy = target[key_or_index].copy()
+            target[key_or_index] = target_copy
+            target = target_copy
+
+        # dict ops
+        if "dc" in op:
+            target.update(op["dc"])
+        if "dn" in op:
+            target.update(op["dn"])
+        if "dd" in op:
+            for key in op["dd"]:
+                del target[key]
+
+        # list ops
+        if "lc" in op:
+            for index, value in op["lc"]:
+                target[index] = value
+        if "ln" in op:
+            target.extend(op["ln"])
+        if "ld" in op:
+            del target[op["ld"] :]
+
+    return new

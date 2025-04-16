@@ -1,8 +1,2 @@
 [run]
-include=splitgill/*
-
-[report]
-omit=
-    test*
-exclude_lines=
-    @abc.abstractmethod
+relative_files = True

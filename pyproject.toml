@@ -1,19 +1,55 @@
 [project]
 name = "splitgill"
-version = "2.0.0"
+version = "3.0.0-alpha"
 description = "Versioned search library"
 readme = "README.md"
-requires-python = ">=2.7,!=3.0.*,!=3.1.*"
-license = { text = "MIT" }
+requires-python = ">=3.8"
+license = { text = "GPL-3.0-or-later" }
 authors = [
-    { name = "Josh Humphries", email = "data@nhm.ac.uk" }
+    { name = "Natural History Museum", email = "data@nhm.ac.uk" }
 ]
 classifiers = [
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 2",
-    "Programming Language :: Python :: 3",
+    "Development Status :: 5 - Production/Stable",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
 ]
-dynamic = ["dependencies", "optional-dependencies"]
+
+dependencies = [
+    "elasticsearch[async]>=8.0.0",
+    "elasticsearch-dsl>=8.9.0",
+    "pymongo>=4.4.1",
+    "cytoolz>=0.12.3",
+    "fastnumbers>=5.0.1",
+    "pyproj>=3.5.0",
+    "shapely>=2.0.5",
+    "regex>=2024.7.24",
+    "orjson>=3.10.6",
+    # only needed while we run on <python3.11
+    "StrEnum>=0.4.15",
+]
+
+[project.optional-dependencies]
+test = [
+    "mock",
+    "pytest",
+    "pytest-cov",
+    "coveralls",
+    "freezegun",
+    "pytest-asyncio",
+]
+docs = [
+    "mkdocs",
+    "mkdocstrings[python]",
+    "mkdocs-material",
+    "mkdocs-gen-files",
+    "mkdocs-section-index",
+    "mkdocs-include-markdown-plugin",
+]
 
 [project.urls]
 repository = "https://github.com/NaturalHistoryMuseum/splitgill"
@@ -31,12 +67,6 @@ zip-safe = false
 
 [tool.setuptools.packages.find]
 exclude = ["tests", "docs"]
-
-[tool.setuptools.dynamic]
-dependencies = { file = ["requirements.txt"] }
-
-[tool.setuptools.dynamic.optional-dependencies]
-test = { file = ["tests/requirements.txt"] }
 
 [tool.commitizen]
 name = "cz_nhm"
@@ -61,3 +91,6 @@ wrap-summaries = 88
 wrap-descriptions = 88
 pre-summary-newline = true
 make-summary-multi-line = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
