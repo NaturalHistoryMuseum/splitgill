@@ -1,5 +1,0 @@
-mock==3.0.5
-pytest==4.6.5
-pytest-cov==2.7.1
-tox==3.14.0
-coveralls

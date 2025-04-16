@@ -1,134 +1,123 @@
-#!/usr/bin/env python
-# encoding: utf-8
+from dataclasses import dataclass
+from datetime import datetime, timezone, date
+from itertools import islice
+from time import time
+from typing import Iterable, Union, List, Any
 
-import abc
-import calendar
-import itertools
-
-import six
-from six.moves import zip
+from cytoolz import get_in
+from elasticsearch_dsl import Search, A
+from elasticsearch_dsl.aggs import Agg
 
 
-def chunk_iterator(iterable, chunk_size=1000):
+def to_timestamp(moment: Union[datetime, date]) -> int:
     """
-    Iterates over an iterable, yielding lists of size chunk_size until the iterable is
-    exhausted. The final list could be smaller than chunk_size but will always have a
-    length > 0.
+    Converts a datetime or date object into a timestamp value. The timestamp returned is
+    an int. The timestamp value is the number of milliseconds that have elapsed between
+    the UNIX epoch and the given moment. If the moment is a date, 00:00:00 on the day
+    will be used.
 
-    :param iterable: the iterable to chunk up
-    :param chunk_size: the maximum size of each yielded chunk
+    Any precision greater than milliseconds held within the datetime is simply ignored
+    and no rounding occurs.
+
+    :param moment: a datetime or date object
+    :return: the timestamp (number of milliseconds between the UNIX epoch and the
+             moment) as an int
     """
-    chunk = []
-    for element in iterable:
-        chunk.append(element)
-        if len(chunk) == chunk_size:
-            yield chunk
-            chunk = []
-    if chunk:
+    if isinstance(moment, datetime):
+        return int(moment.timestamp() * 1000)
+    else:
+        return int(datetime(moment.year, moment.month, moment.day).timestamp() * 1000)
+
+
+def parse_to_timestamp(
+    datetime_string: str, datetime_format: str, tz: timezone = timezone.utc
+) -> int:
+    """
+    Parses the given string using the given format and returns a timestamp.
+
+    If the datetime object built from parsing the string with the given format doesn't
+    contain a tzinfo component, then the tz parameter is added as a replacement value.
+    This defaults to UTC.
+
+    :param datetime_string: the datetime as a string
+    :param datetime_format: the format as a string
+    :param tz: the timezone to use (default: UTC)
+    :return: the parsed datetime as the number of milliseconds since the UNIX epoch as
+             an int
+    """
+    dt = datetime.strptime(datetime_string, datetime_format)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=tz)
+    return to_timestamp(dt)
+
+
+def now() -> int:
+    """
+    Get the current datetime as a timestamp.
+    """
+    return int(time() * 1000)
+
+
+def partition(iterable: Iterable, size: int) -> Iterable[list]:
+    """
+    Partitions the given iterable into chunks. Each chunk yielded will be a list which
+    is at most `size` in length. The final list yielded may be smaller if the length of
+    the iterable isn't wholly divisible by the size.
+
+    :param iterable: the iterable to partition
+    :param size: the maximum size of list chunk to yield
+    :return: yields lists
+    """
+    it = iter(iterable)
+    while chunk := list(islice(it, size)):
         yield chunk
 
 
-def to_timestamp(moment):
+@dataclass
+class Term:
     """
-    Converts a datetime into a timestamp value. The timestamp returned is an int. The
-    timestamp value is the number of milliseconds that have elapsed between the UNIX
-    epoch and the given moment.
-
-    :param moment: a datetime object
-    :return: the timestamp (number of milliseconds between the UNIX epoch and the moment) as an int
-    """
-    if six.PY2:
-        ts = calendar.timegm(moment.timetuple()) + moment.microsecond / 1000000.0
-    else:
-        ts = moment.timestamp()
-    # multiply by 1000 to get the time in milliseconds and use int to remove any decimal places
-    return int(ts * 1000)
-
-
-def iter_pairs(iterable, final_partner=None):
-    """
-    Produces a generator that iterates over the iterable provided, yielding a tuple of
-    consecutive items. When the final item in the iterable is reached, it is yielded
-    with the final partner parameter. For example, printing the result of:
-
-        iter_pairs([1,2,3,4])
-
-    would produce
-
-        (1, 2)
-        (2, 3)
-        (3, 4)
-        (4, None)
-
-    :param iterable: the iterable or iterator to pair up
-    :param final_partner: the value that will partner the final item in the iterable (defaults to
-                          None)
-    :return: a generator object
-    """
-    i1, i2 = itertools.tee(iterable)
-    return zip(i1, itertools.chain(itertools.islice(i2, 1, None), [final_partner]))
-
-
-@six.add_metaclass(abc.ABCMeta)
-class OpBuffer(object):
-    """
-    Convenience class and context manager which allows buffering operations and then
-    handling them in bulk.
+    Represents a bucket in a terms aggregation result.
     """
 
-    def __init__(self, size):
-        """
-        :param size: the number of ops to buffer up before handling as a batch
-        """
-        self.ops = []
-        self.size = size
+    # the field value
+    value: Union[str, int, float, bool]
+    # thue number of documents this value appeared in
+    count: int
 
-    def add(self, op):
-        """
-        Adds the op to the buffer and if the buffer has reached it's limit, flush it.
 
-        :param op: the op
-        :return: True if the buffer was handled, False if not
-        """
-        self.ops.append(op)
-        # check greater than or equal to instead of just equal to to avoid any issues with the op
-        # list being modified out of sequence
-        if len(self.ops) >= self.size:
-            self.handle_ops()
-            self.ops = []
-            return True
-        return False
+def iter_terms(search: Search, field: str, chunk_size: int = 50) -> Iterable[Term]:
+    """
+    Yields Term objects, each representing a value and the number of documents which
+    contain that value in the given field. The Terms are yielded in descending order of
+    value frequency.
 
-    def add_all(self, ops):
-        """
-        Adds all the given ops to the buffer one by one.
+    :param search: a Search instance to use to run the aggregation
+    :param field: the name of the field to get the terms for
+    :param chunk_size: the number of buckets to retrieve per request
+    :return: yields Term objects
+    """
+    after = None
+    while True:
+        # this has a dual purpose, it ensures we don't get any search results
+        # when we don't need them, and it ensures we get a fresh copy of the
+        # search to work with
+        agg_search = search[:0]
+        agg_search.aggs.bucket(
+            "values",
+            "composite",
+            size=chunk_size,
+            sources={"value": A("terms", field=field)},
+        )
+        if after is not None:
+            agg_search.aggs["values"].after = after
 
-        :param ops: the ops to add
-        :return: True if the buffer was handled whilst adding the ops, False if not
-        """
-        return any(set(map(self.add, ops)))
+        result = agg_search.execute().aggs.to_dict()
 
-    def flush(self):
-        """
-        Flushes any remaining ops in the buffer.
-        """
-        if self.ops:
-            self.handle_ops()
-            self.ops = []
-
-    @abc.abstractmethod
-    def handle_ops(self):
-        """
-        Handles the ops in the buffer currently.
-
-        There is no need to clear the buffer in the implementing subclass.
-        """
-        pass
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        # only flush if there are no exceptions
-        if exc_type is None and exc_val is None and exc_tb is None:
-            self.flush()
+        buckets = get_in(("values", "buckets"), result, [])
+        after = get_in(("values", "after_key"), result, None)
+        if not buckets:
+            break
+        else:
+            yield from (
+                Term(bucket["key"]["value"], bucket["doc_count"]) for bucket in buckets
+            )

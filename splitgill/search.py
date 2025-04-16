@@ -1,15 +1,49 @@
-#!/usr/bin/env python
-# encoding: utf-8
-import bisect
+import datetime
 from collections import defaultdict
+from typing import Dict, Union, Optional
 
-from elasticsearch_dsl import Search, Q, A
-from elasticsearch_dsl.query import Bool
+from elasticsearch_dsl import Q
+from elasticsearch_dsl.query import Bool, Query
 
-from splitgill.indexing.utils import get_elasticsearch_client
+from splitgill.indexing.fields import (
+    DocumentField,
+    ParsedType,
+    parsed_path,
+    DATA_ID_FIELD,
+)
+from splitgill.utils import to_timestamp
+
+# the all fields text field which contains all data for easy full record searching
+ALL_TEXT = DocumentField.ALL_TEXT
+# the all geo values field which contains all geo values found in this record, again
+# for easy searching
+ALL_SHAPES = DocumentField.ALL_SHAPES
+# the all geo values field which contains all geo values as centroid points in this
+# record, again for easy searching, but mainly for mapping
+ALL_POINTS = DocumentField.ALL_POINTS
+
+# convenient access for parsed type path functions
+text = ParsedType.TEXT.path_to
+keyword = ParsedType.KEYWORD.path_to
+boolean = ParsedType.BOOLEAN.path_to
+number = ParsedType.NUMBER.path_to
+date = ParsedType.DATE.path_to
+point = ParsedType.GEO_POINT.path_to
+shape = ParsedType.GEO_SHAPE.path_to
 
 
-def create_version_query(version):
+def id_query(record_id: str) -> Query:
+    """
+    Returns a term query on the _id field in the record's data with the record_id value
+    passed. This uses the data's _id not the documents ID root field.
+
+    :param record_id: the record's ID
+    :return: a term query
+    """
+    return term_query(DATA_ID_FIELD, record_id, ParsedType.KEYWORD)
+
+
+def version_query(version: int) -> Query:
     """
     Creates the elasticsearch-dsl term necessary to find the correct data from some
     searched records given a version. You probably want to use the result of this
@@ -18,23 +52,23 @@ def create_version_query(version):
     :param version: the requested version
     :return: an elasticsearch-dsl Query object
     """
-    return Q(u'term', **{u'meta.versions': version})
+    return Q("term", **{DocumentField.VERSIONS: version})
 
 
-def create_index_specific_version_filter(indexes_and_versions):
+def index_specific_version_filter(indexes_and_versions: Dict[str, int]) -> Query:
     """
     Creates the elasticsearch-dsl Bool object necessary to query the given indexes at
     the given specific versions. If there are multiple indexes that require the same
     version then a terms.
 
-    query will be created covering the group rather than several term queries for each index - this
-    is probably no different in terms of performance but it does keep the size of the query down
-    when large numbers of indexes are queried. If all indexes require the same version then a single
-    term query is returned (using the create_version_query above) which has no index filtering in it
-    at all.
+    The query will be created covering the group rather than several term queries for
+    each index - this is probably no different in terms of performance, but it does keep
+    the size of the query down when large numbers of indexes are queried. If all indexes
+    require the same version then a single term query is returned (using the
+    create_version_query above) which has no index filtering in it at all.
 
     :param indexes_and_versions: a dict of index names -> versions
-    :return: an elasticsearch-dsl object
+    :return: an elasticsearch-dsl Query object
     """
     # flip the dict we've been given to group by the version
     by_version = defaultdict(list)
@@ -42,220 +76,203 @@ def create_index_specific_version_filter(indexes_and_versions):
         by_version[version].append(index)
 
     if len(by_version) == 1:
-        # there's only one version, just use it in a single meta.version check with no indexes
-        return create_version_query(next(iter(by_version.keys())))
+        # there's only one version, just use it in a single meta.versions check with no
+        # indexes
+        return version_query(next(iter(by_version.keys())))
     else:
         filters = []
         for version, indexes in by_version.items():
-            version_filter = create_version_query(version)
+            version_filter = version_query(version)
             if len(indexes) == 1:
                 # there's only one index requiring this version so use a term query
                 filters.append(
-                    Bool(filter=[Q(u'term', _index=indexes[0]), version_filter])
+                    Bool(filter=[Q("term", _index=indexes[0]), version_filter])
                 )
             else:
-                # there are a few indexes using this version, query them using terms as a group
+                # there are a few indexes using this version, query them using terms as
+                # a group
                 filters.append(
-                    Bool(filter=[Q(u'terms', _index=indexes), version_filter])
+                    Bool(filter=[Q("terms", _index=indexes), version_filter])
                 )
         return Bool(should=filters, minimum_should_match=1)
 
 
-class SearchHelper(object):
+def has_geo() -> Query:
     """
-    Class providing a set of helper functions for elasticsearch indexes created using
-    splitgill.
+    Create an exists query which filters for records which have geo data. Currently,
+    this uses ALL_POINTS, but it could just as easily use ALL_SHAPES, it doesn't matter.
 
-    This class is threadsafe and therefore a single, global instance is the recommended
-    way to use it.
+    :return: an exists Query object
     """
+    return Q("exists", field=DocumentField.ALL_POINTS)
 
-    def __init__(self, config, client=None):
-        """
-        :param config: the config object
-        :param client: an instance of the elasticsearch client class to be used by any methods in
-                       this object that need to communicate with elasticsearch. If one isn't
-                       provided then one is created using some sensible parameters.
-        """
-        self.config = config
-        if client is None:
-            self.client = get_elasticsearch_client(
-                self.config,
-                sniff_on_start=True,
-                sniff_on_connection_fail=True,
-                sniffer_timeout=60,
-                sniff_timeout=10,
-                http_compress=False,
-            )
+
+def exists_query(field: str) -> Query:
+    """
+    A convenience function which returns an exists query for the given field.
+
+    :param field: the field path
+    :return: an exists query on the field using the full parsed path
+    """
+    return Q("exists", field=parsed_path(field, parsed_type=None, full=True))
+
+
+def infer_parsed_type(
+    value: Union[int, float, str, bool, datetime.date, datetime.datetime],
+) -> ParsedType:
+    """
+    Given a value, infer the ParsedType based on the type of the value.
+
+    If no ParsedType can be matched, a ValueError is raised.
+
+    :param value: the value
+    :return: a ParsedType
+    """
+    if isinstance(value, str):
+        return ParsedType.KEYWORD
+    elif isinstance(value, bool):
+        return ParsedType.BOOLEAN
+    elif isinstance(value, (int, float)):
+        return ParsedType.NUMBER
+    elif isinstance(value, (datetime.date, datetime.datetime)):
+        return ParsedType.DATE
+    else:
+        raise ValueError(f"Unexpected type {type(value)}")
+
+
+def term_query(
+    field: str,
+    value: Union[int, float, str, bool, datetime.date, datetime.datetime],
+    parsed_type: Optional[ParsedType] = None,
+) -> Query:
+    """
+    Create and return a term query which will find documents that have an exact value
+    match in the given field. If the parsed_type parameter is not specified, it will be
+    inferred based on the value type.
+
+    :param field: the field match
+    :param value: the value to match
+    :param parsed_type: the parsed type of the field to use, or None to infer from value
+    :return: a Q object
+    """
+    if parsed_type is None:
+        parsed_type = infer_parsed_type(value)
+
+    # date is the parent class of datetime so this check is ok
+    if parsed_type == ParsedType.DATE and isinstance(value, datetime.date):
+        value = to_timestamp(value)
+
+    return Q("term", **{parsed_path(field, parsed_type=parsed_type, full=True): value})
+
+
+def match_query(query: str, field: Optional[str] = None, **match_kwargs) -> Query:
+    """
+    Create and return a match query using the given query and the optional field name.
+    If the field name is not specified, all text data is searched instead using the
+    ALL_TEXT field.
+
+    :param query: the query to match
+    :param field: the field to query, or None if all fields should be queried
+    :param match_kwargs: additional options for the match query
+    :return: a Query object
+    """
+    if field is None:
+        path = ALL_TEXT
+    else:
+        path = text(field)
+    return Q("match", **{path: {"query": query, **match_kwargs}})
+
+
+def range_query(
+    field: str,
+    gte: Union[int, float, str, datetime.date, datetime.datetime] = None,
+    lt: Union[int, float, str, datetime.date, datetime.datetime] = None,
+    gt: Union[int, float, str, datetime.date, datetime.datetime] = None,
+    lte: Union[int, float, str, datetime.date, datetime.datetime] = None,
+    parsed_type: Optional[ParsedType] = None,
+    **range_kwargs,
+) -> Query:
+    """
+    Create and return a range query using the given parameters to specify the extent. At
+    least one of the gte/lt/gt/lte parameters must be specified otherwise a ValueError
+    is raised. If the parsed_type parameter is not specified, it will be inferred from
+    the first non-None gte/lt/gt/lte parameter.
+
+    :param field: the field to query
+    :param gte: the greater than or equal to value
+    :param lt: the less than value
+    :param gt: the greater than value
+    :param lte: the less than or equal to value
+    :param parsed_type: the parsed type of the field to use, or None to infer from value
+    :param range_kwargs: additional options for the range query
+    :return: a Query object
+    """
+    range_inner = {}
+    for_inference = None
+    for key, value in zip(["gte", "lt", "gt", "lte"], [gte, lt, gt, lte]):
+        if value is None:
+            continue
+        if for_inference is None:
+            for_inference = value
+        # date is the parent class of datetime so this check is ok
+        if isinstance(value, datetime.date):
+            range_inner[key] = to_timestamp(value)
         else:
-            self.client = client
+            range_inner[key] = value
 
-    def get_latest_index_versions(self, indexes=None):
-        """
-        Returns the current indexes and their latest versions as a dict. If the indexes
-        parameter is None then the details for all indexes are returned, if not then
-        only the indexes that match the names passed in the list are returned.
+    if not range_inner:
+        raise ValueError("You must provide at least one of the lt/lte/gt/gte values")
 
-        The index names passed should all be prefixed. The prefixed names will be returned in the
-        dict returned too.
+    if parsed_type is None:
+        parsed_type = infer_parsed_type(for_inference)
 
-        :param indexes: the index names to match and return data for. The names should be the full
-                        index names with prefix.
-        :return: a dict of index names -> latest version
-        """
-        if not self.client.indices.exists(self.config.elasticsearch_status_index_name):
-            return {}
+    range_inner.update(range_kwargs)
 
-        search = Search(
-            using=self.client, index=self.config.elasticsearch_status_index_name
-        )
-        if indexes is not None:
-            search = search.filter(
-                Q(
-                    u'bool',
-                    should=[Q(u'term', index_name=index) for index in indexes],
-                    minimum_should_match=1,
-                )
-            )
-        return {hit.index_name: hit.latest_version for hit in search.scan()}
+    return Q(
+        "range", **{parsed_path(field, parsed_type=parsed_type, full=True): range_inner}
+    )
 
-    def get_record_versions(self, index, record_id):
-        """
-        Given the id of a record, returns all the available versions of that record in
-        the given index. The versions are timestamps represented by milliseconds since
-        the UNIX epoch. They are returned as a list in ascending order.
 
-        :param index: the prefixed index name
-        :param record_id: the record id
-        :return: a list of sorted versions available for the given record
-        """
-        search = (
-            Search(using=self.client, index=index)
-            .query(u'term', **{u'data._id': record_id})
-            .source([u'meta.version'])
-        )
-        return sorted(hit[u'meta'][u'version'] for hit in search.scan())
+def rebuild_data(parsed_data: dict) -> dict:
+    """
+    Rebuild the original data from the parsed version of the data created by the parse
+    function above.
 
-    def get_index_versions(self, index, search=None):
-        """
-        Given an index, return a list of the versions available for that index. These
-        will be provided in ascending order. If the search argument is provided then the
-        versions returned will be limited to the versions covered by the search.
+    :param parsed_data: the parsed dict
+    :return: the rebuilt data dict
+    """
+    # this doesn't need _ checks because you can't currently have parsed types at the
+    # root level of the data dict
+    return {key: rebuild_dict_or_list(value) for key, value in parsed_data.items()}
 
-        :param index: the prefixed index name
-        :param search: a Search object, optional
-        :return: a list of versions in ascending order
-        """
-        return [vc[u'version'] for vc in self.get_index_version_counts(index, search)]
 
-    def get_index_version_counts(self, index, search=None):
-        """
-        Given an index, return a list of dicts each containing a version and a count of the number
-        of records that were changed in that version. The dict is structure like so:
+def rebuild_dict_or_list(
+    value: Union[dict, list]
+) -> Union[int, str, bool, float, dict, list, None]:
+    """
+    Rebuild a dict or a list inside the parsed dict.
 
-            {
-                "version": <version>,
-                "changes": <number of changes>
+    :param value: a dict which can either be for structure or a value, or a list of
+                  either value or structure dicts
+    :return: a dict, list, or value
+    """
+    if isinstance(value, dict):
+        if ParsedType.UNPARSED in value:
+            # this is a value dict, return the original value
+            return value[ParsedType.UNPARSED]
+        else:
+            # this is a structural dict, pass each value through this function but
+            # filter out fields that start with an underscore, unless they are the
+            # special _id field
+            return {
+                key: rebuild_dict_or_list(value)
+                for key, value in value.items()
+                if not key.startswith("_") or key == DATA_ID_FIELD
             }
-
-        The returned list is sorted in ascending order by version. If the search argument is
-        provided then the versions and counts returned will be limited to the versions covered by
-        the search.
-
-        :param index: the prefixed index
-        :param search: a Search object, optional
-        :return: a list of dicts of version and changes count data
-        """
-        versions = []
-        # if there is no search passed in, make our own
-        if search is None:
-            search = Search()
-        # [0:0] ensures we don't waste time by getting hits back
-        search = search.using(self.client).index(index)[0:0]
-        # create an aggregation to count the number of records in the index at each version
-        search.aggs.bucket(
-            u'versions',
-            u'composite',
-            size=1000,
-            sources={u'version': A(u'terms', field=u'meta.version', order=u'asc')},
-        )
-        while True:
-            # run the search and get the result, ignore_cache makes sure that calling execute gives
-            # us back new data from the backend. We need this because we just sneakily change the
-            # after value in the aggregation without generating a new search object
-            result = search.execute(ignore_cache=True).aggs.to_dict()[u'versions']
-
-            # iterate over the results
-            for bucket in result[u'buckets']:
-                versions.append(
-                    {
-                        u'version': bucket[u'key'][u'version'],
-                        u'changes': bucket[u'doc_count'],
-                    }
-                )
-
-            # retrieve the after key for pagination if there is one
-            after_key = result.get(u'after_key', None)
-            if after_key is None:
-                # if there isn't then we're done
-                break
-            else:
-                # otherwise apply it to the aggregation
-                search.aggs[u'versions'].after = after_key
-
-        return versions
-
-    def get_rounded_versions(self, indexes, target_version):
-        """
-        Given a list of indexes, work out their individual rounded versions based on the
-        target version, i.e. round the target version down to the lowest, nearest
-        version of each index's data.
-
-        If the target version is lower than the oldest version of an index then the target version
-        will be assigned to the index in returned dict.
-
-        If there are no versions found for an index then the index is assigned to None in the
-        returned dict.
-
-        :param indexes: a list of prefixed indexes
-        :param target_version: the target version
-        :return: a dict of index names mapped to their rounded version
-        """
-        result = {}
-        for index in indexes:
-            # get all the versions available for this index
-            versions = self.get_index_versions(index)
-
-            if not versions:
-                # something isn't right, just set to None
-                result[index] = None
-            elif target_version is None or target_version >= versions[-1]:
-                # cap the requested version to the latest version
-                result[index] = versions[-1]
-            elif target_version < versions[0]:
-                # use the requested version if it's lower than the lowest available version
-                result[index] = target_version
-            else:
-                # find the lowest, nearest version to the requested one
-                position = bisect.bisect_right(versions, target_version)
-                result[index] = versions[position - 1]
-
-        return result
-
-    def prefix_index(self, index):
-        """
-        Adds the prefix from the config to the index.
-
-        :param index: the index name (without the prefix)
-        :return: the prefixed index name
-        """
-        return u'{}{}'.format(self.config.elasticsearch_index_prefix, index)
-
-    def ensure_index_exists(self, index):
-        """
-        Ensures that an index exists in Elasticsearch for the given index object.
-
-        :param index: the index object
-        """
-        if not self.client.indices.exists(index.name):
-            self.client.indices.create(index.name, body=index.get_index_create_body())
+    elif isinstance(value, list):
+        # pass each element of the list through this function
+        return [rebuild_dict_or_list(element) for element in value]
+    else:
+        # failsafe: just return the value. This should only really happen with lists
+        # containing Nones (which is technically allowed)
+        return value
