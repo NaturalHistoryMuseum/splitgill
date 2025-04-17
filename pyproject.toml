@@ -1,6 +1,6 @@
 [project]
 name = "splitgill"
-version = "3.0.0-alpha"
+version = "3.0.0"
 description = "Versioned search library"
 readme = "README.md"
 requires-python = ">=3.8"
