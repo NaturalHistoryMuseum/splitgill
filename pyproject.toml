@@ -78,10 +78,6 @@ version_files = [
     "pyproject.toml:version"
 ]
 
-[tool.black]
-line-length = 88
-skip_string_normalization = true
-
 [tool.pylint]
 max-line-length = 88
 disable = ["C0114", "R0903"]
