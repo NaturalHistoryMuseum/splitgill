@@ -1,3 +1,9 @@
+## v3.0.1 (2025-04-17)
+
+### Fix
+
+- update version number to allow bump to work
+
 ## v3.0.0 (2025-04-17)
 
 ### Breaking Changes
