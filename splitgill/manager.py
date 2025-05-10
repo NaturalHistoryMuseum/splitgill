@@ -1,29 +1,29 @@
 from bisect import bisect_right
 from enum import Enum
-from typing import Optional, Iterable, List, Dict, Union
+from typing import Dict, Iterable, List, Optional, Union
 
 from cytoolz.dicttoolz import get_in
 from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search
 from elasticsearch_dsl.query import Query
-from pymongo import MongoClient, IndexModel, ASCENDING, DESCENDING
+from pymongo import ASCENDING, DESCENDING, IndexModel, MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
 
 from splitgill.indexing.fields import (
-    DocumentField,
     DataField,
+    DocumentField,
     ParsedField,
 )
-from splitgill.indexing.index import IndexNames, generate_index_ops, ArcStatus
+from splitgill.indexing.index import ArcStatus, IndexNames, generate_index_ops
 from splitgill.indexing.options import ParsingOptionsBuilder
-from splitgill.indexing.syncing import write_ops, WriteResult, BulkOptions
+from splitgill.indexing.syncing import BulkOptions, WriteResult, write_ops
 from splitgill.indexing.templates import create_templates
 from splitgill.ingest import generate_ops, generate_rollback_ops
 from splitgill.locking import LockManager
-from splitgill.model import Record, MongoRecord, ParsingOptions, IngestResult
+from splitgill.model import IngestResult, MongoRecord, ParsingOptions, Record
 from splitgill.search import version_query
-from splitgill.utils import partition, now, iter_terms
+from splitgill.utils import iter_terms, now, partition
 
 OPTIONS_COLLECTION_NAME = "options"
 LOCKS_COLLECTION_NAME = "locks"
@@ -300,18 +300,16 @@ class SplitgillDatabase:
         will not be rolled back.
 
         :param records: the records to add. These will be added in batches, so it is
-                        safe to pass a very large stream of records
+            safe to pass a very large stream of records
         :param commit: whether to commit the data added with a new version after writing
-                       the records. Default: True.
+            the records. Default: True.
         :param modified_field: a field name which, if the only changes in the record
-                               data are in this field means the changes will be ignored.
-                               As you can probably guess from the name, the root reason
-                               for this parameter existing is to avoid committing a new
-                               version of a record when all that has happened is the
-                               record has been touched and the modified field's date
-                               value updated even though the rest of the record remains
-                               the same. Default: None, meaning all fields are checked
-                               for changes.
+            data are in this field means the changes will be ignored. As you can
+            probably guess from the name, the root reason for this parameter existing is
+            to avoid committing a new version of a record when all that has happened is
+            the record has been touched and the modified field's date value updated even
+            though the rest of the record remains the same. Default: None, meaning all
+            fields are checked for changes.
         :return: returns a IngestResult object
         """
         # this does nothing if the indexes already exist
@@ -341,9 +339,9 @@ class SplitgillDatabase:
 
         :param options: the new parsing options
         :param commit: whether to commit the new config added with a new version after
-                       writing the config. Default: True.
+            writing the config. Default: True.
         :return: returns the new version if a commit happened, otherwise None. If a
-                 commit was requested but nothing was changed, None is returned.
+            commit was requested but nothing was changed, None is returned.
         """
         # get the latest options that have been committed (get_options ignores
         # uncommitted options)
@@ -465,11 +463,11 @@ class SplitgillDatabase:
         have IDs so can be directly replaced.
 
         :param bulk_options: options determining how the bulk operations are sent to
-                             Elasticsearch
+            Elasticsearch
         :param resync: whether to resync all records with Elasticsearch regardless of
-                       the currently synced version. This won't delete any data in the
-                       latest index as those records are replaced during resync, but any
-                       arc indices will be deleted prior to re-indexing.
+            the currently synced version. This won't delete any data in the latest index
+            as those records are replaced during resync, but any arc indices will be
+            deleted prior to re-indexing.
         :return: a WriteResult object
         """
         if not self.has_data():
@@ -516,6 +514,49 @@ class SplitgillDatabase:
             bulk_options,
         )
 
+    def resync_arcs(self, bulk_options: Optional[BulkOptions] = None) -> WriteResult:
+        """
+        Resynchronises all the arc indices. The arc indices are deleted first and then
+        resynced. The latest index isn't touched.
+
+        :param bulk_options: options determining how the bulk operations are sent to
+            Elasticsearch
+        :return: a WriteResult object
+        """
+        # delete all arcs
+        res = self._client.elasticsearch.indices.get_alias(
+            index=self.indices.arc_wildcard
+        )
+        for arc_index in res.keys():
+            self._client.elasticsearch.indices.delete(index=arc_index)
+
+        create_templates(self._client.elasticsearch)
+
+        # cache this so that we don't have to look it up for every op
+        latest_index_name = self.indices.latest
+
+        return write_ops(
+            self._client.elasticsearch,
+            # filter out ops on the latest index so that only the arc indices are
+            # written to. This will filter out both index and delete ops
+            (
+                op
+                for op in generate_index_ops(
+                    self.indices,
+                    # this will always return the default ArcStatus cause we just
+                    # deleted them all
+                    self.get_arc_status(),
+                    # get all committed records
+                    self.iter_records(filter={"version": {"$ne": None}}),
+                    # get all committed options
+                    self.get_options(include_uncommitted=False),
+                    None,
+                )
+                if op.index != latest_index_name
+            ),
+            bulk_options,
+        )
+
     def search(
         self, version: Union[SearchVersion, int] = SearchVersion.latest
     ) -> Search:
@@ -539,7 +580,7 @@ class SplitgillDatabase:
         to search on all indices used by this database.
 
         :param version: the version to search at, this should either be a SearchVersion
-                        enum option or an int version.
+            enum option or an int version.
         :return: a Search DSL object
         """
         search = Search(using=self._client.elasticsearch)
@@ -603,9 +644,9 @@ class SplitgillDatabase:
         version with the given query.
 
         :param version: the version to find data fields at, if None, the latest data is
-                        searched
+            searched
         :param query: the query to filter records with before finding the data fields,
-                      if None, all record data is considered
+            if None, all record data is considered
         :return: a list of DataField objects with the most frequent field first
         """
         search = self.search(version if version is not None else SearchVersion.latest)
@@ -654,9 +695,9 @@ class SplitgillDatabase:
         version with the given query.
 
         :param version: the version to find parsed fields at, if None, the latest data
-                        is searched
+            is searched
         :param query: the query to filter records with before finding the parsed fields,
-                      if None, all record data is considered
+            if None, all record data is considered
         :return: a list of ParsedField objects with the most frequent field first
         """
         search = self.search(version if version is not None else SearchVersion.latest)

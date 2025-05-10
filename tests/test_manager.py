@@ -2,7 +2,7 @@ import time
 from collections import Counter
 from datetime import datetime, timezone
 from typing import List
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from elasticsearch import Elasticsearch
@@ -11,26 +11,26 @@ from freezegun import freeze_time
 from pymongo import MongoClient
 
 from splitgill.indexing.fields import (
-    DocumentField,
+    DATA_ID_FIELD,
     DataField,
+    DataType,
+    DocumentField,
     ParsedField,
     ParsedType,
-    DataType,
-    DATA_ID_FIELD,
 )
 from splitgill.indexing.index import ArcStatus
 from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.indexing.parser import parse
 from splitgill.indexing.syncing import BulkOptions
 from splitgill.manager import (
-    SplitgillClient,
-    SplitgillDatabase,
     OPTIONS_COLLECTION_NAME,
     SearchVersion,
+    SplitgillClient,
+    SplitgillDatabase,
 )
-from splitgill.model import Record, ParsingOptions
-from splitgill.search import version_query, term_query, id_query
-from splitgill.utils import to_timestamp, now
+from splitgill.model import ParsingOptions, Record
+from splitgill.search import id_query, term_query, version_query
+from splitgill.utils import now, to_timestamp
 
 
 class TestSplitgillClient:
@@ -1404,3 +1404,25 @@ class TestArcStatus:
             database.sync()
 
         assert database.get_arc_status() == ArcStatus(2, 2)
+
+
+def test_resync_arcs(splitgill: SplitgillClient):
+    database = splitgill.get_database("test")
+    database.ingest([Record(f"r-{i}", {"a": 4}) for i in range(1000)], commit=True)
+    database.ingest([Record(f"r-{i}", {"a": 7}) for i in range(1000)], commit=True)
+    database.ingest([Record(f"r-{i}", {"a": 5}) for i in range(400)], commit=True)
+
+    with patch("splitgill.indexing.index.MAX_DOCS_PER_ARC", 349):
+        database.sync()
+        database.resync_arcs()
+
+    count = database.search(version=SearchVersion.all).count()
+    r_5_count = (
+        database.search(version=SearchVersion.all).filter(id_query("r-5")).count()
+    )
+    r_780_count = (
+        database.search(version=SearchVersion.all).filter(id_query("r-780")).count()
+    )
+    assert count == 2400
+    assert r_5_count == 3
+    assert r_780_count == 2
