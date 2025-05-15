@@ -1,3 +1,23 @@
+## v3.1.0 (2025-05-15)
+
+### Feature
+
+- add a method for resyncing arcs
+
+### Fix
+
+- check for errors after all worker tasks have completed
+- correct index op generation logic
+
+### Tests
+
+- add a test to ensure errors percolate from the syncing code
+
+### CI System(s)
+
+- add asyncio_default_fixture_loop_scope to stop pytest complaining
+- add sync workflow for dev and patch
+
 ## v3.0.1 (2025-04-17)
 
 ### Fix

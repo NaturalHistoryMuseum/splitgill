@@ -1,6 +1,6 @@
 [project]
 name = "splitgill"
-version = "3.0.1"
+version = "3.1.0"
 description = "Versioned search library"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -70,7 +70,7 @@ exclude = ["tests", "docs"]
 
 [tool.commitizen]
 name = "cz_nhm"
-version = "3.0.1"
+version = "3.1.0"
 tag_format = "v$version"
 update_changelog_on_bump = true
 changelog_incremental = false
