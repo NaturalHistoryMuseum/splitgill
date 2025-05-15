@@ -1,16 +1,19 @@
-from asyncio import Queue, sleep, create_task, gather
+from asyncio import Queue, create_task, gather, sleep
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from elastic_transport import ConnectionTimeout
+from elasticsearch import Elasticsearch
 
 from splitgill.indexing.index import IndexOp
 from splitgill.indexing.syncing import (
-    WriteResult,
-    worker,
     BulkOpException,
+    BulkOptions,
+    WriteResult,
     check_for_errors,
     refresh,
+    worker,
+    write_ops,
 )
 
 
@@ -127,6 +130,24 @@ def test_refresh_attempts():
         refresh(mock_client, [], attempts=attempts)
 
     assert mock_client.indices.refresh.call_count == attempts
+
+
+def test_write_errors(elasticsearch_client: Elasticsearch):
+    # use a small chunk size and large number of workers to test that the error is
+    # raised regardless of which worker gets it and that the error is raised after a
+    # successfully processing lots of other records
+    options = BulkOptions(chunk_size=4, worker_count=8)
+
+    # create 7000 ops
+    ops = [IndexOp("test", f"doc-{i}", {"x": i}) for i in range(7000)]
+    # replace one of the ops with an op that causes an error, in this case we pass a
+    # list instead of a dict as the record. This is a nice test because it will
+    # serialise, but to something that Elasticsearch won't accept as a document so it
+    # will raise an error
+    ops[5419] = IndexOp("test", "doc-error", [])
+
+    with pytest.raises(BulkOpException, match="1 errors during bulk index"):
+        write_ops(elasticsearch_client, ops, options)
 
 
 # todo: some more tests would be nice, although the coverage from integration tests is

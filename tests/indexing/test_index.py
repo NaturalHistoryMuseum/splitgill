@@ -8,20 +8,20 @@ from unittest.mock import patch
 from elasticsearch_dsl import Search
 from freezegun import freeze_time
 
-from splitgill.indexing.fields import DocumentField, DATA_ID_FIELD
+from splitgill.indexing.fields import DATA_ID_FIELD, DocumentField
 from splitgill.indexing.index import (
-    generate_index_ops,
-    IndexNames,
-    BulkOp,
-    IndexOp,
-    DeleteOp,
     ArcStatus,
+    BulkOp,
+    DeleteOp,
+    IndexNames,
+    IndexOp,
+    generate_index_ops,
 )
 from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.indexing.parser import parse
-from splitgill.manager import SplitgillClient, SplitgillDatabase, SearchVersion
-from splitgill.model import Record, ParsingOptions
-from splitgill.search import term_query, id_query
+from splitgill.manager import SearchVersion, SplitgillClient, SplitgillDatabase
+from splitgill.model import ParsingOptions, Record
+from splitgill.search import id_query
 
 
 def test_index_names():
@@ -175,15 +175,15 @@ class TestGenerateIndexOps:
             )
         )
         assert len(ops) == 7
-        check_op(database.indices, ops[0], "r1", 10, data[9], options[10])
+        check_op(database.indices, ops[6], "r1", 10, data[9], options[10])
         check_op(
-            database.indices, ops[1], "r1", 9, data[9], options[7], next_version=10
+            database.indices, ops[5], "r1", 9, data[9], options[7], next_version=10
         )
-        check_op(database.indices, ops[2], "r1", 8, data[8], options[7], next_version=9)
+        check_op(database.indices, ops[4], "r1", 8, data[8], options[7], next_version=9)
         check_op(database.indices, ops[3], "r1", 7, data[4], options[7], next_version=8)
-        check_op(database.indices, ops[4], "r1", 5, data[4], options[5], next_version=7)
-        check_op(database.indices, ops[5], "r1", 4, data[4], options[1], next_version=5)
-        check_op(database.indices, ops[6], "r1", 2, data[2], options[1], next_version=4)
+        check_op(database.indices, ops[2], "r1", 5, data[4], options[5], next_version=7)
+        check_op(database.indices, ops[1], "r1", 4, data[4], options[1], next_version=5)
+        check_op(database.indices, ops[0], "r1", 2, data[2], options[1], next_version=4)
 
     def test_delete(self, splitgill: SplitgillClient):
         builder = ParsingOptionsBuilder()
@@ -212,12 +212,55 @@ class TestGenerateIndexOps:
         )
         # we're expecting this set of pairs:
         # 2|1, 4|1(D), 4|5(D), 4|7(D), 8|7, 9|7(D), 9|10(D)
-        # so the deletes are ignored (except for the next versions they set) and that
-        # means we only get 3 ops
-        assert len(ops) == 3
-        check_delete_op(database.indices, ops[0], "r1")
+        # so the deletes are ignored (except for the next versions they set) and because
+        # we're syncing from the start, no delete op should be created and therefore we
+        # should only get 2 ops
+        assert len(ops) == 2
+        check_op(database.indices, ops[0], "r1", 2, data[2], options[1], next_version=4)
         check_op(database.indices, ops[1], "r1", 8, data[8], options[7], next_version=9)
-        check_op(database.indices, ops[2], "r1", 2, data[2], options[1], next_version=4)
+
+    def test_delete_with_after(self, splitgill: SplitgillClient):
+        builder = ParsingOptionsBuilder()
+        options = {
+            2: builder.with_float_format("{0:.4f}").build(),
+        }
+
+        database = setup_scenario(splitgill, {"r1": {2: {"x": 5.4}}}, options)
+        first_ops = list(
+            generate_index_ops(
+                database.indices,
+                ArcStatus(0, 0),
+                database.iter_records(),
+                database.get_options(),
+                None,
+            )
+        )
+
+        database = setup_scenario(splitgill, {"r1": {4: {}}}, options)
+        second_ops = list(
+            generate_index_ops(
+                database.indices,
+                ArcStatus(0, 0),
+                database.iter_records(),
+                database.get_options(),
+                2,
+            )
+        )
+
+        assert len(first_ops) == 1
+        check_op(database.indices, first_ops[0], "r1", 2, {"x": 5.4}, options[2])
+
+        assert len(second_ops) == 2
+        check_delete_op(database.indices, second_ops[0], "r1")
+        check_op(
+            database.indices,
+            second_ops[1],
+            "r1",
+            2,
+            {"x": 5.4},
+            options[2],
+            next_version=4,
+        )
 
     def test_after_between_versions(self, splitgill: SplitgillClient):
         builder = ParsingOptionsBuilder()
@@ -246,13 +289,13 @@ class TestGenerateIndexOps:
             )
         )
         assert len(ops) == 5
-        check_op(database.indices, ops[0], "r1", 10, data[9], options[10])
+        check_op(database.indices, ops[4], "r1", 10, data[9], options[10])
         check_op(
-            database.indices, ops[1], "r1", 9, data[9], options[7], next_version=10
+            database.indices, ops[3], "r1", 9, data[9], options[7], next_version=10
         )
         check_op(database.indices, ops[2], "r1", 8, data[8], options[7], next_version=9)
-        check_op(database.indices, ops[3], "r1", 7, data[4], options[7], next_version=8)
-        check_op(database.indices, ops[4], "r1", 5, data[4], options[5], next_version=7)
+        check_op(database.indices, ops[1], "r1", 7, data[4], options[7], next_version=8)
+        check_op(database.indices, ops[0], "r1", 5, data[4], options[5], next_version=7)
 
     def test_after_at_both_versions(self, splitgill: SplitgillClient):
         builder = ParsingOptionsBuilder()
@@ -281,13 +324,13 @@ class TestGenerateIndexOps:
             )
         )
         assert len(ops) == 5
-        check_op(database.indices, ops[0], "r1", 10, data[9], options[10])
+        check_op(database.indices, ops[4], "r1", 10, data[9], options[10])
         check_op(
-            database.indices, ops[1], "r1", 9, data[9], options[7], next_version=10
+            database.indices, ops[3], "r1", 9, data[9], options[7], next_version=10
         )
         check_op(database.indices, ops[2], "r1", 8, data[8], options[7], next_version=9)
-        check_op(database.indices, ops[3], "r1", 7, data[5], options[7], next_version=8)
-        check_op(database.indices, ops[4], "r1", 5, data[5], options[5], next_version=7)
+        check_op(database.indices, ops[1], "r1", 7, data[5], options[7], next_version=8)
+        check_op(database.indices, ops[0], "r1", 5, data[5], options[5], next_version=7)
 
     def test_after_new_data(self, splitgill: SplitgillClient):
         builder = ParsingOptionsBuilder()
@@ -317,8 +360,8 @@ class TestGenerateIndexOps:
         # should get 2 ops, one to update the latest index and one pushing the old
         # latest down to the non-latest data indices
         assert len(ops) == 2
-        check_op(database.indices, ops[0], "r1", 9, data[9], options[7])
-        check_op(database.indices, ops[1], "r1", 8, data[8], options[7], next_version=9)
+        check_op(database.indices, ops[1], "r1", 9, data[9], options[7])
+        check_op(database.indices, ops[0], "r1", 8, data[8], options[7], next_version=9)
 
     def test_after_new_options(self, splitgill: SplitgillClient):
         builder = ParsingOptionsBuilder()
@@ -350,9 +393,9 @@ class TestGenerateIndexOps:
         # should get 2 ops, one to update the latest index and one pushing the old
         # latest down to the non-latest data indices
         assert len(ops) == 2
-        check_op(database.indices, ops[0], "r1", 10, data[9], options[10])
+        check_op(database.indices, ops[1], "r1", 10, data[9], options[10])
         check_op(
-            database.indices, ops[1], "r1", 9, data[9], options[7], next_version=10
+            database.indices, ops[0], "r1", 9, data[9], options[7], next_version=10
         )
 
     def test_after_new_both(self, splitgill: SplitgillClient):
@@ -385,8 +428,8 @@ class TestGenerateIndexOps:
         # should get 2 ops, one to update the latest index and one pushing the old
         # latest down to the non-latest data indices
         assert len(ops) == 2
-        check_op(database.indices, ops[0], "r1", 9, data[9], options[9])
-        check_op(database.indices, ops[1], "r1", 8, data[8], options[7], next_version=9)
+        check_op(database.indices, ops[1], "r1", 9, data[9], options[9])
+        check_op(database.indices, ops[0], "r1", 8, data[8], options[7], next_version=9)
 
     def test_just_latest(
         self, splitgill: SplitgillClient, basic_options: ParsingOptions
@@ -585,6 +628,61 @@ class TestGenerateIndexOps:
         assert search.index(database.indices.latest).count() == 1
         for arc_index in range(9):
             assert search.index(database.indices.get_arc(arc_index)).count() == 1
+
+    def test_handling_of_non_impactful_options(self, splitgill: SplitgillClient):
+        """
+        This test checks that changed and not-changed versions of the data produce the
+        correct ops.
+
+        We attempt to only create ops when something changes, and this exposes an edge
+        case where it's tricky to figure out the right versions of the data to make ops
+        for.
+        """
+        database = splitgill.get_database("test")
+        doc_id = "r-1"
+        # create an initial version with some parsing options
+        with freeze_time("2025-05-01 09:00:00"):
+            database.update_options(ParsingOptionsBuilder().build(), commit=False)
+            database.ingest([Record(doc_id, {"x": 5})], commit=True)
+
+        # update the parsing options in a way which doesn't impact the resulting parsed data
+        with freeze_time("2025-05-01 11:00:00"):
+            database.update_options(
+                ParsingOptionsBuilder().with_keyword_length(10).build(), commit=True
+            )
+
+        # update the data
+        with freeze_time("2025-05-01 12:00:00"):
+            database.ingest([Record(doc_id, {"x": 7})], commit=True)
+
+        ops = list(
+            generate_index_ops(
+                database.indices,
+                ArcStatus(0, 0),
+                database.iter_records(),
+                database.get_options(),
+                None,
+            )
+        )
+
+        assert len(ops) == 2
+
+        assert ops[0].index == database.indices.get_arc(0)
+        assert ops[0].doc_id is None
+        # the first op has the first data/option version
+        assert ops[0].document[DocumentField.VERSION] == 1746090000000
+        assert ops[0].document[DocumentField.VERSIONS] == {
+            "gte": 1746090000000,
+            # but the op doesn't have next version as the middle options change at 11am,
+            # it's the next data change at 12 noon because the options change doesn't change
+            # the resulting document
+            "lt": 1746100800000,
+        }
+
+        assert ops[1].index == database.indices.latest
+        assert ops[1].doc_id == doc_id
+        assert ops[1].document[DocumentField.VERSION] == 1746100800000
+        assert ops[1].document[DocumentField.VERSIONS] == {"gte": 1746100800000}
 
 
 def test_delete_op():
