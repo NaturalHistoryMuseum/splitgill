@@ -1,10 +1,10 @@
 import time
-from asyncio import Queue, run, sleep, create_task, gather, Task
+from asyncio import Queue, Task, create_task, gather, run, sleep
 from dataclasses import dataclass
-from typing import Iterable, List, Set, Tuple, Optional
+from typing import Iterable, List, Optional, Set, Tuple
 
-from elastic_transport import NodeConfig, ConnectionTimeout
-from elasticsearch import Elasticsearch, AsyncElasticsearch
+from elastic_transport import ConnectionTimeout, NodeConfig
+from elasticsearch import AsyncElasticsearch, Elasticsearch
 
 from splitgill.indexing.index import BulkOp
 from splitgill.utils import partition
@@ -100,9 +100,8 @@ def write_ops(
     Write the given iterable of bulk index operations to Elasticsearch.
 
     :param client: an Elasticsearch client, this isn't actually used as the processing
-                   is done asynchronously using the AsyncElasticsearch class, but we
-                   pull the hosts from this Elasticsearch client to create the
-                   AsyncElasticsearch object
+        is done asynchronously using the AsyncElasticsearch class, but we pull the hosts
+        from this Elasticsearch client to create the AsyncElasticsearch object
     :param op_stream: an iterable of BulkOp objects
     :param options: options determining how we do the bulk write
     :return: a WriteResult object
@@ -183,6 +182,8 @@ async def write_ops_async(
         for _ in workers:
             await task_queue.put(None)
         await task_queue.join()
+
+        check_for_errors(workers)
 
         # collect the worker results up and return
         worker_counts = await gather(*workers)
