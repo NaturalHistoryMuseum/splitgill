@@ -177,15 +177,18 @@ class RecordVersion:
     def __eq__(self, other: Any) -> bool:
         """
         Determines if two record versions are equal. Two versions are deemed equal if
-        they have the same parsed data and this version doesn't represent a deleted
-        version.
+        they have the same parsed data and neither version has been deleted.
 
         :param other: any object
         :return: True if the two record versions are equal, False if not, and returns
             NotImplemented if the other parameter is not a RecordVersion
         """
         if isinstance(other, RecordVersion):
-            return self.deleted_at is None and other.parsed == self.parsed
+            return (
+                self.deleted_at is None
+                and other.deleted_at is None
+                and other.parsed == self.parsed
+            )
         return NotImplemented
 
 
