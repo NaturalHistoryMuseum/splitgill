@@ -1,3 +1,14 @@
+## v3.1.1 (2025-09-04)
+
+### Fix
+
+- make versions unequal if either version has been deleted
+
+### Docs
+
+- update tests badge
+- update rtd configuration
+
 ## v3.1.0 (2025-05-15)
 
 ### Feature
