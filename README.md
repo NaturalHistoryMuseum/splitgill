@@ -2,7 +2,7 @@
 
 # splitgill
 
-[![Tests](https://img.shields.io/github/actions/workflow/status/NaturalHistoryMuseum/splitgill/main.yml?branch=main&style=flat-square)](https://github.com/NaturalHistoryMuseum/splitgill/actions/workflows/main.yml)
+[![Tests](https://img.shields.io/github/actions/workflow/status/NaturalHistoryMuseum/splitgill/tests.yml?branch=main&style=flat-square)](https://github.com/NaturalHistoryMuseum/splitgill/actions/workflows/tests.yml)
 [![Coveralls](https://img.shields.io/coveralls/github/NaturalHistoryMuseum/splitgill/main?style=flat-square)](https://coveralls.io/github/NaturalHistoryMuseum/splitgill)
 [![Python version](https://img.shields.io/badge/python-3.8%20%7C%203.9%20%7C%203.10%20%7C%203.11-blue?style=flat-square)](https://www.python.org/downloads)
 [![Docs](https://img.shields.io/readthedocs/splitgill?style=flat-square)](https://splitgill.readthedocs.io)
