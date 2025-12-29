@@ -35,25 +35,25 @@ from splitgill.utils import now, to_timestamp
 
 class TestSplitgillClient:
     def test_database(self, splitgill: SplitgillClient):
-        assert splitgill.get_mongo_database().name == "sg"
+        assert splitgill.get_mongo_database().name == 'sg'
 
     def test_custom_database(
         self, mongo_client: MongoClient, elasticsearch_client: Elasticsearch
     ):
         client = SplitgillClient(
-            mongo_client, elasticsearch_client, mongo_database_name="test"
+            mongo_client, elasticsearch_client, mongo_database_name='test'
         )
-        assert client.get_mongo_database().name == "test"
+        assert client.get_mongo_database().name == 'test'
 
     def test_get_data_collection(self, splitgill: SplitgillClient):
-        name = "test"
-        assert splitgill.get_data_collection(name).name == f"data-{name}"
+        name = 'test'
+        assert splitgill.get_data_collection(name).name == f'data-{name}'
 
     def test_get_options_collection(self, splitgill: SplitgillClient):
         assert splitgill.get_options_collection().name == OPTIONS_COLLECTION_NAME
 
     def test_get_database(self, splitgill: SplitgillClient):
-        name = "test"
+        name = 'test'
         assert (
             splitgill.get_database(name).name == SplitgillDatabase(name, splitgill).name
         )
@@ -61,46 +61,46 @@ class TestSplitgillClient:
 
 class TestSplitgillDatabaseGetCommittedVersion:
     def test_no_data_no_options(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        database = SplitgillDatabase('test', splitgill)
         assert database.get_committed_version() is None
 
     def test_uncommitted_data(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        database = SplitgillDatabase('test', splitgill)
         records = [
-            Record.new({"x": 4}),
-            Record.new({"x": 89}),
-            Record.new({"x": 5}),
+            Record.new({'x': 4}),
+            Record.new({'x': 89}),
+            Record.new({'x': 5}),
         ]
         database.ingest(records, commit=False)
         assert database.get_committed_version() is None
 
-    @freeze_time("2012-01-14 12:00:01")
+    @freeze_time('2012-01-14 12:00:01')
     def test_committed_data(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        database = SplitgillDatabase('test', splitgill)
         records = [
-            Record.new({"x": 4}),
-            Record.new({"x": 89}),
-            Record.new({"x": 5}),
+            Record.new({'x': 4}),
+            Record.new({'x': 89}),
+            Record.new({'x': 5}),
         ]
         database.ingest(records, commit=True)
         assert database.get_committed_version() == 1326542401000
 
-    @freeze_time("2012-01-14 12:00:01")
+    @freeze_time('2012-01-14 12:00:01')
     def test_mixed_data(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        database = SplitgillDatabase('test', splitgill)
         version = 1326542401000
         records = [
-            Record.new({"x": 4}),
-            Record.new({"x": 89}),
-            Record.new({"x": 5}),
+            Record.new({'x': 4}),
+            Record.new({'x': 89}),
+            Record.new({'x': 5}),
         ]
         database.ingest(records, commit=True)
         assert database.get_committed_version() == version
         more_records = [
             # this one is new
-            Record.new({"x": 1}),
+            Record.new({'x': 1}),
             # this one is an update to one of the ones above
-            Record(records[0].id, {"x": 100}),
+            Record(records[0].id, {'x': 100}),
         ]
         database.ingest(more_records, commit=False)
         assert database.get_committed_version() == version
@@ -108,74 +108,74 @@ class TestSplitgillDatabaseGetCommittedVersion:
     def test_uncommitted_options(
         self, splitgill: SplitgillClient, basic_options: ParsingOptions
     ):
-        database = SplitgillDatabase("test", splitgill)
+        database = SplitgillDatabase('test', splitgill)
         database.update_options(basic_options, commit=False)
         assert database.get_committed_version() is None
 
-    @freeze_time("2012-01-14 12:00:01")
+    @freeze_time('2012-01-14 12:00:01')
     def test_committed_options(
         self, splitgill: SplitgillClient, basic_options: ParsingOptions
     ):
-        database = SplitgillDatabase("test", splitgill)
+        database = SplitgillDatabase('test', splitgill)
         database.update_options(basic_options, commit=True)
         assert database.get_committed_version() == 1326542401000
 
-    @freeze_time("2012-01-14 12:00:01")
+    @freeze_time('2012-01-14 12:00:01')
     def test_mixed_options(
         self, splitgill: SplitgillClient, basic_options_builder: ParsingOptionsBuilder
     ):
-        database = SplitgillDatabase("test", splitgill)
+        database = SplitgillDatabase('test', splitgill)
         version = 1326542401000
         options = basic_options_builder.build()
         database.update_options(options, commit=True)
         assert database.get_committed_version() == version
-        new_options = basic_options_builder.with_true_value("aye").build()
+        new_options = basic_options_builder.with_true_value('aye').build()
         database.update_options(new_options, commit=False)
         assert database.get_committed_version() == version
 
     def test_mixed_both(
         self, splitgill: SplitgillClient, basic_options_builder: ParsingOptionsBuilder
     ):
-        database = SplitgillDatabase("test", splitgill)
+        database = SplitgillDatabase('test', splitgill)
 
         records = [
-            Record.new({"x": 4}),
-            Record.new({"x": 89}),
-            Record.new({"x": 5}),
+            Record.new({'x': 4}),
+            Record.new({'x': 89}),
+            Record.new({'x': 5}),
         ]
         database.ingest(records, commit=False)
         database.update_options(basic_options_builder.build(), commit=False)
 
         # add the new stuff
-        with freeze_time("2012-01-14 12:00:01"):
+        with freeze_time('2012-01-14 12:00:01'):
             version = database.commit()
             assert database.get_committed_version() == version
 
         # update the records
-        with freeze_time("2012-01-14 12:00:05"):
-            new_records = [Record.new({"x": 4})]
+        with freeze_time('2012-01-14 12:00:05'):
+            new_records = [Record.new({'x': 4})]
             database.ingest(new_records, commit=True)
         assert database.get_committed_version() == 1326542405000
 
         # update the options
-        with freeze_time("2012-01-14 12:00:09"):
-            new_options = basic_options_builder.with_true_value("aye").build()
+        with freeze_time('2012-01-14 12:00:09'):
+            new_options = basic_options_builder.with_true_value('aye').build()
             database.update_options(new_options, commit=True)
         assert database.get_committed_version() == 1326542409000
 
 
 class TestGetElasticsearchVersion:
     def test_no_docs(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        database = SplitgillDatabase('test', splitgill)
         assert database.get_elasticsearch_version() is None
 
     def test_with_docs(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        database = SplitgillDatabase('test', splitgill)
 
         versions = []
         for _ in range(5):
             versions.append(
-                database.ingest([Record.new({"x": 4})], commit=True).version
+                database.ingest([Record.new({'x': 4})], commit=True).version
             )
             # just to ensure the versions are different have a nap. They will be, cause
             # Python slow, but this guarantees it
@@ -192,12 +192,12 @@ class TestGetElasticsearchVersion:
         # of data or a delete (ensuring that we are getting the latest version from both
         # the version and the next fields)
 
-        database = SplitgillDatabase("test", splitgill)
+        database = SplitgillDatabase('test', splitgill)
 
         versions = []
         for _ in range(5):
             versions.append(
-                database.ingest([Record.new({"x": 4})], commit=True).version
+                database.ingest([Record.new({'x': 4})], commit=True).version
             )
             # just to ensure the versions are different have a nap. They will be, cause
             # Python slow, but this guarantees it
@@ -214,42 +214,42 @@ class TestGetElasticsearchVersion:
 
 class TestCommit:
     def test_nothing_to_commit(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        database = SplitgillDatabase('test', splitgill)
         assert database.commit() is None
 
-    @freeze_time("2012-01-14 12:00:01")
+    @freeze_time('2012-01-14 12:00:01')
     def test_new_records(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        database.ingest([Record.new({"x": 5})], commit=False)
+        database = SplitgillDatabase('test', splitgill)
+        database.ingest([Record.new({'x': 5})], commit=False)
         assert database.commit() == 1326542401000
 
-    @freeze_time("2012-01-14 12:00:01")
+    @freeze_time('2012-01-14 12:00:01')
     def test_new_options(
         self, splitgill: SplitgillClient, basic_options: ParsingOptions
     ):
-        database = SplitgillDatabase("test", splitgill)
+        database = SplitgillDatabase('test', splitgill)
         database.update_options(basic_options, commit=False)
         assert database.commit() == 1326542401000
 
-    @freeze_time("2012-01-14 12:00:01")
+    @freeze_time('2012-01-14 12:00:01')
     def test_both(self, splitgill: SplitgillClient, basic_options: ParsingOptions):
-        database = SplitgillDatabase("test", splitgill)
-        database.ingest([Record.new({"x": 5})], commit=False)
+        database = SplitgillDatabase('test', splitgill)
+        database.ingest([Record.new({'x': 5})], commit=False)
         database.update_options(basic_options, commit=False)
         assert database.commit() == 1326542401000
 
 
 class TestIngest:
     def test_no_records(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        database = SplitgillDatabase('test', splitgill)
         database.ingest([])
         assert database.get_committed_version() is None
 
-    @freeze_time("2012-01-14 12:00:01")
+    @freeze_time('2012-01-14 12:00:01')
     def test_with_records(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        database = SplitgillDatabase('test', splitgill)
         count = 103
-        record_iter = (Record.new({"x": i}) for i in range(count))
+        record_iter = (Record.new({'x': i}) for i in range(count))
 
         database.ingest(record_iter, commit=True)
 
@@ -257,69 +257,69 @@ class TestIngest:
         assert database.get_committed_version() == 1326542401000
 
     def test_same_record(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        record = Record("r1", {"x": 5, "y": False, "z": [1, 2, 3]})
+        database = SplitgillDatabase('test', splitgill)
+        record = Record('r1', {'x': 5, 'y': False, 'z': [1, 2, 3]})
 
         database.ingest([record], commit=True)
-        added_record = database.data_collection.find_one({"id": "r1"})
-        assert added_record["data"] == {**record.data, DATA_ID_FIELD: "r1"}
-        assert "diffs" not in added_record
+        added_record = database.data_collection.find_one({'id': 'r1'})
+        assert added_record['data'] == {**record.data, DATA_ID_FIELD: 'r1'}
+        assert 'diffs' not in added_record
 
         # add the same record again
         database.ingest([record], commit=True)
-        added_record_again = database.data_collection.find_one({"id": "r1"})
+        added_record_again = database.data_collection.find_one({'id': 'r1'})
         assert added_record == added_record_again
 
     def test_same_record_tuples_and_lists(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
-        record = Record("r1", {"x": (1, 2, 3)})
-        clean_data = {"x": [1, 2, 3], DATA_ID_FIELD: "r1"}
+        database = SplitgillDatabase('test', splitgill)
+        record = Record('r1', {'x': (1, 2, 3)})
+        clean_data = {'x': [1, 2, 3], DATA_ID_FIELD: 'r1'}
 
         database.ingest([record], commit=True)
-        added_record = database.data_collection.find_one({"id": "r1"})
-        assert added_record["data"] == clean_data
-        assert "diffs" not in added_record
+        added_record = database.data_collection.find_one({'id': 'r1'})
+        assert added_record['data'] == clean_data
+        assert 'diffs' not in added_record
 
         # add the same record again
         database.ingest([record], commit=True)
-        added_record_again = database.data_collection.find_one({"id": "r1"})
+        added_record_again = database.data_collection.find_one({'id': 'r1'})
         assert added_record == added_record_again
 
         # add the same record again with a list instead of a tuple this time
         record.data = clean_data
         database.ingest([record], commit=True)
-        added_record_again = database.data_collection.find_one({"id": "r1"})
+        added_record_again = database.data_collection.find_one({'id': 'r1'})
         assert added_record == added_record_again
 
-    @freeze_time("2012-01-14 12:00:01")
+    @freeze_time('2012-01-14 12:00:01')
     def test_commit_and_is_default(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        database = SplitgillDatabase('test', splitgill)
 
-        database.ingest([Record.new({"x": 10})])
+        database.ingest([Record.new({'x': 10})])
 
         assert database.get_committed_version() == 1326542401000
 
     def test_no_commit(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        database = SplitgillDatabase('test', splitgill)
 
-        database.ingest([Record.new({"x": 10})], commit=False)
+        database.ingest([Record.new({'x': 10})], commit=False)
 
         assert database.get_committed_version() is None
 
     def test_no_commit_when_error(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        database = SplitgillDatabase('test', splitgill)
         # force bulk write to error when called
-        database.data_collection.bulk_write = MagicMock(side_effect=Exception("oh no!"))
+        database.data_collection.bulk_write = MagicMock(side_effect=Exception('oh no!'))
 
-        with pytest.raises(Exception, match="oh no!"):
-            database.ingest([Record.new({"x": 10})], commit=True)
+        with pytest.raises(Exception, match='oh no!'):
+            database.ingest([Record.new({'x': 10})], commit=True)
 
         assert database.get_committed_version() is None
 
 
 class TestSync:
     def test_nothing_to_sync(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        database = SplitgillDatabase('test', splitgill)
         result = database.sync()
 
         assert not splitgill.elasticsearch.indices.exists(index=database.indices.latest)
@@ -327,9 +327,9 @@ class TestSync:
         assert not result.indices
 
     def test_everything_to_sync_many_workers(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        database = SplitgillDatabase('test', splitgill)
 
-        records = [Record.new({"x": i}) for i in range(1000)]
+        records = [Record.new({'x': i}) for i in range(1000)]
         database.ingest(records, commit=True)
 
         # these are silly numbers, but it'll make sure it works at least!
@@ -342,22 +342,22 @@ class TestSync:
         assert result.indices == [database.indices.latest]
 
     def test_one_sync_then_another(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        database = SplitgillDatabase('test', splitgill)
 
         version_1_time = datetime(2020, 7, 2, tzinfo=timezone.utc)
         version_1_records = [
-            Record("r1", {"x": 5}),
-            Record("r2", {"x": 10}),
-            Record("r3", {"x": 15}),
-            Record("r4", {"x": -1}),
-            Record("r5", {"x": 1098}),
+            Record('r1', {'x': 5}),
+            Record('r2', {'x': 10}),
+            Record('r3', {'x': 15}),
+            Record('r4', {'x': -1}),
+            Record('r5', {'x': 1098}),
         ]
         # add some records at a specific version
         with freeze_time(version_1_time):
             database.ingest(version_1_records, commit=True)
         database.sync()
         assert (
-            splitgill.elasticsearch.count(index=database.indices.latest)["count"] == 5
+            splitgill.elasticsearch.count(index=database.indices.latest)['count'] == 5
         )
         assert database.get_current_indices() == [database.indices.latest]
 
@@ -365,9 +365,9 @@ class TestSync:
         version_2_time = datetime(2020, 7, 3, tzinfo=timezone.utc)
         version_2_records = [
             # a new record
-            Record("another", {"x": 7}),
+            Record('another', {'x': 7}),
             # an update to the first record in the version 1 set of records
-            Record("r1", {"x": 6}),
+            Record('r1', {'x': 6}),
         ]
         # update the records
         with freeze_time(version_2_time):
@@ -390,15 +390,15 @@ class TestSync:
         ]
 
     def test_sync_with_delete(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        database = SplitgillDatabase('test', splitgill)
 
         version_1_time = datetime(2020, 7, 2, tzinfo=timezone.utc)
         version_1_records = [
-            Record("r1", {"x": 5}),
-            Record("r2", {"x": 10}),
-            Record("r3", {"x": 15}),
-            Record("r4", {"x": -1}),
-            Record("r5", {"x": 1098}),
+            Record('r1', {'x': 5}),
+            Record('r2', {'x': 10}),
+            Record('r3', {'x': 15}),
+            Record('r4', {'x': -1}),
+            Record('r5', {'x': 1098}),
         ]
         # add some records at a specific version
         with freeze_time(version_1_time):
@@ -413,9 +413,9 @@ class TestSync:
         version_2_time = datetime(2020, 7, 3, tzinfo=timezone.utc)
         version_2_records = [
             # a new record
-            Record("another", {"x": 7}),
+            Record('another', {'x': 7}),
             # a delete to the second record in the version 1 set of records
-            Record("r2", {}),
+            Record('r2', {}),
         ]
         # update the records
         with freeze_time(version_2_time):
@@ -436,25 +436,25 @@ class TestSync:
 
         # the second record shouldn't be in the latest index
         assert not splitgill.elasticsearch.exists(
-            id="r2", index=database.indices.latest
+            id='r2', index=database.indices.latest
         )
         # but it should be in the old index
         assert (
             database.search(SearchVersion.all)
-            .filter(id_query("r2"))
+            .filter(id_query('r2'))
             .filter(version_query(to_timestamp(version_1_time)))
             .count()
             == 1
         )
 
     def test_sync_delete_non_existent(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        database = SplitgillDatabase('test', splitgill)
 
         database.ingest(
             [
-                Record.new({"x": 5}),
-                Record.new({"x": 10}),
-                Record.new({"x": 15}),
+                Record.new({'x': 5}),
+                Record.new({'x': 10}),
+                Record.new({'x': 15}),
                 # a delete
                 Record.new({}),
             ],
@@ -476,19 +476,19 @@ class TestSync:
             if called < 4:
                 return parse(*args, **kwargs)
             else:
-                raise Exception("Something went wrong... on purpose!")
+                raise Exception('Something went wrong... on purpose!')
 
-        with patch("splitgill.indexing.index.parse", side_effect=mock_parse):
-            database = SplitgillDatabase("test", splitgill)
+        with patch('splitgill.indexing.index.parse', side_effect=mock_parse):
+            database = SplitgillDatabase('test', splitgill)
             records = [
-                Record.new({"x": 5}),
-                Record.new({"x": 10}),
-                Record.new({"x": 15}),
-                Record.new({"x": 8}),
+                Record.new({'x': 5}),
+                Record.new({'x': 10}),
+                Record.new({'x': 15}),
+                Record.new({'x': 8}),
             ]
             database.ingest(records)
 
-            with pytest.raises(Exception, match="Something went wrong... on purpose!"):
+            with pytest.raises(Exception, match='Something went wrong... on purpose!'):
                 # add them one at a time so that some docs actually get to elasticsearch
                 database.sync(BulkOptions(chunk_size=1))
 
@@ -500,8 +500,8 @@ class TestSync:
         assert (
             splitgill.elasticsearch.indices.get_settings(index=database.indices.latest)[
                 database.indices.latest
-            ]["settings"]["index"]["refresh_interval"]
-            == "-1"
+            ]['settings']['index']['refresh_interval']
+            == '-1'
         )
 
         # run another sync which doesn't error (we're outside of the patch context)
@@ -515,8 +515,8 @@ class TestSync:
         assert (
             splitgill.elasticsearch.indices.get_settings(index=database.indices.latest)[
                 database.indices.latest
-            ]["settings"]["index"].get("refresh_interval")
-            != "-1"
+            ]['settings']['index'].get('refresh_interval')
+            != '-1'
         )
 
     def test_incomplete_is_not_searchable_until_refresh(
@@ -532,19 +532,19 @@ class TestSync:
             if called < 4:
                 return parse(*args, **kwargs)
             else:
-                raise Exception("Something went wrong... on purpose!")
+                raise Exception('Something went wrong... on purpose!')
 
-        with patch("splitgill.indexing.index.parse", side_effect=mock_parse):
-            database = SplitgillDatabase("test", splitgill)
+        with patch('splitgill.indexing.index.parse', side_effect=mock_parse):
+            database = SplitgillDatabase('test', splitgill)
             records = [
-                Record.new({"x": 5}),
-                Record.new({"x": 10}),
-                Record.new({"x": 15}),
-                Record.new({"x": 8}),
+                Record.new({'x': 5}),
+                Record.new({'x': 10}),
+                Record.new({'x': 15}),
+                Record.new({'x': 8}),
             ]
             database.ingest(records)
 
-            with pytest.raises(Exception, match="Something went wrong... on purpose!"):
+            with pytest.raises(Exception, match='Something went wrong... on purpose!'):
                 # add them one at a time so that some docs actually get to elasticsearch
                 database.sync(
                     BulkOptions(worker_count=1, chunk_size=1, buffer_multiplier=1)
@@ -557,13 +557,13 @@ class TestSync:
         assert database.search().count() < 4
 
     def test_resync_rogue_deletions(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        database = SplitgillDatabase('test', splitgill)
         records = [
-            Record.new({"x": 5}),
-            Record.new({"x": 10}),
-            Record.new({"x": 15}),
-            Record.new({"x": -1}),
-            Record.new({"x": 1098}),
+            Record.new({'x': 5}),
+            Record.new({'x': 10}),
+            Record.new({'x': 15}),
+            Record.new({'x': -1}),
+            Record.new({'x': 1098}),
         ]
         database.ingest(records, commit=True)
 
@@ -572,7 +572,7 @@ class TestSync:
 
         # delete a couple of documents to cause mayhem
         database.search().params(refresh=True).filter(
-            "terms", **{DocumentField.ID: [records[1].id, records[4].id]}
+            'terms', **{DocumentField.ID: [records[1].id, records[4].id]}
         ).delete()
         # check we deleted them
         assert database.search().count() == len(records) - 2
@@ -582,25 +582,25 @@ class TestSync:
         assert database.search().count() == len(records)
 
     def test_resync_over_existing(self, splitgill: SplitgillClient):
-        database = SplitgillDatabase("test", splitgill)
+        database = SplitgillDatabase('test', splitgill)
         records = [
-            Record("r1", {"x": 5}),
-            Record("r2", {"x": 10}),
-            Record("r3", {"x": 15}),
-            Record("r4", {"x": -1}),
-            Record("r5", {"x": 1098}),
+            Record('r1', {'x': 5}),
+            Record('r2', {'x': 10}),
+            Record('r3', {'x': 15}),
+            Record('r4', {'x': -1}),
+            Record('r5', {'x': 1098}),
         ]
         database.ingest(records, commit=True)
 
         new_records = [
-            Record("r2", {"x": "arms!"}),
-            Record("r5", {"x": "egg!"}),
+            Record('r2', {'x': 'arms!'}),
+            Record('r5', {'x': 'egg!'}),
         ]
         database.ingest(new_records, commit=True)
 
         # force the sync to create arc-0 and arc-1 so that we can test all the arcs get
         # deleted when we resync
-        with patch("splitgill.indexing.index.MAX_DOCS_PER_ARC", 1):
+        with patch('splitgill.indexing.index.MAX_DOCS_PER_ARC', 1):
             database.sync(resync=False)
 
         assert database.search().count() == 5
@@ -613,7 +613,7 @@ class TestSync:
 
 
 def test_search(splitgill: SplitgillClient):
-    database = SplitgillDatabase("test", splitgill)
+    database = SplitgillDatabase('test', splitgill)
 
     client = splitgill.elasticsearch
     latest = [database.indices.latest]
@@ -632,18 +632,18 @@ def test_search(splitgill: SplitgillClient):
     assert database.search(version=5)._index == wildcard
     assert database.search(version=5)._using == client
     assert database.search(version=5).to_dict() == {
-        "query": {"bool": {"filter": [version_query(5).to_dict()]}}
+        'query': {'bool': {'filter': [version_query(5).to_dict()]}}
     }
 
     # data in index and 5 is less than latest, so should create a search over everything
     # at version 5
-    database.ingest([Record.new({"x": 5})])
+    database.ingest([Record.new({'x': 5})])
     database.sync()
     assert 5 < database.get_elasticsearch_version()
     assert database.search(version=5)._index == wildcard
     assert database.search(version=5)._using == client
     assert database.search(version=5).to_dict() == {
-        "query": {"bool": {"filter": [version_query(5).to_dict()]}}
+        'query': {'bool': {'filter': [version_query(5).to_dict()]}}
     }
 
     # data in index and version requested is above latest so should just use latest
@@ -727,12 +727,12 @@ def check_data_fields(actual: List[DataField], expected: List[DataField]):
 class TestGetFieldsMethods:
     def test_int(self, database: SplitgillDatabase):
         records = [
-            Record.new({"a": 5}),
-            Record.new({"a": 10}),
-            Record.new({"b": 15}),
-            Record.new({"b": -1}),
-            Record.new({"b": 1098}),
-            Record.new({"c": 33}),
+            Record.new({'a': 5}),
+            Record.new({'a': 10}),
+            Record.new({'b': 15}),
+            Record.new({'b': -1}),
+            Record.new({'b': 1098}),
+            Record.new({'c': 33}),
         ]
         database.ingest(records, commit=True)
         database.sync()
@@ -741,28 +741,28 @@ class TestGetFieldsMethods:
         assert len(data_fields) == 4
         assert data_fields == [
             id_df(6),
-            df("b", 3, i=3),
-            df("a", 2, i=2),
-            df("c", 1, i=1),
+            df('b', 3, i=3),
+            df('a', 2, i=2),
+            df('c', 1, i=1),
         ]
 
         parsed_fields = database.get_parsed_fields()
         assert len(parsed_fields) == 4
         assert parsed_fields == [
             id_pf(6),
-            pf("b", 3, t=3, n=3),
-            pf("a", 2, t=2, n=2),
-            pf("c", 1, t=1, n=1),
+            pf('b', 3, t=3, n=3),
+            pf('a', 2, t=2, n=2),
+            pf('c', 1, t=1, n=1),
         ]
 
     def test_float(self, database: SplitgillDatabase):
         records = [
-            Record.new({"a": 5.4}),
-            Record.new({"a": 10.1}),
-            Record.new({"b": 15.0}),
-            Record.new({"b": -1.8}),
-            Record.new({"b": 1098.124235}),
-            Record.new({"c": 33.6}),
+            Record.new({'a': 5.4}),
+            Record.new({'a': 10.1}),
+            Record.new({'b': 15.0}),
+            Record.new({'b': -1.8}),
+            Record.new({'b': 1098.124235}),
+            Record.new({'c': 33.6}),
         ]
         database.ingest(records, commit=True)
         database.sync()
@@ -771,32 +771,32 @@ class TestGetFieldsMethods:
         assert len(data_fields) == 4
         assert data_fields == [
             id_df(6),
-            df("b", 3, f=3),
-            df("a", 2, f=2),
-            df("c", 1, f=1),
+            df('b', 3, f=3),
+            df('a', 2, f=2),
+            df('c', 1, f=1),
         ]
 
         parsed_fields = database.get_parsed_fields()
         assert len(parsed_fields) == 4
         assert parsed_fields == [
             id_pf(6),
-            pf("b", 3, t=3, n=3),
-            pf("a", 2, t=2, n=2),
-            pf("c", 1, t=1, n=1),
+            pf('b', 3, t=3, n=3),
+            pf('a', 2, t=2, n=2),
+            pf('c', 1, t=1, n=1),
         ]
 
     def test_date(self, database: SplitgillDatabase):
         records = [
-            Record.new({"a": "2010-01-06"}),
-            Record.new({"a": "2010-01-06T13:11:47+05:00"}),
-            Record.new({"b": "2010-01-06 13:11:47"}),
+            Record.new({'a': '2010-01-06'}),
+            Record.new({'a': '2010-01-06T13:11:47+05:00'}),
+            Record.new({'b': '2010-01-06 13:11:47'}),
         ]
         database.ingest(records, commit=True)
         database.update_options(
             ParsingOptionsBuilder()
-            .with_date_format("%Y-%m-%d")
-            .with_date_format("%Y-%m-%dT%H:%M:%S%z")
-            .with_date_format("%Y-%m-%d %H:%M:%S")
+            .with_date_format('%Y-%m-%d')
+            .with_date_format('%Y-%m-%dT%H:%M:%S%z')
+            .with_date_format('%Y-%m-%d %H:%M:%S')
             .build()
         )
         database.sync()
@@ -805,26 +805,26 @@ class TestGetFieldsMethods:
         assert len(data_fields) == 3
         assert data_fields == [
             id_df(3),
-            df("a", 2, s=2),
-            df("b", 1, s=1),
+            df('a', 2, s=2),
+            df('b', 1, s=1),
         ]
 
         parsed_fields = database.get_parsed_fields()
         assert len(parsed_fields) == 3
         assert parsed_fields == [
             id_pf(3),
-            pf("a", 2, d=2, t=2),
-            pf("b", 1, d=1, t=1),
+            pf('a', 2, d=2, t=2),
+            pf('b', 1, d=1, t=1),
         ]
 
     def test_bool(self, database: SplitgillDatabase):
         records = [
-            Record.new({"a": True}),
-            Record.new({"a": False}),
-            Record.new({"b": True}),
-            Record.new({"b": True}),
-            Record.new({"b": False}),
-            Record.new({"c": False}),
+            Record.new({'a': True}),
+            Record.new({'a': False}),
+            Record.new({'b': True}),
+            Record.new({'b': True}),
+            Record.new({'b': False}),
+            Record.new({'c': False}),
         ]
         database.ingest(records, commit=True)
         database.sync()
@@ -833,28 +833,28 @@ class TestGetFieldsMethods:
         assert len(data_fields) == 4
         assert data_fields == [
             id_df(6),
-            df("b", 3, b=3),
-            df("a", 2, b=2),
-            df("c", 1, b=1),
+            df('b', 3, b=3),
+            df('a', 2, b=2),
+            df('c', 1, b=1),
         ]
 
         parsed_fields = database.get_parsed_fields()
         assert len(parsed_fields) == 4
         assert parsed_fields == [
             id_pf(6),
-            pf("b", 3, t=3, b=3),
-            pf("a", 2, t=2, b=2),
-            pf("c", 1, t=1, b=1),
+            pf('b', 3, t=3, b=3),
+            pf('a', 2, t=2, b=2),
+            pf('c', 1, t=1, b=1),
         ]
 
     def test_str(self, database: SplitgillDatabase):
         records = [
-            Record.new({"a": "beans"}),
-            Record.new({"a": "hammers"}),
-            Record.new({"b": "eggs"}),
-            Record.new({"b": "llamas"}),
-            Record.new({"b": "goats"}),
-            Record.new({"c": "books"}),
+            Record.new({'a': 'beans'}),
+            Record.new({'a': 'hammers'}),
+            Record.new({'b': 'eggs'}),
+            Record.new({'b': 'llamas'}),
+            Record.new({'b': 'goats'}),
+            Record.new({'c': 'books'}),
         ]
         database.ingest(records, commit=True)
         database.sync()
@@ -863,28 +863,28 @@ class TestGetFieldsMethods:
         assert len(data_fields) == 4
         assert data_fields == [
             id_df(6),
-            df("b", 3, s=3),
-            df("a", 2, s=2),
-            df("c", 1, s=1),
+            df('b', 3, s=3),
+            df('a', 2, s=2),
+            df('c', 1, s=1),
         ]
 
         parsed_fields = database.get_parsed_fields()
         assert len(parsed_fields) == 4
         assert parsed_fields == [
             id_pf(6),
-            pf("b", 3, t=3),
-            pf("a", 2, t=2),
-            pf("c", 1, t=1),
+            pf('b', 3, t=3),
+            pf('a', 2, t=2),
+            pf('c', 1, t=1),
         ]
 
     def test_dict(self, database: SplitgillDatabase):
         records = [
-            Record.new({"topA": {"a": 4}}),
-            Record.new({"topA": {"a": 5}}),
-            Record.new({"topB": {"a": 6}}),
-            Record.new({"topB": {"a": 7}}),
-            Record.new({"topB": {"a": 8}}),
-            Record.new({"topC": {"a": 9}}),
+            Record.new({'topA': {'a': 4}}),
+            Record.new({'topA': {'a': 5}}),
+            Record.new({'topB': {'a': 6}}),
+            Record.new({'topB': {'a': 7}}),
+            Record.new({'topB': {'a': 8}}),
+            Record.new({'topC': {'a': 9}}),
         ]
         database.ingest(records, commit=True)
         database.sync()
@@ -895,12 +895,12 @@ class TestGetFieldsMethods:
             data_fields,
             [
                 id_df(6),
-                df("topB", 3, d=3),
-                df("topB.a", 3, i=3),
-                df("topA", 2, d=2),
-                df("topA.a", 2, i=2),
-                df("topC", 1, d=1),
-                df("topC.a", 1, i=1),
+                df('topB', 3, d=3),
+                df('topB.a', 3, i=3),
+                df('topA', 2, d=2),
+                df('topA.a', 2, i=2),
+                df('topC', 1, d=1),
+                df('topC.a', 1, i=1),
             ],
         )
 
@@ -908,17 +908,17 @@ class TestGetFieldsMethods:
         assert len(parsed_fields) == 4
         assert parsed_fields == [
             id_pf(6),
-            pf("topB.a", 3, t=3, n=3),
-            pf("topA.a", 2, t=2, n=2),
-            pf("topC.a", 1, t=1, n=1),
+            pf('topB.a', 3, t=3, n=3),
+            pf('topA.a', 2, t=2, n=2),
+            pf('topC.a', 1, t=1, n=1),
         ]
 
     def test_list(self, database: SplitgillDatabase):
         records = [
-            Record.new({"a": [1, 2, 3]}),
-            Record.new({"a": [1, "beans", 3]}),
-            Record.new({"a": [1, False, True]}),
-            Record.new({"a": [5.4]}),
+            Record.new({'a': [1, 2, 3]}),
+            Record.new({'a': [1, 'beans', 3]}),
+            Record.new({'a': [1, False, True]}),
+            Record.new({'a': [5.4]}),
         ]
         database.ingest(records, commit=True)
         database.sync()
@@ -929,8 +929,8 @@ class TestGetFieldsMethods:
             data_fields,
             [
                 id_df(4),
-                df("a", 4, l=4),
-                df("a.", 4, i=3, f=1, s=1, b=1),
+                df('a', 4, l=4),
+                df('a.', 4, i=3, f=1, s=1, b=1),
             ],
         )
 
@@ -938,17 +938,17 @@ class TestGetFieldsMethods:
         assert len(parsed_fields) == 2
         assert parsed_fields == [
             id_pf(4),
-            pf("a", 4, t=4, n=4, b=1),
+            pf('a', 4, t=4, n=4, b=1),
         ]
 
     def test_mix(self, database: SplitgillDatabase):
         records = [
-            Record.new({"a": 5}),
-            Record.new({"a": 50.1}),
-            Record.new({"b": "beans!"}),
-            Record.new({"b": [1, 2, 3]}),
-            Record.new({"b": {"x": 5.4, "y": True}}),
-            Record.new({"b": {"x": "lemonade!", "y": False}}),
+            Record.new({'a': 5}),
+            Record.new({'a': 50.1}),
+            Record.new({'b': 'beans!'}),
+            Record.new({'b': [1, 2, 3]}),
+            Record.new({'b': {'x': 5.4, 'y': True}}),
+            Record.new({'b': {'x': 'lemonade!', 'y': False}}),
         ]
         database.ingest(records, commit=True)
         database.sync()
@@ -959,11 +959,11 @@ class TestGetFieldsMethods:
             data_fields,
             [
                 id_df(6),
-                df("b", 4, s=1, l=1, d=2),
-                df("a", 2, i=1, f=1),
-                df("b.x", 2, f=1, s=1),
-                df("b.y", 2, b=2),
-                df("b.", 1, i=1),
+                df('b', 4, s=1, l=1, d=2),
+                df('a', 2, i=1, f=1),
+                df('b.x', 2, f=1, s=1),
+                df('b.y', 2, b=2),
+                df('b.', 1, i=1),
             ],
         )
 
@@ -971,16 +971,16 @@ class TestGetFieldsMethods:
         assert len(parsed_fields) == 5
         assert parsed_fields == [
             id_pf(6),
-            pf("a", 2, t=2, n=2),
-            pf("b", 2, t=2, n=1),
-            pf("b.x", 2, t=2, n=1),
-            pf("b.y", 2, t=2, b=2),
+            pf('a', 2, t=2, n=2),
+            pf('b', 2, t=2, n=1),
+            pf('b.x', 2, t=2, n=1),
+            pf('b.y', 2, t=2, b=2),
         ]
 
     def test_list_of_dicts(self, database: SplitgillDatabase):
         records = [
-            Record.new({"a": [{"a": 5}, {"a": 5.4}, {"b": True}]}),
-            Record.new({"a": [{"a": "beans"}, {"a": 5.4}, {"b": 3.9}]}),
+            Record.new({'a': [{'a': 5}, {'a': 5.4}, {'b': True}]}),
+            Record.new({'a': [{'a': 'beans'}, {'a': 5.4}, {'b': 3.9}]}),
         ]
         database.ingest(records, commit=True)
         database.sync()
@@ -991,10 +991,10 @@ class TestGetFieldsMethods:
             data_fields,
             [
                 id_df(2),
-                df("a", 2, l=2),
-                df("a.", 2, d=2),
-                df("a..a", 2, i=1, f=2, s=1),
-                df("a..b", 2, b=1, f=1),
+                df('a', 2, l=2),
+                df('a.', 2, d=2),
+                df('a..a', 2, i=1, f=2, s=1),
+                df('a..b', 2, b=1, f=1),
             ],
         )
 
@@ -1002,15 +1002,15 @@ class TestGetFieldsMethods:
         assert len(parsed_fields) == 3
         assert parsed_fields == [
             id_pf(2),
-            pf("a.a", 2, t=2, n=2),
-            pf("a.b", 2, t=2, b=1, n=1),
+            pf('a.a', 2, t=2, n=2),
+            pf('a.b', 2, t=2, b=1, n=1),
         ]
 
     def test_list_of_lists(self, database: SplitgillDatabase):
         records = [
-            Record.new({"a": [[1, 2, 3], [4, 5, 6], 9]}),
-            Record.new({"a": [[9, 8, 7], [6, 5, 4], "organs"]}),
-            Record.new({"a": [[1, 2, 3], [4, 5, 6], [True, False]]}),
+            Record.new({'a': [[1, 2, 3], [4, 5, 6], 9]}),
+            Record.new({'a': [[9, 8, 7], [6, 5, 4], 'organs']}),
+            Record.new({'a': [[1, 2, 3], [4, 5, 6], [True, False]]}),
         ]
         database.ingest(records, commit=True)
         database.sync()
@@ -1021,9 +1021,9 @@ class TestGetFieldsMethods:
             data_fields,
             [
                 id_df(3),
-                df("a", 3, l=3),
-                df("a.", 3, l=3, i=1, s=1),
-                df("a..", 3, b=1, i=3),
+                df('a', 3, l=3),
+                df('a.', 3, l=3, i=1, s=1),
+                df('a..', 3, b=1, i=3),
             ],
         )
 
@@ -1031,12 +1031,12 @@ class TestGetFieldsMethods:
         assert len(parsed_fields) == 2
         assert parsed_fields == [
             id_pf(3),
-            pf("a", 3, t=3, n=3, b=1),
+            pf('a', 3, t=3, n=3, b=1),
         ]
 
     def test_deep_nesting(self, database: SplitgillDatabase):
         # ew
-        records = [Record.new({"a": {"b": [[{"c": [{"d": 5}]}]]}})]
+        records = [Record.new({'a': {'b': [[{'c': [{'d': 5}]}]]}})]
         database.ingest(records, commit=True)
         database.sync()
 
@@ -1046,30 +1046,30 @@ class TestGetFieldsMethods:
             data_fields,
             [
                 id_df(1),
-                df("a", 1, d=1),
-                df("a.b", 1, l=1),
-                df("a.b.", 1, l=1),
-                df("a.b..", 1, d=1),
-                df("a.b...c", 1, l=1),
-                df("a.b...c.", 1, d=1),
-                df("a.b...c..d", 1, i=1),
+                df('a', 1, d=1),
+                df('a.b', 1, l=1),
+                df('a.b.', 1, l=1),
+                df('a.b..', 1, d=1),
+                df('a.b...c', 1, l=1),
+                df('a.b...c.', 1, d=1),
+                df('a.b...c..d', 1, i=1),
             ],
         )
         parsed_fields = database.get_parsed_fields()
         assert len(parsed_fields) == 2
-        assert parsed_fields == [id_pf(1), pf("a.b.c.d", 1, t=1, n=1)]
+        assert parsed_fields == [id_pf(1), pf('a.b.c.d', 1, t=1, n=1)]
 
     def test_version(self, database: SplitgillDatabase):
         # add some records with integer values
         version_1_time = datetime(2020, 7, 2, tzinfo=timezone.utc)
-        version_1_records = [Record("r1", {"x": 5}), Record("r2", {"x": 10})]
+        version_1_records = [Record('r1', {'x': 5}), Record('r2', {'x': 10})]
         with freeze_time(version_1_time):
             database.ingest(version_1_records, commit=True)
         database.sync()
 
         # the next day all the record values become bools, wild stuff
         version_2_time = datetime(2020, 7, 3, tzinfo=timezone.utc)
-        version_2_records = [Record("r1", {"x": True}), Record("r2", {"x": False})]
+        version_2_records = [Record('r1', {'x': True}), Record('r2', {'x': False})]
         with freeze_time(version_2_time):
             database.ingest(version_2_records, commit=True)
         database.sync()
@@ -1077,25 +1077,25 @@ class TestGetFieldsMethods:
         # check the latest version where the values are all bools
         data_fields = database.get_data_fields()
         assert len(data_fields) == 2
-        assert data_fields == [id_df(2), df("x", 2, b=2)]
+        assert data_fields == [id_df(2), df('x', 2, b=2)]
         parsed_fields = database.get_parsed_fields()
         assert len(parsed_fields) == 2
-        assert parsed_fields == [id_pf(2), pf("x", 2, t=2, b=2)]
+        assert parsed_fields == [id_pf(2), pf('x', 2, t=2, b=2)]
 
         # then check the old version where the values are ints
         data_fields = database.get_data_fields(version=to_timestamp(version_1_time))
         assert len(data_fields) == 2
-        assert data_fields == [id_df(2), df("x", 2, i=2)]
+        assert data_fields == [id_df(2), df('x', 2, i=2)]
         parsed_fields = database.get_parsed_fields(version=to_timestamp(version_1_time))
         assert len(parsed_fields) == 2
-        assert parsed_fields == [id_pf(2), pf("x", 2, t=2, n=2)]
+        assert parsed_fields == [id_pf(2), pf('x', 2, t=2, n=2)]
 
     def test_with_filter(self, database: SplitgillDatabase):
         records = [
-            Record.new({"a": 1, "b": True}),
-            Record.new({"a": 2, "b": 5.3}),
-            Record.new({"a": 3, "b": "beans!"}),
-            Record.new({"a": 4, "b": "armpit"}),
+            Record.new({'a': 1, 'b': True}),
+            Record.new({'a': 2, 'b': 5.3}),
+            Record.new({'a': 3, 'b': 'beans!'}),
+            Record.new({'a': 4, 'b': 'armpit'}),
         ]
         database.ingest(records, commit=True)
         database.sync()
@@ -1105,41 +1105,41 @@ class TestGetFieldsMethods:
         assert len(data_fields) == 3
         assert data_fields == [
             id_df(4),
-            df("a", 4, i=4),
-            df("b", 4, f=1, b=1, s=2),
+            df('a', 4, i=4),
+            df('b', 4, f=1, b=1, s=2),
         ]
         parsed_fields = database.get_parsed_fields()
         assert len(parsed_fields) == 3
         assert parsed_fields == [
             id_pf(4),
-            pf("a", 4, t=4, n=4),
-            pf("b", 4, t=4, b=1, n=1),
+            pf('a', 4, t=4, n=4),
+            pf('b', 4, t=4, b=1, n=1),
         ]
 
         # now check with some filters
-        query = term_query("a", 1)
+        query = term_query('a', 1)
         data_fields = database.get_data_fields(query=query)
         parsed_fields = database.get_parsed_fields(query=query)
-        assert data_fields == [id_df(1), df("a", 1, i=1), df("b", 1, b=1)]
-        assert parsed_fields == [id_pf(1), pf("a", 1, t=1, n=1), pf("b", 1, t=1, b=1)]
+        assert data_fields == [id_df(1), df('a', 1, i=1), df('b', 1, b=1)]
+        assert parsed_fields == [id_pf(1), pf('a', 1, t=1, n=1), pf('b', 1, t=1, b=1)]
 
-        query = term_query("a", 2)
+        query = term_query('a', 2)
         data_fields = database.get_data_fields(query=query)
         parsed_fields = database.get_parsed_fields(query=query)
-        assert data_fields == [id_df(1), df("a", 1, i=1), df("b", 1, f=1)]
-        assert parsed_fields == [id_pf(1), pf("a", 1, t=1, n=1), pf("b", 1, t=1, n=1)]
+        assert data_fields == [id_df(1), df('a', 1, i=1), df('b', 1, f=1)]
+        assert parsed_fields == [id_pf(1), pf('a', 1, t=1, n=1), pf('b', 1, t=1, n=1)]
 
-        query = term_query("a", 3)
+        query = term_query('a', 3)
         data_fields = database.get_data_fields(query=query)
         parsed_fields = database.get_parsed_fields(query=query)
-        assert data_fields == [id_df(1), df("a", 1, i=1), df("b", 1, s=1)]
-        assert parsed_fields == [id_pf(1), pf("a", 1, t=1, n=1), pf("b", 1, t=1)]
+        assert data_fields == [id_df(1), df('a', 1, i=1), df('b', 1, s=1)]
+        assert parsed_fields == [id_pf(1), pf('a', 1, t=1, n=1), pf('b', 1, t=1)]
 
-        query = term_query("a", 4)
+        query = term_query('a', 4)
         data_fields = database.get_data_fields(query=query)
         parsed_fields = database.get_parsed_fields(query=query)
-        assert data_fields == [id_df(1), df("a", 1, i=1), df("b", 1, s=1)]
-        assert parsed_fields == [id_pf(1), pf("a", 1, t=1, n=1), pf("b", 1, t=1)]
+        assert data_fields == [id_df(1), df('a', 1, i=1), df('b', 1, s=1)]
+        assert parsed_fields == [id_pf(1), pf('a', 1, t=1, n=1), pf('b', 1, t=1)]
 
     def test_geo_in_parsed_fields(
         self, database: SplitgillDatabase, geojson_point: dict, wkt_point: str
@@ -1147,17 +1147,17 @@ class TestGetFieldsMethods:
         records = [
             Record.new(
                 {
-                    "geojson": geojson_point,
-                    "wkt": wkt_point,
-                    "lat": 30,
-                    "lon": 60,
-                    "rad": 100,
+                    'geojson': geojson_point,
+                    'wkt': wkt_point,
+                    'lat': 30,
+                    'lon': 60,
+                    'rad': 100,
                 }
             ),
         ]
         database.ingest(records, commit=False)
         database.update_options(
-            ParsingOptionsBuilder().with_geo_hint("lat", "lon", "rad").build(),
+            ParsingOptionsBuilder().with_geo_hint('lat', 'lon', 'rad').build(),
             commit=False,
         )
         database.commit()
@@ -1167,20 +1167,20 @@ class TestGetFieldsMethods:
         assert len(parsed_fields) == 8
         assert parsed_fields == [
             id_pf(1),
-            pf("geojson", 1, g=1, has_original=False),
-            pf("geojson.coordinates", 1, n=1, t=1),
-            pf("geojson.type", 1, t=1),
-            pf("lat", 1, g=1, t=1, n=1),
-            pf("lon", 1, t=1, n=1),
-            pf("rad", 1, t=1, n=1),
-            pf("wkt", 1, g=1, t=1),
+            pf('geojson', 1, g=1, has_original=False),
+            pf('geojson.coordinates', 1, n=1, t=1),
+            pf('geojson.type', 1, t=1),
+            pf('lat', 1, g=1, t=1, n=1),
+            pf('lon', 1, t=1, n=1),
+            pf('rad', 1, t=1, n=1),
+            pf('wkt', 1, g=1, t=1),
         ]
 
     def test_counts(self, database: SplitgillDatabase):
         records = [
-            Record.new({"a": [1, True]}),
-            Record.new({"a": [1, 4.5]}),
-            Record.new({"a": "beans"}),
+            Record.new({'a': [1, True]}),
+            Record.new({'a': [1, 4.5]}),
+            Record.new({'a': 'beans'}),
         ]
         database.ingest(records, commit=True)
         database.sync()
@@ -1192,39 +1192,39 @@ class TestGetFieldsMethods:
             [
                 id_df(3),
                 # 3 fields have an "a" field
-                df("a", 3, l=2, s=1),
+                df('a', 3, l=2, s=1),
                 # 2 fields have lists under "a"
-                df("a.", 2, i=2, b=1, f=1),
+                df('a.', 2, i=2, b=1, f=1),
             ],
         )
 
         parsed_fields = database.get_parsed_fields()
         assert len(parsed_fields) == 2
-        assert parsed_fields == [id_pf(3), pf("a", 3, n=2, b=1, t=3)]
+        assert parsed_fields == [id_pf(3), pf('a', 3, n=2, b=1, t=3)]
 
     def test_hierarchy(self, database: SplitgillDatabase):
         records = [
-            Record.new({"a": "beans"}),
-            Record.new({"b": {"c": 4, "d": True}}),
-            Record.new({"e": ["beans"]}),
-            Record.new({"f": [{"g": 3, "h": {"i": "beans"}}]}),
+            Record.new({'a': 'beans'}),
+            Record.new({'b': {'c': 4, 'd': True}}),
+            Record.new({'e': ['beans']}),
+            Record.new({'f': [{'g': 3, 'h': {'i': 'beans'}}]}),
         ]
         database.ingest(records, commit=True)
         database.sync()
 
         # these are the data fields we expect
         record_id = id_df(4)
-        a = df("a", 1, s=1)
-        b = df("b", 1, d=1)
-        b_c = df("b.c", 1, i=1)
-        b_d = df("b.d", 1, b=1)
-        e = df("e", 1, l=1)
-        e_ = df("e.", 1, s=1)
-        f = df("f", 1, l=1)
-        f_ = df("f.", 1, d=1)
-        f__g = df("f..g", 1, i=1)
-        f__h = df("f..h", 1, d=1)
-        f__h_i = df("f..h.i", 1, s=1)
+        a = df('a', 1, s=1)
+        b = df('b', 1, d=1)
+        b_c = df('b.c', 1, i=1)
+        b_d = df('b.d', 1, b=1)
+        e = df('e', 1, l=1)
+        e_ = df('e.', 1, s=1)
+        f = df('f', 1, l=1)
+        f_ = df('f.', 1, d=1)
+        f__g = df('f..g', 1, i=1)
+        f__h = df('f..h', 1, d=1)
+        f__h_i = df('f..h.i', 1, s=1)
 
         # these are the relationships we expect
         b.children.append(b_c)
@@ -1272,7 +1272,7 @@ class TestGetFieldsMethods:
 
 
 def test_get_rounded_version(splitgill: SplitgillClient):
-    database = splitgill.get_database("test")
+    database = splitgill.get_database('test')
 
     # test with no versions
     assert database.get_rounded_version(8) is None
@@ -1280,7 +1280,7 @@ def test_get_rounded_version(splitgill: SplitgillClient):
     # create some versions
     for version in [4, 5, 9]:
         with freeze_time(datetime.fromtimestamp(version / 1000, timezone.utc)):
-            database.ingest([Record.new({"a": 4})])
+            database.ingest([Record.new({'a': 4})])
     database.sync()
 
     # check before the first version
@@ -1308,18 +1308,18 @@ def test_get_rounded_version(splitgill: SplitgillClient):
 
 
 def test_get_versions(splitgill: SplitgillClient):
-    database = splitgill.get_database("test")
+    database = splitgill.get_database('test')
 
     assert database.get_versions() == []
 
-    record_id = "test-1"
+    record_id = 'test-1'
     versions = [
-        (4, {"a": 1}),
-        (5, {"a": 7}),
+        (4, {'a': 1}),
+        (5, {'a': 7}),
         # delete
         (7, {}),
         # it's back! :O
-        (9, {"a": 4}),
+        (9, {'a': 4}),
         # lastly, delete the record to check next is also being considered
         (15, {}),
     ]
@@ -1338,27 +1338,27 @@ def test_get_versions(splitgill: SplitgillClient):
 
 class TestArcStatus:
     def test_empty(self, splitgill: SplitgillClient):
-        database = splitgill.get_database("test")
+        database = splitgill.get_database('test')
         status = database.get_arc_status()
         assert status.index == 0
         assert status.count == 0
 
     def test_basic(self, splitgill: SplitgillClient):
-        database = splitgill.get_database("test")
+        database = splitgill.get_database('test')
 
-        record_id = "r-1"
+        record_id = 'r-1'
         # this will go into arc-0
-        database.ingest([Record(record_id, {"a": 4})], commit=True)
+        database.ingest([Record(record_id, {'a': 4})], commit=True)
         # this will go into arc-0
-        database.ingest([Record(record_id, {"a": 7})], commit=True)
+        database.ingest([Record(record_id, {'a': 7})], commit=True)
         # this will go into arc-0
-        database.ingest([Record(record_id, {"a": 9})], commit=True)
+        database.ingest([Record(record_id, {'a': 9})], commit=True)
         # this will go into arc-1
-        database.ingest([Record(record_id, {"a": 3})], commit=True)
+        database.ingest([Record(record_id, {'a': 3})], commit=True)
         # this'll be the latest record
-        database.ingest([Record(record_id, {"a": 8})], commit=True)
+        database.ingest([Record(record_id, {'a': 8})], commit=True)
 
-        with patch("splitgill.indexing.index.MAX_DOCS_PER_ARC", 3):
+        with patch('splitgill.indexing.index.MAX_DOCS_PER_ARC', 3):
             database.sync()
 
         status = database.get_arc_status()
@@ -1374,54 +1374,54 @@ class TestArcStatus:
         )
 
     def test_repeat_ingest(self, splitgill: SplitgillClient):
-        database = splitgill.get_database("test")
+        database = splitgill.get_database('test')
 
-        record_id = "r-1"
+        record_id = 'r-1'
         # this will go into arc-0
-        database.ingest([Record(record_id, {"a": 4})], commit=True)
+        database.ingest([Record(record_id, {'a': 4})], commit=True)
         # this will go into arc-0
-        database.ingest([Record(record_id, {"a": 7})], commit=True)
+        database.ingest([Record(record_id, {'a': 7})], commit=True)
         # this will go into arc-0
-        database.ingest([Record(record_id, {"a": 9})], commit=True)
+        database.ingest([Record(record_id, {'a': 9})], commit=True)
         # this will go into arc-1
-        database.ingest([Record(record_id, {"a": 3})], commit=True)
+        database.ingest([Record(record_id, {'a': 3})], commit=True)
         # this will go into arc-1
-        database.ingest([Record(record_id, {"a": 8})], commit=True)
+        database.ingest([Record(record_id, {'a': 8})], commit=True)
 
-        with patch("splitgill.indexing.index.MAX_DOCS_PER_ARC", 3):
+        with patch('splitgill.indexing.index.MAX_DOCS_PER_ARC', 3):
             database.sync()
 
         # this will go into arc-1
-        database.ingest([Record(record_id, {"a": 1})], commit=True)
+        database.ingest([Record(record_id, {'a': 1})], commit=True)
         # this will go into arc-2
-        database.ingest([Record(record_id, {"a": 4})], commit=True)
+        database.ingest([Record(record_id, {'a': 4})], commit=True)
         # this will go into arc-2
-        database.ingest([Record(record_id, {"a": 9})], commit=True)
+        database.ingest([Record(record_id, {'a': 9})], commit=True)
         # this will go into latest
-        database.ingest([Record(record_id, {"a": 2})], commit=True)
+        database.ingest([Record(record_id, {'a': 2})], commit=True)
 
-        with patch("splitgill.indexing.index.MAX_DOCS_PER_ARC", 3):
+        with patch('splitgill.indexing.index.MAX_DOCS_PER_ARC', 3):
             database.sync()
 
         assert database.get_arc_status() == ArcStatus(2, 2)
 
 
 def test_resync_arcs(splitgill: SplitgillClient):
-    database = splitgill.get_database("test")
-    database.ingest([Record(f"r-{i}", {"a": 4}) for i in range(1000)], commit=True)
-    database.ingest([Record(f"r-{i}", {"a": 7}) for i in range(1000)], commit=True)
-    database.ingest([Record(f"r-{i}", {"a": 5}) for i in range(400)], commit=True)
+    database = splitgill.get_database('test')
+    database.ingest([Record(f'r-{i}', {'a': 4}) for i in range(1000)], commit=True)
+    database.ingest([Record(f'r-{i}', {'a': 7}) for i in range(1000)], commit=True)
+    database.ingest([Record(f'r-{i}', {'a': 5}) for i in range(400)], commit=True)
 
-    with patch("splitgill.indexing.index.MAX_DOCS_PER_ARC", 349):
+    with patch('splitgill.indexing.index.MAX_DOCS_PER_ARC', 349):
         database.sync()
         database.resync_arcs()
 
     count = database.search(version=SearchVersion.all).count()
     r_5_count = (
-        database.search(version=SearchVersion.all).filter(id_query("r-5")).count()
+        database.search(version=SearchVersion.all).filter(id_query('r-5')).count()
     )
     r_780_count = (
-        database.search(version=SearchVersion.all).filter(id_query("r-780")).count()
+        database.search(version=SearchVersion.all).filter(id_query('r-780')).count()
     )
     assert count == 2400
     assert r_5_count == 3

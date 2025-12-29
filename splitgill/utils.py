@@ -1,12 +1,11 @@
 from dataclasses import dataclass
-from datetime import datetime, timezone, date
+from datetime import date, datetime, timezone
 from itertools import islice
 from time import time
-from typing import Iterable, Union, List, Any
+from typing import Iterable, Union
 
 from cytoolz import get_in
-from elasticsearch_dsl import Search, A
-from elasticsearch_dsl.aggs import Agg
+from elasticsearch_dsl import A, Search
 
 
 def to_timestamp(moment: Union[datetime, date]) -> int:
@@ -21,7 +20,7 @@ def to_timestamp(moment: Union[datetime, date]) -> int:
 
     :param moment: a datetime or date object
     :return: the timestamp (number of milliseconds between the UNIX epoch and the
-             moment) as an int
+        moment) as an int
     """
     if isinstance(moment, datetime):
         return int(moment.timestamp() * 1000)
@@ -43,7 +42,7 @@ def parse_to_timestamp(
     :param datetime_format: the format as a string
     :param tz: the timezone to use (default: UTC)
     :return: the parsed datetime as the number of milliseconds since the UNIX epoch as
-             an int
+        an int
     """
     dt = datetime.strptime(datetime_string, datetime_format)
     if dt.tzinfo is None:
@@ -103,21 +102,21 @@ def iter_terms(search: Search, field: str, chunk_size: int = 50) -> Iterable[Ter
         # search to work with
         agg_search = search[:0]
         agg_search.aggs.bucket(
-            "values",
-            "composite",
+            'values',
+            'composite',
             size=chunk_size,
-            sources={"value": A("terms", field=field)},
+            sources={'value': A('terms', field=field)},
         )
         if after is not None:
-            agg_search.aggs["values"].after = after
+            agg_search.aggs['values'].after = after
 
         result = agg_search.execute().aggs.to_dict()
 
-        buckets = get_in(("values", "buckets"), result, [])
-        after = get_in(("values", "after_key"), result, None)
+        buckets = get_in(('values', 'buckets'), result, [])
+        after = get_in(('values', 'after_key'), result, None)
         if not buckets:
             break
         else:
             yield from (
-                Term(bucket["key"]["value"], bucket["doc_count"]) for bucket in buckets
+                Term(bucket['key']['value'], bucket['doc_count']) for bucket in buckets
             )

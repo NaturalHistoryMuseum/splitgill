@@ -1,12 +1,12 @@
-from dataclasses import dataclass, field, astuple
+from dataclasses import astuple, dataclass, field
 from itertools import chain
-from typing import Dict, Iterable, NamedTuple, List, Optional, FrozenSet, Any
+from typing import Any, Dict, FrozenSet, Iterable, List, NamedTuple, Optional
 from uuid import uuid4
 
 from bson import ObjectId
 from pymongo.results import BulkWriteResult
 
-from splitgill.diffing import patch, DiffOp
+from splitgill.diffing import DiffOp, patch
 
 
 @dataclass
@@ -29,15 +29,15 @@ class Record:
         return not self.data
 
     @staticmethod
-    def new(data: dict) -> "Record":
+    def new(data: dict) -> 'Record':
         return Record(str(uuid4()), data)
 
     @staticmethod
-    def delete(record_id: str) -> "Record":
+    def delete(record_id: str) -> 'Record':
         return Record(record_id, {})
 
 
-VersionedData = NamedTuple("VersionedData", version=Optional[int], data=dict)
+VersionedData = NamedTuple('VersionedData', version=Optional[int], data=dict)
 
 
 @dataclass
@@ -100,7 +100,7 @@ class MongoRecord:
         with the latest data and working back to the first version.
 
         :return: VersionedData (version: int, data: dict) named tuples in descending
-                 version order
+            version order
         """
         yield VersionedData(self.version, self.data)
         base = self.data
@@ -171,23 +171,23 @@ class ParsingOptions:
 
     def to_doc(self) -> dict:
         return {
-            "true_values": list(self.true_values),
-            "false_values": list(self.false_values),
-            "date_formats": list(self.date_formats),
-            "geo_hints": [astuple(hint) for hint in self.geo_hints],
-            "keyword_length": self.keyword_length,
-            "float_format": self.float_format,
+            'true_values': list(self.true_values),
+            'false_values': list(self.false_values),
+            'date_formats': list(self.date_formats),
+            'geo_hints': [astuple(hint) for hint in self.geo_hints],
+            'keyword_length': self.keyword_length,
+            'float_format': self.float_format,
         }
 
     @classmethod
-    def from_doc(cls, doc: dict) -> "ParsingOptions":
+    def from_doc(cls, doc: dict) -> 'ParsingOptions':
         return ParsingOptions(
-            frozenset(doc["true_values"]),
-            frozenset(doc["false_values"]),
-            frozenset(doc["date_formats"]),
-            frozenset(GeoFieldHint(*params) for params in doc["geo_hints"]),
-            doc["keyword_length"],
-            doc["float_format"],
+            frozenset(doc['true_values']),
+            frozenset(doc['false_values']),
+            frozenset(doc['date_formats']),
+            frozenset(GeoFieldHint(*params) for params in doc['geo_hints']),
+            doc['keyword_length'],
+            doc['float_format'],
         )
 
 

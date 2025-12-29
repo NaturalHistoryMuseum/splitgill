@@ -33,7 +33,7 @@ def test_write_result():
 class TestWorker:
     async def test_timeout(self):
         queue = Queue()
-        queue.put_nowait([IndexOp("test", "doc1", {"x": 4})])
+        queue.put_nowait([IndexOp('test', 'doc1', {'x': 4})])
 
         mock_client = AsyncMock(
             bulk=AsyncMock(side_effect=ConnectionTimeout("doesn't matter"))
@@ -43,7 +43,7 @@ class TestWorker:
 
     async def test_timeout_backoff_and_then_succeed(self):
         queue = Queue()
-        queue.put_nowait([IndexOp("test", "doc1", {"x": 4})])
+        queue.put_nowait([IndexOp('test', 'doc1', {'x': 4})])
         queue.put_nowait(None)
 
         mock_client = AsyncMock(
@@ -51,7 +51,7 @@ class TestWorker:
                 side_effect=[
                     ConnectionTimeout("doesn't matter"),
                     ConnectionTimeout("doesn't matter"),
-                    {"items": [{"index": {}}, {"index": {}}, {"delete": {}}]},
+                    {'items': [{'index': {}}, {'index': {}}, {'delete': {}}]},
                 ]
             )
         )
@@ -61,13 +61,13 @@ class TestWorker:
 
     async def test_counting(self):
         queue = Queue()
-        queue.put_nowait([IndexOp("test", "doc1", {"x": 4})])
-        queue.put_nowait([IndexOp("test", "doc1", {"x": 2})])
+        queue.put_nowait([IndexOp('test', 'doc1', {'x': 4})])
+        queue.put_nowait([IndexOp('test', 'doc1', {'x': 2})])
         queue.put_nowait(None)
 
         mock_client = AsyncMock(
             bulk=AsyncMock(
-                return_value={"items": [{"index": {}}, {"index": {}}, {"delete": {}}]}
+                return_value={'items': [{'index': {}}, {'index': {}}, {'delete': {}}]}
             )
         )
         indexed, deleted = await worker(mock_client, queue)
@@ -76,12 +76,12 @@ class TestWorker:
 
     async def test_errors(self):
         queue = Queue()
-        queue.put_nowait([IndexOp("test", "doc1", {"x": 4})])
+        queue.put_nowait([IndexOp('test', 'doc1', {'x': 4})])
 
-        error_item = {"index": {"error": ["oh no!"]}}
+        error_item = {'index': {'error': ['oh no!']}}
         mock_client = AsyncMock(
             bulk=AsyncMock(
-                return_value={"items": [{"index": {}}, error_item, {"delete": {}}]}
+                return_value={'items': [{'index': {}}, error_item, {'delete': {}}]}
             )
         )
         with pytest.raises(BulkOpException) as e:
@@ -104,7 +104,7 @@ class TestCheckForErrors:
         tasks = set()
 
         async def error():
-            raise Exception("oh no!")
+            raise Exception('oh no!')
 
         # this task won't be complete by the time we check
         task_1 = create_task(sleep(2))
@@ -115,7 +115,7 @@ class TestCheckForErrors:
         # this task will raise an error!
         tasks.add(create_task(error()))
         await sleep(0)
-        with pytest.raises(Exception, match="oh no!"):
+        with pytest.raises(Exception, match='oh no!'):
             check_for_errors(tasks)
         # make sure we don't leave any tasks hanging around
         await gather(task_1, task_2)
@@ -123,7 +123,7 @@ class TestCheckForErrors:
 
 def test_refresh_attempts():
     mock_client = MagicMock(
-        indices=MagicMock(refresh=MagicMock(side_effect=ConnectionTimeout("nope")))
+        indices=MagicMock(refresh=MagicMock(side_effect=ConnectionTimeout('nope')))
     )
     attempts = 9
     with pytest.raises(ConnectionTimeout):
@@ -139,14 +139,14 @@ def test_write_errors(elasticsearch_client: Elasticsearch):
     options = BulkOptions(chunk_size=4, worker_count=8)
 
     # create 7000 ops
-    ops = [IndexOp("test", f"doc-{i}", {"x": i}) for i in range(7000)]
+    ops = [IndexOp('test', f'doc-{i}', {'x': i}) for i in range(7000)]
     # replace one of the ops with an op that causes an error, in this case we pass a
     # list instead of a dict as the record. This is a nice test because it will
     # serialise, but to something that Elasticsearch won't accept as a document so it
     # will raise an error
-    ops[5419] = IndexOp("test", "doc-error", [])
+    ops[5419] = IndexOp('test', 'doc-error', [])
 
-    with pytest.raises(BulkOpException, match="1 errors during bulk index"):
+    with pytest.raises(BulkOpException, match='1 errors during bulk index'):
         write_ops(elasticsearch_client, ops, options)
 
 

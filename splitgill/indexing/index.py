@@ -52,15 +52,15 @@ class IndexNames:
     def __init__(self, name: str):
         self.name = name
         # the base name of all indices for this database
-        self.base = f"data-{name}"
+        self.base = f'data-{name}'
         # the latest index name
-        self.latest = f"{self.base}-latest"
+        self.latest = f'{self.base}-latest'
         # the archive indices base name
-        self.arc_base = f"{self.base}-arc"
+        self.arc_base = f'{self.base}-arc'
         # wildcard name to catch all data indices (so both latest and all arcs)
-        self.wildcard = f"{self.base}-*"
+        self.wildcard = f'{self.base}-*'
         # wildcard name to catch all arc indices
-        self.arc_wildcard = f"{self.arc_base}-*"
+        self.arc_wildcard = f'{self.arc_base}-*'
 
     def get_arc(self, index: int) -> str:
         """
@@ -69,7 +69,7 @@ class IndexNames:
         :param index: the archive index
         :return: the index name
         """
-        return f"{self.arc_base}-{index}"
+        return f'{self.arc_base}-{index}'
 
 
 @dataclass
@@ -102,12 +102,12 @@ class IndexOp(BulkOp):
     def serialise(self) -> str:
         # index ops are 2 lines, first the action metadata and then the document
         return (
-            dumps({"index": {"_index": self.index, "_id": self.doc_id}})
-            + b"\n"
+            dumps({'index': {'_index': self.index, '_id': self.doc_id}})
+            + b'\n'
             # we have to use OPT_NON_STR_KEYS because we're using StrEnums and orjson
             # doesn't work with them :(
             + dumps(self.document, option=OPT_NON_STR_KEYS)
-        ).decode("utf-8")
+        ).decode('utf-8')
 
 
 @dataclass
@@ -134,7 +134,7 @@ class RecordVersion:
     version: int
     parsed: ParsedData
     # pointer to the next RecordVersion
-    next: Optional["RecordVersion"] = None
+    next: Optional['RecordVersion'] = None
     # if this version has been deleted, this is set with the version it was deleted at
     deleted_at: Optional[int] = None
 
@@ -164,14 +164,14 @@ class RecordVersion:
         doc = {
             DocumentField.ID: self.record_id,
             DocumentField.VERSION: self.version,
-            DocumentField.VERSIONS: {"gte": self.version},
+            DocumentField.VERSIONS: {'gte': self.version},
             DocumentField.DATA: self.parsed.parsed,
             DocumentField.DATA_TYPES: self.parsed.data_types,
             DocumentField.PARSED_TYPES: self.parsed.parsed_types,
         }
         if self.version_end is not None:
             doc[DocumentField.NEXT] = self.version_end
-            doc[DocumentField.VERSIONS]["lt"] = self.version_end
+            doc[DocumentField.VERSIONS]['lt'] = self.version_end
         return doc
 
     def __eq__(self, other: Any) -> bool:
@@ -205,7 +205,7 @@ class RecordVersions:
     @classmethod
     def build(
         cls, record: MongoRecord, all_options: Dict[int, ParsingOptions]
-    ) -> "RecordVersions":
+    ) -> 'RecordVersions':
         """
         Build a new RecordVersion object using the data in the given record and all the
         available options.

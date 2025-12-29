@@ -1,13 +1,13 @@
 import re
 from functools import lru_cache
 from itertools import chain
-from typing import Optional, Iterable
+from typing import Iterable, Optional
 
 import orjson
 from cytoolz.itertoolz import sliding_window
-from fastnumbers import try_float, RAISE
+from fastnumbers import RAISE, try_float
 from pyproj import CRS, Transformer
-from shapely import Point, LineString, Polygon, from_wkt, from_geojson, to_wkt
+from shapely import LineString, Point, Polygon, from_geojson, from_wkt, to_wkt
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import transform
 
@@ -45,8 +45,8 @@ def match_hints(data: dict, hints: Iterable[GeoFieldHint]) -> dict:
     matches = {}
 
     for hint in hints:
-        longitude = data.get(hint.lon_field, "")
-        latitude = data.get(hint.lat_field, "")
+        longitude = data.get(hint.lon_field, '')
+        latitude = data.get(hint.lat_field, '')
         try:
             point = Point(longitude, latitude)
         except (ValueError, TypeError):
@@ -59,7 +59,7 @@ def match_hints(data: dict, hints: Iterable[GeoFieldHint]) -> dict:
         if hint.radius_field:
             try:
                 radius = try_float(
-                    data.get(hint.radius_field, ""), on_fail=RAISE, nan=RAISE, inf=RAISE
+                    data.get(hint.radius_field, ''), on_fail=RAISE, nan=RAISE, inf=RAISE
                 )
                 # only need to make a circle if the radius is greater than 0, this also
                 # means we ignore negative radius values
@@ -94,15 +94,15 @@ def create_polygon_circle(
     :param longitude: a longitude float value
     :param radius_in_metres: a radius in metres value
     :param segments: the quad_segs parameter to pass when creating the circle around the
-                     point (the number of segments used will be 4*segments).
+        point (the number of segments used will be 4*segments).
     :return: a Polygon
     """
     if radius_in_metres <= 0:
-        raise ValueError("Uncertainty cannot be <= 0")
+        raise ValueError('Uncertainty cannot be <= 0')
 
     # thanks to https://gis.stackexchange.com/a/289923 for this!
     aeqd_proj = CRS.from_proj4(
-        f"+proj=aeqd +lat_0={latitude} +lon_0={longitude} +x_0=0 +y_0=0"
+        f'+proj=aeqd +lat_0={latitude} +lon_0={longitude} +x_0=0 +y_0=0'
     )
     tfmr = Transformer.from_proj(aeqd_proj, aeqd_proj.geodetic_crs)
     buf = Point(0, 0).buffer(radius_in_metres, quad_segs=segments)
@@ -110,7 +110,7 @@ def create_polygon_circle(
     polygon = Polygon(transform(tfmr.transform, buf).exterior.coords[::-1])
     # confirm that we've created something sensible
     if not is_shape_valid(polygon) or not is_winding_valid(polygon):
-        raise ValueError("Invalid circle generated")
+        raise ValueError('Invalid circle generated')
 
     return polygon
 
@@ -135,11 +135,11 @@ def match_geojson(candidate: dict) -> Optional[dict]:
     :return: returns a dict ready for indexing or None
     """
     # check to make sure trying to get GeoJSON out of this dict is even worth trying
-    if "type" not in candidate or "coordinates" not in candidate:
+    if 'type' not in candidate or 'coordinates' not in candidate:
         return None
 
     shape: Optional[BaseGeometry] = from_geojson(
-        orjson.dumps(candidate), on_invalid="ignore"
+        orjson.dumps(candidate), on_invalid='ignore'
     )
     if shape is None or not is_shape_valid(shape):
         return None
@@ -151,7 +151,7 @@ def match_geojson(candidate: dict) -> Optional[dict]:
     return to_parsed_dict(shape.centroid, shape)
 
 
-wkt_start_check_regex = re.compile(r"(point|linestring|polygon) ", re.IGNORECASE)
+wkt_start_check_regex = re.compile(r'(point|linestring|polygon) ', re.IGNORECASE)
 
 
 def match_wkt(candidate: str) -> Optional[dict]:
@@ -167,7 +167,7 @@ def match_wkt(candidate: str) -> Optional[dict]:
     if wkt_start_check_regex.match(candidate) is None:
         return None
 
-    shape: Optional[BaseGeometry] = from_wkt(candidate, on_invalid="ignore")
+    shape: Optional[BaseGeometry] = from_wkt(candidate, on_invalid='ignore')
     if shape is None or not is_shape_valid(shape):
         return None
 

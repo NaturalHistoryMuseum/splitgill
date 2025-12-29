@@ -1,11 +1,11 @@
 from functools import lru_cache
 from itertools import groupby
-from typing import Union, NamedTuple, Tuple
+from typing import NamedTuple, Tuple, Union
 
 from fastnumbers import try_float
 
-from splitgill.indexing.fields import ParsedType, DataType
-from splitgill.indexing.geo import match_geojson, match_wkt, match_hints
+from splitgill.indexing.fields import DataType, ParsedType
+from splitgill.indexing.geo import match_geojson, match_hints, match_wkt
 from splitgill.model import ParsingOptions
 from splitgill.utils import parse_to_timestamp
 
@@ -40,14 +40,14 @@ def parse(data: dict, options: ParsingOptions) -> ParsedData:
     # aggregations faster as there are fewer unique values)
     parsed_types.sort()
     parsed_types = [
-        f"{path}.{','.join(pt.rsplit('.', 1)[1] for pt in group)}"
-        for path, group in groupby(parsed_types, lambda pt: pt.rsplit(".", 1)[0])
+        f'{path}.{",".join(pt.rsplit(".", 1)[1] for pt in group)}'
+        for path, group in groupby(parsed_types, lambda pt: pt.rsplit('.', 1)[0])
     ]
 
     data_types.sort()
     data_types = [
-        f"{path}.{','.join(dt.rsplit('.', 1)[1] for dt in group)}"
-        for path, group in groupby(data_types, lambda dt: dt.rsplit(".", 1)[0])
+        f'{path}.{",".join(dt.rsplit(".", 1)[1] for dt in group)}'
+        for path, group in groupby(data_types, lambda dt: dt.rsplit('.', 1)[0])
     ]
 
     return ParsedData(parsed, data_types, parsed_types)
@@ -63,7 +63,7 @@ def parse_dict(data: dict, options: ParsingOptions, check_geojson: bool) -> Pars
     :return: a ParsedData named tuple
     """
     parsed = {}
-    data_types = [f"{key}.{DataType.type_for(value)}" for key, value in data.items()]
+    data_types = [f'{key}.{DataType.type_for(value)}' for key, value in data.items()]
     parsed_types = []
 
     if check_geojson:
@@ -80,25 +80,25 @@ def parse_dict(data: dict, options: ParsingOptions, check_geojson: bool) -> Pars
                 parsed[key], dts, pts = parse_dict(value, options, True)
             else:
                 parsed[key], dts, pts = parse_list(value, options)
-            data_types.extend(f"{key}.{dt}" for dt in dts)
-            parsed_types.extend(f"{key}.{pt}" for pt in pts)
+            data_types.extend(f'{key}.{dt}' for dt in dts)
+            parsed_types.extend(f'{key}.{pt}' for pt in pts)
         else:
             if value is None:
                 parsed[key] = {ParsedType.UNPARSED: None}
                 continue
             if not str(value):
-                parsed[key] = {ParsedType.UNPARSED: ""}
+                parsed[key] = {ParsedType.UNPARSED: ''}
                 continue
             parsed_value = parse_value(value, options)
             parsed[key] = parsed_value
-            parsed_types.extend(f"{key}.{k}" for k in parsed_value.keys())
+            parsed_types.extend(f'{key}.{k}' for k in parsed_value.keys())
 
     hint_matches = match_hints(data, options.geo_hints)
     for key, geo_data in hint_matches.items():
         # we want to add the geo data to the key's parsed data but the parsed dict is
         # a cached response from parse_value, so we have to make a copy
         parsed[key] = {**parsed[key], **geo_data}
-        parsed_types.extend(f"{key}.{k}" for k in geo_data.keys())
+        parsed_types.extend(f'{key}.{k}' for k in geo_data.keys())
 
     return ParsedData(parsed, data_types, parsed_types)
 
@@ -113,7 +113,7 @@ def parse_list(data: list, options: ParsingOptions) -> Tuple[list, set, set]:
     :return: a list of parsed values, a set of parsed types, and a set of data types
     """
     parsed: list = [None] * len(data)
-    data_types = {f".{DataType.type_for(value)}" for value in data}
+    data_types = {f'.{DataType.type_for(value)}' for value in data}
     parsed_types = set()
 
     for index, value in enumerate(data):
@@ -124,7 +124,7 @@ def parse_list(data: list, options: ParsingOptions) -> Tuple[list, set, set]:
                 parsed[index], dts, pts = parse_dict(value, options, True)
             else:
                 parsed[index], dts, pts = parse_list(value, options)
-            data_types.update(f".{dt}" for dt in dts)
+            data_types.update(f'.{dt}' for dt in dts)
             # elasticsearch completely flattens lists so when adding the parsed types we
             # just ignore the hierarchy and store the types directly in our set
             parsed_types.update(pts)

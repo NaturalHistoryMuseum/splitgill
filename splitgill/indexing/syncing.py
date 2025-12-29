@@ -37,7 +37,7 @@ class BulkOpException(Exception):
     """
 
     def __init__(self, errors: List[dict]):
-        super().__init__(f"{len(errors)} errors during bulk index. Sample: {errors[0]}")
+        super().__init__(f'{len(errors)} errors during bulk index. Sample: {errors[0]}')
         self.errors = errors
 
 
@@ -117,7 +117,7 @@ def write_ops(
 
     # return the indices back to their original settings as defined in the template
     client.indices.put_settings(
-        body={"index": {"refresh_interval": None, "number_of_replicas": None}},
+        body={'index': {'refresh_interval': None, 'number_of_replicas': None}},
         index=result.indices,
     )
 
@@ -136,7 +136,7 @@ async def setup_indices(client: AsyncElasticsearch, indices: Iterable[str]):
         if not await client.indices.exists(index=index):
             await client.indices.create(index=index)
         await client.indices.put_settings(
-            body={"index": {"refresh_interval": -1, "number_of_replicas": 0}},
+            body={'index': {'refresh_interval': -1, 'number_of_replicas': 0}},
             index=index,
         )
 
@@ -240,15 +240,15 @@ async def worker(client: AsyncElasticsearch, task_queue: Queue) -> Tuple[int, in
                     raise
 
         errors = []
-        for item in response["items"]:
+        for item in response['items']:
             action = next(iter(item.keys()))
-            error = item[action].get("error", None)
+            error = item[action].get('error', None)
             if error:
                 errors.append(item)
             else:
-                if action == "index":
+                if action == 'index':
                     indexed += 1
-                elif action == "delete":
+                elif action == 'delete':
                     deleted += 1
 
         if errors:

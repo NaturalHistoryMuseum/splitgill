@@ -1,7 +1,7 @@
 from typing import Optional, Set
 
-from splitgill.diffing import DATETIME_FORMAT, DATE_FORMAT, NAIVE_DATETIME_FORMAT
-from splitgill.model import ParsingOptions, GeoFieldHint
+from splitgill.diffing import DATE_FORMAT, DATETIME_FORMAT, NAIVE_DATETIME_FORMAT
+from splitgill.model import GeoFieldHint, ParsingOptions
 
 
 class ParsingOptionsBuilder:
@@ -18,7 +18,7 @@ class ParsingOptionsBuilder:
         # somewhat sensible representative idea to users of what the number actually is
         # and how it can be searched. This format will produce string representations of
         # numbers in scientific notation if it decides it needs to
-        self._float_format: str = "{0:.15g}"
+        self._float_format: str = '{0:.15g}'
         self._true_values: Set[str] = set()
         self._false_values: Set[str] = set()
         # add the formats we use for datetime and date objects during ingest by default
@@ -51,7 +51,7 @@ class ParsingOptionsBuilder:
             self._float_format,
         )
 
-    def with_true_value(self, value: str) -> "ParsingOptionsBuilder":
+    def with_true_value(self, value: str) -> 'ParsingOptionsBuilder':
         """
         Add the given value to the set of strings that means True and return self (for
         easy chaining). The value is lowercased before adding it to the set of accepted
@@ -67,7 +67,7 @@ class ParsingOptionsBuilder:
             self._true_values.add(value.lower())
         return self
 
-    def with_false_value(self, value: str) -> "ParsingOptionsBuilder":
+    def with_false_value(self, value: str) -> 'ParsingOptionsBuilder':
         """
         Add the given value to the set of strings that means False and return self (for
         easy chaining). The value is lowercased before adding it to the set of accepted
@@ -83,7 +83,7 @@ class ParsingOptionsBuilder:
             self._false_values.add(value.lower())
         return self
 
-    def with_date_format(self, date_format: str) -> "ParsingOptionsBuilder":
+    def with_date_format(self, date_format: str) -> 'ParsingOptionsBuilder':
         """
         Add the given date format to the set of date formats to parse and return self
         (for easing chaining). The date format should be one that datetime.strptime can
@@ -105,7 +105,7 @@ class ParsingOptionsBuilder:
         longitude_field: str,
         radius_field: Optional[str] = None,
         segments: int = 16,
-    ) -> "ParsingOptionsBuilder":
+    ) -> 'ParsingOptionsBuilder':
         """
         Add the given lat/lon/radius field combination as a hint for the existence of a
         geo parsable field. The radius field name is optional. A segments parameter can
@@ -135,7 +135,7 @@ class ParsingOptionsBuilder:
         :param longitude_field: the name of the longitude field
         :param radius_field: the name of the radius field (optional)
         :param segments: the number of segments to use when creating the circle
-                         (optional, defaults to 16)
+            (optional, defaults to 16)
         :return: self
         """
         if latitude_field and longitude_field:
@@ -144,7 +144,7 @@ class ParsingOptionsBuilder:
             self._geo_hints.add(hint)
         return self
 
-    def with_keyword_length(self, keyword_length: int) -> "ParsingOptionsBuilder":
+    def with_keyword_length(self, keyword_length: int) -> 'ParsingOptionsBuilder':
         """
         Sets the maximum keyword length which will be used when indexing. Any strings
         longer than this value will be trimmed down before they are sent to
@@ -167,14 +167,14 @@ class ParsingOptionsBuilder:
         """
         if keyword_length < 1:
             # 0 would mean no keyword values would be indexed, minus numbers are silly
-            raise ValueError("Keyword length must be greater than 0")
+            raise ValueError('Keyword length must be greater than 0')
         if keyword_length > 32766:
             # lucerne has a term byte-length limit of ~32k so cap at that
-            raise ValueError("Keyword length must be less than 32766")
+            raise ValueError('Keyword length must be less than 32766')
         self._keyword_length = keyword_length
         return self
 
-    def with_float_format(self, float_format: str) -> "ParsingOptionsBuilder":
+    def with_float_format(self, float_format: str) -> 'ParsingOptionsBuilder':
         """
         Sets the format string to use when converting a float to a string for indexing.
         The string will have its format() method called during indexing with the float
@@ -186,7 +186,7 @@ class ParsingOptionsBuilder:
         self._float_format = float_format
         return self
 
-    def clear_date_formats(self) -> "ParsingOptionsBuilder":
+    def clear_date_formats(self) -> 'ParsingOptionsBuilder':
         """
         Clears out the date formats in this builder. Note that this will remove the
         default formats which handle the default way Splitgill handles datetime and date
@@ -197,7 +197,7 @@ class ParsingOptionsBuilder:
         self._date_formats.clear()
         return self
 
-    def reset_date_formats(self) -> "ParsingOptionsBuilder":
+    def reset_date_formats(self) -> 'ParsingOptionsBuilder':
         """
         Reset the date formats in this builder back to the default set.
 
@@ -209,7 +209,7 @@ class ParsingOptionsBuilder:
         self._date_formats.add(NAIVE_DATETIME_FORMAT)
         return self
 
-    def clear_true_values(self) -> "ParsingOptionsBuilder":
+    def clear_true_values(self) -> 'ParsingOptionsBuilder':
         """
         Clear out all true values in this builder.
 
@@ -218,7 +218,7 @@ class ParsingOptionsBuilder:
         self._true_values.clear()
         return self
 
-    def clear_false_values(self) -> "ParsingOptionsBuilder":
+    def clear_false_values(self) -> 'ParsingOptionsBuilder':
         """
         Clear out all false values in this builder.
 
@@ -227,7 +227,7 @@ class ParsingOptionsBuilder:
         self._false_values.clear()
         return self
 
-    def clear_geo_hints(self) -> "ParsingOptionsBuilder":
+    def clear_geo_hints(self) -> 'ParsingOptionsBuilder':
         """
         Clear out all geo hints in this builder.
 
