@@ -18,7 +18,7 @@ from splitgill.model import ParsingOptions
 
 @pytest.fixture
 def mongo_client() -> MongoClient:
-    with MongoClient(getenv("SPLITGILL_MONGO_HOST", "mongo"), 27017) as client:
+    with MongoClient(getenv('SPLITGILL_MONGO_HOST', 'mongo'), 27017) as client:
         yield client
         database_names = client.list_database_names()
         for name in database_names:
@@ -31,26 +31,26 @@ def mongo_client() -> MongoClient:
 
 @pytest.fixture
 def mongo_database(mongo_client: MongoClient) -> Database:
-    yield mongo_client["test"]
+    yield mongo_client['test']
 
 
 @pytest.fixture
 def mongo_collection(mongo_database: Database) -> Collection:
-    yield mongo_database["test"]
+    yield mongo_database['test']
 
 
 @pytest.fixture
 def es_node_configs() -> List[NodeConfig]:
-    node_configs = [NodeConfig("http", getenv("SPLITGILL_ES_HOST", "es"), 9200)]
+    node_configs = [NodeConfig('http', getenv('SPLITGILL_ES_HOST', 'es'), 9200)]
 
     yield node_configs
 
     with Elasticsearch(node_configs) as es:
-        es.indices.delete(index="*")
-        index_templates = es.indices.get_index_template(name="*")
-        for index_template in index_templates["index_templates"]:
+        es.indices.delete(index='*')
+        index_templates = es.indices.get_index_template(name='*')
+        for index_template in index_templates['index_templates']:
             with suppress(Exception):
-                es.indices.delete_index_template(name=index_template["name"])
+                es.indices.delete_index_template(name=index_template['name'])
 
 
 @pytest.fixture
@@ -76,27 +76,27 @@ def splitgill(
 
 @pytest.fixture
 def database(splitgill: SplitgillClient) -> SplitgillDatabase:
-    return splitgill.get_database("test-db")
+    return splitgill.get_database('test-db')
 
 
 @pytest.fixture
 def geojson_point() -> dict:
-    return {"type": "Point", "coordinates": [30, 10]}
+    return {'type': 'Point', 'coordinates': [30, 10]}
 
 
 @pytest.fixture
 def geojson_linestring() -> dict:
     return {
-        "type": "LineString",
-        "coordinates": [[10, 10], [20, 10], [20, 20]],
+        'type': 'LineString',
+        'coordinates': [[10, 10], [20, 10], [20, 20]],
     }
 
 
 @pytest.fixture
 def geojson_polygon() -> dict:
     return {
-        "type": "Polygon",
-        "coordinates": [[[10, 10], [20, 10], [20, 20], [10, 20], [10, 10]]],
+        'type': 'Polygon',
+        'coordinates': [[[10, 10], [20, 10], [20, 20], [10, 20], [10, 10]]],
     }
 
 
@@ -104,8 +104,8 @@ def geojson_polygon() -> dict:
 def geojson_holed_polygon() -> dict:
     # this is a lovely square with an hourglass like shape hole
     return {
-        "type": "Polygon",
-        "coordinates": [
+        'type': 'Polygon',
+        'coordinates': [
             [[10, 10], [20, 10], [20, 20], [10, 20], [10, 10]],
             [[12, 12], [14, 15], [12, 18], [18, 18], [16, 15], [18, 12], [12, 12]],
         ],
@@ -137,26 +137,26 @@ def basic_options() -> ParsingOptions:
     return (
         ParsingOptionsBuilder()
         .with_keyword_length(8191)
-        .with_float_format("{0:.15g}")
-        .with_true_value("true")
-        .with_true_value("yes")
-        .with_true_value("y")
-        .with_false_value("false")
-        .with_false_value("no")
-        .with_false_value("n")
-        .with_date_format("%Y-%m-%d")
-        .with_date_format("%Y-%m-%dT%H:%M:%S")
-        .with_date_format("%Y-%m-%dT%H:%M:%S.%f")
-        .with_date_format("%Y-%m-%d %H:%M:%S")
-        .with_date_format("%Y-%m-%d %H:%M:%S.%f")
-        .with_date_format("%Y-%m-%dT%H:%M:%S%z")
-        .with_date_format("%Y-%m-%dT%H:%M:%S.%f%z")
-        .with_date_format("%Y-%m-%d %H:%M:%S%z")
-        .with_date_format("%Y-%m-%d %H:%M:%S.%f%z")
-        .with_geo_hint("lat", "lon")
-        .with_geo_hint("latitude", "longitude", "radius")
+        .with_float_format('{0:.15g}')
+        .with_true_value('true')
+        .with_true_value('yes')
+        .with_true_value('y')
+        .with_false_value('false')
+        .with_false_value('no')
+        .with_false_value('n')
+        .with_date_format('%Y-%m-%d')
+        .with_date_format('%Y-%m-%dT%H:%M:%S')
+        .with_date_format('%Y-%m-%dT%H:%M:%S.%f')
+        .with_date_format('%Y-%m-%d %H:%M:%S')
+        .with_date_format('%Y-%m-%d %H:%M:%S.%f')
+        .with_date_format('%Y-%m-%dT%H:%M:%S%z')
+        .with_date_format('%Y-%m-%dT%H:%M:%S.%f%z')
+        .with_date_format('%Y-%m-%d %H:%M:%S%z')
+        .with_date_format('%Y-%m-%d %H:%M:%S.%f%z')
+        .with_geo_hint('lat', 'lon')
+        .with_geo_hint('latitude', 'longitude', 'radius')
         .with_geo_hint(
-            "decimalLatitude", "decimalLongitude", "coordinateUncertaintyInMeters"
+            'decimalLatitude', 'decimalLongitude', 'coordinateUncertaintyInMeters'
         )
         .build()
     )

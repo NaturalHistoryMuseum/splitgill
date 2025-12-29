@@ -25,8 +25,8 @@ from splitgill.model import IngestResult, MongoRecord, ParsingOptions, Record
 from splitgill.search import version_query
 from splitgill.utils import iter_terms, now, partition
 
-OPTIONS_COLLECTION_NAME = "options"
-LOCKS_COLLECTION_NAME = "locks"
+OPTIONS_COLLECTION_NAME = 'options'
+LOCKS_COLLECTION_NAME = 'locks'
 
 
 class SplitgillClient:
@@ -39,14 +39,14 @@ class SplitgillClient:
         self,
         mongo: MongoClient,
         elasticsearch: Elasticsearch,
-        mongo_database_name: str = "sg",
+        mongo_database_name: str = 'sg',
     ):
         self.mongo = mongo
         self.elasticsearch = elasticsearch
         self.mongo_database_name = mongo_database_name
         self.lock_manager = LockManager(self.get_lock_collection())
 
-    def get_database(self, name: str) -> "SplitgillDatabase":
+    def get_database(self, name: str) -> 'SplitgillDatabase':
         """
         Returns a SplitgillDatabase object.
 
@@ -78,7 +78,7 @@ class SplitgillClient:
         :param name: the name of the Splitgill database
         :return: a pymongo Collection object
         """
-        return self.get_mongo_database().get_collection(f"data-{name}")
+        return self.get_mongo_database().get_collection(f'data-{name}')
 
     def get_lock_collection(self) -> Collection:
         """
@@ -96,9 +96,9 @@ class SearchVersion(Enum):
     """
 
     # searches the latest data
-    latest = "latest"
+    latest = 'latest'
     # searches all data
-    all = "all"
+    all = 'all'
 
 
 class SplitgillDatabase:
@@ -150,12 +150,12 @@ class SplitgillDatabase:
         )
         if result:
             latest_arc_index = max(
-                int(arc_index_name.split("-")[-1]) for arc_index_name in result.keys()
+                int(arc_index_name.split('-')[-1]) for arc_index_name in result.keys()
             )
             count_result = self._client.elasticsearch.count(
                 index=self.indices.get_arc(latest_arc_index)
             )
-            return ArcStatus(latest_arc_index, count_result["count"])
+            return ArcStatus(latest_arc_index, count_result['count'])
         else:
             return ArcStatus(0, 0)
 
@@ -167,13 +167,13 @@ class SplitgillDatabase:
 
         :return: the max version or None
         """
-        sort = [("version", DESCENDING)]
+        sort = [('version', DESCENDING)]
         last_data = self.data_collection.find_one(sort=sort)
-        last_options = self.options_collection.find_one({"name": self.name}, sort=sort)
+        last_options = self.options_collection.find_one({'name': self.name}, sort=sort)
 
-        last_data_version = last_data.get("version") if last_data is not None else None
+        last_data_version = last_data.get('version') if last_data is not None else None
         last_options_version = (
-            last_options.get("version") if last_options is not None else None
+            last_options.get('version') if last_options is not None else None
         )
         # there's no committed data or options
         if last_data_version is None and last_options_version is None:
@@ -197,13 +197,13 @@ class SplitgillDatabase:
         version = None
         for field in (DocumentField.VERSION, DocumentField.NEXT):
             result = self._client.elasticsearch.search(
-                aggs={"max_version": {"max": {"field": field}}},
+                aggs={'max_version': {'max': {'field': field}}},
                 size=0,
                 # search all indices so that we catch deletes which won't have a
                 # document in latest
                 index=self.indices.wildcard,
             )
-            value = get_in(("aggregations", "max_version", "value"), result, None)
+            value = get_in(('aggregations', 'max_version', 'value'), result, None)
             if value is not None and (version is None or value > version):
                 version = value
 
@@ -236,7 +236,7 @@ class SplitgillDatabase:
 
         :return: True if there is data, False if not
         """
-        return self.data_collection.find_one({"version": {"$ne": None}}) is not None
+        return self.data_collection.find_one({'version': {'$ne': None}}) is not None
 
     def has_options(self) -> bool:
         """
@@ -245,7 +245,7 @@ class SplitgillDatabase:
 
         :return: True if there is options, False if not
         """
-        return self.options_collection.find_one({"version": {"$ne": None}}) is not None
+        return self.options_collection.find_one({'version': {'$ne': None}}) is not None
 
     def commit(self) -> Optional[int]:
         """
@@ -260,7 +260,7 @@ class SplitgillDatabase:
         """
         # todo: global now?
         # todo: transaction/rollback? Can't do this without replicasets so who knows?
-        with self.locker.lock(self.name, stage="commit"):
+        with self.locker.lock(self.name, stage='commit'):
             if not self.has_uncommitted_data() and not self.has_uncommitted_options():
                 # nothing to commit, so nothing to do
                 return None
@@ -276,7 +276,7 @@ class SplitgillDatabase:
             # update the uncommitted data and options in a transaction
             for collection in [self.data_collection, self.options_collection]:
                 collection.update_many(
-                    filter={"version": None}, update={"$set": {"version": version}}
+                    filter={'version': None}, update={'$set': {'version': version}}
                 )
             return version
 
@@ -314,7 +314,7 @@ class SplitgillDatabase:
         """
         # this does nothing if the indexes already exist
         self.data_collection.create_indexes(
-            [IndexModel([("id", ASCENDING)]), IndexModel([("version", DESCENDING)])]
+            [IndexModel([('id', ASCENDING)]), IndexModel([('version', DESCENDING)])]
         )
 
         result = IngestResult()
@@ -361,10 +361,10 @@ class SplitgillDatabase:
         # either the options are completely new or they differ from the existing
         # options, write a fresh entry
         new_doc = {
-            "name": self.name,
+            'name': self.name,
             # version = None to indicate this is an uncommitted change
-            "version": None,
-            "options": options.to_doc(),
+            'version': None,
+            'options': options.to_doc(),
         }
         self.options_collection.insert_one(new_doc)
 
@@ -381,7 +381,7 @@ class SplitgillDatabase:
 
         :return: the number of documents deleted
         """
-        return self.options_collection.delete_many({"version": None}).deleted_count
+        return self.options_collection.delete_many({'version': None}).deleted_count
 
     def rollback_records(self):
         """
@@ -401,7 +401,7 @@ class SplitgillDatabase:
 
         :return: returns True if there are any uncommitted records, False if not
         """
-        return self.data_collection.find_one({"version": None}) is not None
+        return self.data_collection.find_one({'version': None}) is not None
 
     def has_uncommitted_options(self) -> bool:
         """
@@ -409,7 +409,7 @@ class SplitgillDatabase:
 
         :return: returns True if there are any uncommitted options, False if not
         """
-        return self.options_collection.find_one({"version": None}) is not None
+        return self.options_collection.find_one({'version': None}) is not None
 
     def get_options(self, include_uncommitted=False) -> Dict[int, ParsingOptions]:
         """
@@ -420,9 +420,9 @@ class SplitgillDatabase:
         :return: a dict of versions and options
         """
         return {
-            doc["version"]: ParsingOptions.from_doc(doc["options"])
-            for doc in self.options_collection.find({"name": self.name})
-            if include_uncommitted or doc["version"] is not None
+            doc['version']: ParsingOptions.from_doc(doc['options'])
+            for doc in self.options_collection.find({'name': self.name})
+            if include_uncommitted or doc['version'] is not None
         }
 
     def iter_records(self, **find_kwargs) -> Iterable[MongoRecord]:
@@ -477,7 +477,7 @@ class SplitgillDatabase:
         last_sync = self.get_elasticsearch_version() if not resync else None
         if last_sync is None:
             # elasticsearch has nothing so find all committed records
-            find_filter = {"version": {"$ne": None}}
+            find_filter = {'version': {'$ne': None}}
         else:
             committed_version = self.get_committed_version()
             if last_sync >= committed_version:
@@ -487,10 +487,10 @@ class SplitgillDatabase:
             if any(version > last_sync for version in all_options):
                 # there's an options change ahead, this means we need to check all
                 # records again, so filter out committed records only
-                find_filter = {"version": {"$ne": None}}
+                find_filter = {'version': {'$ne': None}}
             else:
                 # find all the updated records that haven't had their updates synced yet
-                find_filter = {"version": {"$gt": last_sync}}
+                find_filter = {'version': {'$gt': last_sync}}
 
         if resync:
             # delete all arcs
@@ -547,7 +547,7 @@ class SplitgillDatabase:
                     # deleted them all
                     self.get_arc_status(),
                     # get all committed records
-                    self.iter_records(filter={"version": {"$ne": None}}),
+                    self.iter_records(filter={'version': {'$ne': None}}),
                     # get all committed options
                     self.get_options(include_uncommitted=False),
                     None,
@@ -657,7 +657,7 @@ class SplitgillDatabase:
 
         # create the basic field objects and add type counts
         for term in iter_terms(search, DocumentField.DATA_TYPES):
-            path, raw_types = term.value.rsplit(".", 1)
+            path, raw_types = term.value.rsplit('.', 1)
             if path not in fields:
                 fields[path] = DataField(path)
             fields[path].add(raw_types, term.count)
@@ -666,10 +666,10 @@ class SplitgillDatabase:
         for field in fields.values():
             if not field.is_container:
                 continue
-            target_dot_count = field.path.count(".") + 1
+            target_dot_count = field.path.count('.') + 1
             for child in fields.values():
-                if child.path.count(".") == target_dot_count and child.path.startswith(
-                    f"{field.path}."
+                if child.path.count('.') == target_dot_count and child.path.startswith(
+                    f'{field.path}.'
                 ):
                     field.children.append(child)
                     child.parent = field
@@ -679,7 +679,7 @@ class SplitgillDatabase:
         # reverse order of the order we want them applied.
         # descending depth (so fields closest to the root first)
         data_fields = sorted(
-            fields.values(), key=lambda f: f.path.count("."), reverse=True
+            fields.values(), key=lambda f: f.path.count('.'), reverse=True
         )
         # ascending alphabetical order
         data_fields.sort(key=lambda f: f.path)
@@ -708,7 +708,7 @@ class SplitgillDatabase:
 
         # create the basic field objects and add type counts
         for term in iter_terms(search, DocumentField.PARSED_TYPES):
-            path, raw_types = term.value.rsplit(".", 1)
+            path, raw_types = term.value.rsplit('.', 1)
             if path not in fields:
                 fields[path] = ParsedField(path)
             fields[path].add(raw_types, term.count)
@@ -718,7 +718,7 @@ class SplitgillDatabase:
         # in the reverse order of the order we want them applied.
         # descending depth (so fields closest to the root first)
         parsed_fields = sorted(
-            fields.values(), key=lambda f: f.path.count("."), reverse=True
+            fields.values(), key=lambda f: f.path.count('.'), reverse=True
         )
         # ascending alphabetical order
         parsed_fields.sort(key=lambda f: f.path)

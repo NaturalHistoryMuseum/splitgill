@@ -28,7 +28,7 @@ class LockManager:
         """
         self.lock_collection = lock_collection
         # does nothing if this already exists
-        self.lock_collection.create_index("lock_id", unique=True)
+        self.lock_collection.create_index('lock_id', unique=True)
 
     def acquire(self, lock_id: str, raise_on_fail: bool = False, **kwargs) -> bool:
         """
@@ -46,12 +46,12 @@ class LockManager:
         """
         try:
             doc = {
-                "lock_id": lock_id,
-                "locked_at": datetime.now(timezone.utc),
-                "locked_by": platform.node(),
+                'lock_id': lock_id,
+                'locked_at': datetime.now(timezone.utc),
+                'locked_by': platform.node(),
             }
             if kwargs:
-                doc["data"] = kwargs
+                doc['data'] = kwargs
             self.lock_collection.insert_one(doc)
         except DuplicateKeyError:
             if raise_on_fail:
@@ -66,7 +66,7 @@ class LockManager:
 
         :param lock_id: the ID of the lock to release
         """
-        self.lock_collection.delete_one({"lock_id": lock_id})
+        self.lock_collection.delete_one({'lock_id': lock_id})
 
     def is_locked(self, lock_id: str) -> bool:
         """
@@ -85,7 +85,7 @@ class LockManager:
         :param lock_id:
         :return:
         """
-        return self.lock_collection.find_one({"lock_id": lock_id})
+        return self.lock_collection.find_one({'lock_id': lock_id})
 
     @contextmanager
     def lock(self, lock_id: str, **kwargs):

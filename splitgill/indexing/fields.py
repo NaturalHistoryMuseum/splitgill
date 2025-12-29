@@ -9,7 +9,7 @@ from strenum import LowercaseStrEnum, StrEnum
 # special field containing the record's ID so that it can be used for searching etc.
 # Internally, Splitgill doesn't need this, but it's included for user convenience in
 # every record as data._id / parsed._id.
-DATA_ID_FIELD = "_id"
+DATA_ID_FIELD = '_id'
 
 
 class DocumentField(LowercaseStrEnum):
@@ -54,21 +54,21 @@ class ParsedType(StrEnum):
     """
 
     # the unparsed raw field value
-    UNPARSED = "_u"
+    UNPARSED = '_u'
     # the number field
-    NUMBER = "_n"
+    NUMBER = '_n'
     # the date field
-    DATE = "_d"
+    DATE = '_d'
     # the boolean field
-    BOOLEAN = "_b"
+    BOOLEAN = '_b'
     # the text field
-    TEXT = "_t"
+    TEXT = '_t'
     # the keyword case-insensitive field
-    KEYWORD = "_k"
+    KEYWORD = '_k'
     # the geo point field (shape centroid, will always be a point)
-    GEO_POINT = "_gp"
+    GEO_POINT = '_gp'
     # the geo shape field (full shape, could be point, linestring, or polygon)
-    GEO_SHAPE = "_gs"
+    GEO_SHAPE = '_gs'
 
     def path_to(self, field: str, full: bool = True) -> str:
         """
@@ -98,12 +98,12 @@ def parsed_path(
     :return: the path
     """
     if parsed_type is not None:
-        path = f"{field}.{parsed_type}"
+        path = f'{field}.{parsed_type}'
     else:
         path = field
 
     if full:
-        return f"{DocumentField.DATA}.{path}"
+        return f'{DocumentField.DATA}.{path}'
     else:
         return path
 
@@ -118,13 +118,13 @@ class DataType(LowercaseStrEnum):
     The types represented here should match the output of diffing.prepare_data.
     """
 
-    NONE = "#n"
-    STR = "#s"
-    INT = "#i"
-    FLOAT = "#f"
-    BOOL = "#b"
-    LIST = "#l"
-    DICT = "#d"
+    NONE = '#n'
+    STR = '#s'
+    INT = '#i'
+    FLOAT = '#f'
+    BOOL = '#b'
+    LIST = '#l'
+    DICT = '#d'
 
     @classmethod
     def type_for(cls, value: Union[str, int, float, bool, dict, list, None]):
@@ -137,9 +137,9 @@ class DataType(LowercaseStrEnum):
         """
         if value is not None and not isinstance(value, valid_data_types):
             raise TypeError(
-                f"Type ({type(value)}) of value ({value}) not valid DataType"
+                f'Type ({type(value)}) of value ({value}) not valid DataType'
             )
-        return DataType(f"#{type(value).__name__[0].lower()}")
+        return DataType(f'#{type(value).__name__[0].lower()}')
 
 
 @dataclasses.dataclass
@@ -156,10 +156,10 @@ class DataField:
     # given types
     type_counts: CounterType[DataType] = dataclasses.field(default_factory=Counter)
     # the parent data field (if None, this is a field at the root of the record data)
-    parent: Optional["DataField"] = None
+    parent: Optional['DataField'] = None
     # the immediate descendants of this field (will only have values if this field
     # appears as a list or dict
-    children: List["DataField"] = dataclasses.field(default_factory=list)
+    children: List['DataField'] = dataclasses.field(default_factory=list)
 
     def add(self, type_names: str, count: int):
         """
@@ -170,7 +170,7 @@ class DataField:
         :param count: the number of records with this combination of types
         """
         self.count += count
-        for name in type_names.split(","):
+        for name in type_names.split(','):
             self.type_counts[DataType(name)] += count
 
     def is_type(self, *data_types: DataType) -> bool:
@@ -189,7 +189,7 @@ class DataField:
 
     @property
     def name(self) -> str:
-        return self.path.split(".")[-1]
+        return self.path.split('.')[-1]
 
     @property
     def is_none(self) -> bool:
@@ -268,11 +268,11 @@ class DataField:
 
         :return: a str path
         """
-        return ".".join(filter(None, self.path.split(".")))
+        return '.'.join(filter(None, self.path.split('.')))
 
     @property
     def is_list_element(self) -> bool:
-        return self.name == ""
+        return self.name == ''
 
 
 @dataclasses.dataclass
@@ -294,7 +294,7 @@ class ParsedField:
         :param count: the number of records with this combination of types
         """
         self.count += count
-        for raw_type in type_names.split(","):
+        for raw_type in type_names.split(','):
             self.type_counts[ParsedType(raw_type)] += count
 
     def is_type(self, *parsed_types: ParsedType) -> bool:
@@ -309,7 +309,7 @@ class ParsedField:
 
     @property
     def name(self) -> str:
-        return self.path.split(".")[-1]
+        return self.path.split('.')[-1]
 
     @property
     def is_text(self) -> bool:

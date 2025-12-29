@@ -24,23 +24,23 @@ from splitgill.indexing.fields import DATA_ID_FIELD
 
 # strftime formats used to turn datetime and date objects into strings before data
 # enters MongoDB (see prepare_data), these are based on ISO 8601
-DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%f%z"
-DATE_FORMAT = "%Y-%m-%d"
+DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%S.%f%z'
+DATE_FORMAT = '%Y-%m-%d'
 # when we turn a naive datetime into a string using the DATETIME_FORMAT above, %z won't
 # appear meaning we can't strptime with the same format. This is annoying, so here's a
 # strptime format that can parse this native result
-NAIVE_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%f"
+NAIVE_DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%S.%f'
 # a convenient tuple of all the datetime formats Splitgill uses internally
 SG_DATE_FORMATS = (DATETIME_FORMAT, DATE_FORMAT, NAIVE_DATETIME_FORMAT)
 
 # this regex matches invalid characters which we would like to remove from all string
 # values as they are ingested into the system. It matches unicode control characters
 # (i.e. category C*) but not \n, \r, or \t).
-invalid_value_char_regex = rx.compile(r"[^\P{C}\n\r\t]")
+invalid_value_char_regex = rx.compile(r'[^\P{C}\n\r\t]')
 # this regex matches invalid characters which we would like to remove from all field
 # names as they are ingested into the system. It matches all unicode control characters,
 # so it's a bit stricter than the value regex which allows new lines and tabs
-invalid_key_char_regex = rx.compile(r"[^\P{C}]")
+invalid_key_char_regex = rx.compile(r'[^\P{C}]')
 
 
 def prepare_data(
@@ -68,7 +68,7 @@ def prepare_data(
 
     if isinstance(value, str):
         # replace any invalid characters in the string with the empty string
-        return invalid_value_char_regex.sub("", value)
+        return invalid_value_char_regex.sub('', value)
 
     if isinstance(value, (int, float, bool)):
         return value
@@ -114,16 +114,16 @@ def prepare_field_name(name: Any) -> str:
     :param name: the field name
     :return: a clean str field name
     """
-    clean_name = invalid_key_char_regex.sub("", str(name)).replace(".", "_").strip()
+    clean_name = invalid_key_char_regex.sub('', str(name)).replace('.', '_').strip()
     # if this results in the empty string, replace with a hyphen
     if not clean_name:
-        return "-"
+        return '-'
 
     if name == DATA_ID_FIELD:
         return DATA_ID_FIELD
 
-    if clean_name[0] == "_":
-        clean_name = f"-{clean_name[1:]}"
+    if clean_name[0] == '_':
+        clean_name = f'-{clean_name[1:]}'
     return clean_name
 
 
@@ -138,7 +138,7 @@ class DiffOp(NamedTuple):
     ops: Dict[str, Any]
 
 
-_T = TypeVar("_T")
+_T = TypeVar('_T')
 
 
 @dataclass
@@ -152,7 +152,7 @@ class Comparison(abc.ABC, Generic[_T]):
     right: _T
 
     @abc.abstractmethod
-    def compare(self) -> Tuple[Optional[DiffOp], List["Comparison"]]:
+    def compare(self) -> Tuple[Optional[DiffOp], List['Comparison']]:
         """
         Compare the two objects and return a 2-tuple containing a DiffOp and a list of
         further comparisons which need to be handled. If no differences are found, then
@@ -168,7 +168,7 @@ class DictComparison(Comparison[dict]):
     A comparison between two dicts.
     """
 
-    def compare(self) -> Tuple[Optional[DiffOp], List["Comparison"]]:
+    def compare(self) -> Tuple[Optional[DiffOp], List['Comparison']]:
         """
         Compares the two dicts and return a 2-tuple containing a DiffOp and a list of
         further comparisons which need to be handled. If no differences are found, then
@@ -184,11 +184,11 @@ class DictComparison(Comparison[dict]):
             key: value for key, value in self.right.items() if key not in self.left
         }
         if new_values:
-            ops["dn"] = new_values
+            ops['dn'] = new_values
 
         deleted_keys = [key for key in self.left if key not in self.right]
         if deleted_keys:
-            ops["dd"] = deleted_keys
+            ops['dd'] = deleted_keys
 
         changes = {}
         for key, left_value in self.left.items():
@@ -211,7 +211,7 @@ class DictComparison(Comparison[dict]):
             else:
                 changes[key] = right_value
         if changes:
-            ops["dc"] = changes
+            ops['dc'] = changes
 
         return DiffOp(self.path, ops) if ops else None, further_comparisons
 
@@ -222,7 +222,7 @@ class ListComparison(Comparison[list]):
     A comparison between two lists.
     """
 
-    def compare(self) -> Tuple[DiffOp, List["Comparison"]]:
+    def compare(self) -> Tuple[DiffOp, List['Comparison']]:
         """
         Compares the two lists and return a 2-tuple containing a DiffOp and a list of
         further comparisons which need to be handled. If no differences are found, then
@@ -244,13 +244,13 @@ class ListComparison(Comparison[list]):
             if left_value is missing:
                 # the right list is longer, so store all the new values so that they can
                 # just be added to the left list to patch it, and stop
-                ops["ln"] = self.right[index:]
+                ops['ln'] = self.right[index:]
                 break
             elif right_value is missing:
                 # the left value is longer, so store the index from which elements in
                 # the left list will be deleted to shorten it to the length of the right
                 # list, and stop
-                ops["ld"] = index
+                ops['ld'] = index
                 break
             else:
                 # a change in the values at this index in each list, check for nested
@@ -267,7 +267,7 @@ class ListComparison(Comparison[list]):
                 else:
                     changes.append((index, right_value))
         if changes:
-            ops["lc"] = changes
+            ops['lc'] = changes
 
         return DiffOp(self.path, ops) if ops else None, further_comparisons
 
@@ -300,7 +300,7 @@ def diff(base: dict, new: dict) -> Iterable[DiffOp]:
         return
 
     if not isinstance(base, dict) or not isinstance(new, dict):
-        raise DiffingTypeComparisonException("Both base and new must be dicts")
+        raise DiffingTypeComparisonException('Both base and new must be dicts')
 
     # todo: we could write a shortcut when one of the dicts is empty
 
@@ -355,21 +355,21 @@ def patch(base: dict, ops: Collection[DiffOp]) -> dict:
             target = target_copy
 
         # dict ops
-        if "dc" in op:
-            target.update(op["dc"])
-        if "dn" in op:
-            target.update(op["dn"])
-        if "dd" in op:
-            for key in op["dd"]:
+        if 'dc' in op:
+            target.update(op['dc'])
+        if 'dn' in op:
+            target.update(op['dn'])
+        if 'dd' in op:
+            for key in op['dd']:
                 del target[key]
 
         # list ops
-        if "lc" in op:
-            for index, value in op["lc"]:
+        if 'lc' in op:
+            for index, value in op['lc']:
                 target[index] = value
-        if "ln" in op:
-            target.extend(op["ln"])
-        if "ld" in op:
-            del target[op["ld"] :]
+        if 'ln' in op:
+            target.extend(op['ln'])
+        if 'ld' in op:
+            del target[op['ld'] :]
 
     return new

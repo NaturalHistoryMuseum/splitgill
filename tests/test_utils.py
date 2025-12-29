@@ -34,18 +34,18 @@ class TestToTimestamp:
 
 class TestParseTimestamp:
     def test_default_no_tz(self):
-        assert parse_to_timestamp("2012-01-14", "%Y-%m-%d") == 1326499200000
+        assert parse_to_timestamp('2012-01-14', '%Y-%m-%d') == 1326499200000
 
     def test_default_no_tz_is_utc(self):
-        no_tz = parse_to_timestamp("2012-01-14", "%Y-%m-%d")
-        with_utc_tz = parse_to_timestamp("2012-01-14", "%Y-%m-%d", timezone.utc)
+        no_tz = parse_to_timestamp('2012-01-14', '%Y-%m-%d')
+        with_utc_tz = parse_to_timestamp('2012-01-14', '%Y-%m-%d', timezone.utc)
         assert no_tz == with_utc_tz
 
     def test_different_tz(self):
         five_hours_behind = timezone(timedelta(hours=-5))
         assert (
             parse_to_timestamp(
-                "2012-01-14 15:30:54", "%Y-%m-%d %H:%M:%S", five_hours_behind
+                '2012-01-14 15:30:54', '%Y-%m-%d %H:%M:%S', five_hours_behind
             )
             == 1326573054000
         )
@@ -54,7 +54,7 @@ class TestParseTimestamp:
         # if UTC was used instead of the tz in the formatted string, we'd expect to get
         # 1326555054000 as the result
         assert (
-            parse_to_timestamp("2012-01-14 15:30:54 +0300", "%Y-%m-%d %H:%M:%S %z")
+            parse_to_timestamp('2012-01-14 15:30:54 +0300', '%Y-%m-%d %H:%M:%S %z')
             == 1326544254000
         )
 
@@ -64,13 +64,13 @@ class TestParseTimestamp:
         # it is ignored because the timezone is specified in the formatted string
         assert (
             parse_to_timestamp(
-                "2012-01-14 15:30:54 +0300", "%Y-%m-%d %H:%M:%S %z", ten_hours_ahead
+                '2012-01-14 15:30:54 +0300', '%Y-%m-%d %H:%M:%S %z', ten_hours_ahead
             )
             == 1326544254000
         )
 
 
-@freeze_time("2012-01-14 12:00:01")
+@freeze_time('2012-01-14 12:00:01')
 def test_now():
     assert now() == 1326542401000
 

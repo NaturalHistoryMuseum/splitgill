@@ -102,21 +102,21 @@ def iter_terms(search: Search, field: str, chunk_size: int = 50) -> Iterable[Ter
         # search to work with
         agg_search = search[:0]
         agg_search.aggs.bucket(
-            "values",
-            "composite",
+            'values',
+            'composite',
             size=chunk_size,
-            sources={"value": A("terms", field=field)},
+            sources={'value': A('terms', field=field)},
         )
         if after is not None:
-            agg_search.aggs["values"].after = after
+            agg_search.aggs['values'].after = after
 
         result = agg_search.execute().aggs.to_dict()
 
-        buckets = get_in(("values", "buckets"), result, [])
-        after = get_in(("values", "after_key"), result, None)
+        buckets = get_in(('values', 'buckets'), result, [])
+        after = get_in(('values', 'after_key'), result, None)
         if not buckets:
             break
         else:
             yield from (
-                Term(bucket["key"]["value"], bucket["doc_count"]) for bucket in buckets
+                Term(bucket['key']['value'], bucket['doc_count']) for bucket in buckets
             )

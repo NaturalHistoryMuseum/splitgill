@@ -81,8 +81,8 @@ def generate_ops(
         records_by_id = {record.id: record for record in chunk}
         # find if any of the records to be added/updated already exist in the collection
         existing = {
-            doc["id"]: MongoRecord(**doc)
-            for doc in data_collection.find({"id": {"$in": list(records_by_id)}})
+            doc['id']: MongoRecord(**doc)
+            for doc in data_collection.find({'id': {'$in': list(records_by_id)}})
         }
 
         # shortcut if no records exist
@@ -90,9 +90,9 @@ def generate_ops(
             yield from (
                 InsertOne(
                     {
-                        "id": record.id,
-                        "data": prepare_record_data(record),
-                        "version": None,
+                        'id': record.id,
+                        'data': prepare_record_data(record),
+                        'version': None,
                     }
                 )
                 for record in records_by_id.values()
@@ -111,7 +111,7 @@ def generate_ops(
 
             if record_id not in existing:
                 # the record is new, insert and carry on to the next
-                yield InsertOne({"id": record_id, "data": new_data, "version": None})
+                yield InsertOne({'id': record_id, 'data': new_data, 'version': None})
                 continue
 
             existing_record = existing[record_id]
@@ -122,11 +122,11 @@ def generate_ops(
                 if not existing_record.diffs:
                     if not record.data:
                         # the uncommitted record is being deleted, so delete it!
-                        yield DeleteOne({"id": record.id})
+                        yield DeleteOne({'id': record.id})
                     elif any(diff(new_data, existing_record.data)):
                         # the current record has one uncommitted version of the data and
                         # no previous versions, just replace its data with the new data
-                        yield UpdateOne({"id": record.id}, {"$set": {"data": new_data}})
+                        yield UpdateOne({'id': record.id}, {'$set': {'data': new_data}})
                     # the existing and new data are the same, nothing to do
                     continue
                 else:
@@ -160,15 +160,15 @@ def generate_ops(
                 # the existing record has been updated, yield the op necessary to
                 # update it in mongo
                 yield UpdateOne(
-                    {"id": record.id},
+                    {'id': record.id},
                     {
-                        "$set": {
+                        '$set': {
                             # set new latest data
-                            "data": new_data,
+                            'data': new_data,
                             # set version to None to indicate the change is uncommitted
-                            "version": None,
+                            'version': None,
                             # add diff at previous version
-                            f"diffs.{existing_record.version}": changes,
+                            f'diffs.{existing_record.version}': changes,
                         },
                     },
                 )
@@ -188,11 +188,11 @@ def generate_rollback_ops(data_collection: Collection) -> Iterable[MongoBulkOp]:
     :param data_collection: the data collection to operate on
     :return: yields bulk Mongo ops
     """
-    for doc in data_collection.find({"version": None}):
+    for doc in data_collection.find({'version': None}):
         record = MongoRecord(**doc)
         if not record.diffs:
             # the record is just uncommitted data and nothing else, just delete it
-            yield DeleteOne({"id": record.id})
+            yield DeleteOne({'id': record.id})
         else:
             # there is uncommitted data on this record, roll it back and then update
             op = revert_record(record)
@@ -222,15 +222,15 @@ def revert_record(record: MongoRecord) -> Optional[UpdateOne]:
     record.version, record.data = next(islice(record.iter(), 1, None), None)
     del record.diffs[str(record.version)]
     return UpdateOne(
-        {"id": record.id},
+        {'id': record.id},
         {
-            "$set": {
+            '$set': {
                 # update the data and the version
-                "data": record.data,
-                "version": record.version,
+                'data': record.data,
+                'version': record.version,
             },
             # delete the entry from the diffs, or delete the diffs completely if the
             # version we just reverted back to was the only previous version
-            "$unset": {"diffs" if not record.diffs else f"diffs.{record.version}": ""},
+            '$unset': {'diffs' if not record.diffs else f'diffs.{record.version}': ''},
         },
     )
