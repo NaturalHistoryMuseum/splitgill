@@ -2,11 +2,10 @@ from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from itertools import islice
 from time import time
-from typing import Any, Iterable, List, Union
+from typing import Iterable, Union
 
 from cytoolz import get_in
 from elasticsearch_dsl import A, Search
-from elasticsearch_dsl.aggs import Agg
 
 
 def to_timestamp(moment: Union[datetime, date]) -> int:
