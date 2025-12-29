@@ -1,13 +1,13 @@
 import re
 from functools import lru_cache
 from itertools import chain
-from typing import Optional, Iterable
+from typing import Iterable, Optional
 
 import orjson
 from cytoolz.itertoolz import sliding_window
-from fastnumbers import try_float, RAISE
+from fastnumbers import RAISE, try_float
 from pyproj import CRS, Transformer
-from shapely import Point, LineString, Polygon, from_wkt, from_geojson, to_wkt
+from shapely import LineString, Point, Polygon, from_geojson, from_wkt, to_wkt
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import transform
 

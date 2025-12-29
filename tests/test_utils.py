@@ -1,8 +1,8 @@
-from datetime import datetime, timedelta, timezone, date
+from datetime import date, datetime, timedelta, timezone
 
 from freezegun import freeze_time
 
-from splitgill.utils import to_timestamp, parse_to_timestamp, now, partition
+from splitgill.utils import now, parse_to_timestamp, partition, to_timestamp
 
 
 class TestToTimestamp:

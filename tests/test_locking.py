@@ -5,7 +5,7 @@ import pytest
 from freezegun import freeze_time
 from pymongo.collection import Collection
 
-from splitgill.locking import LockManager, AlreadyLocked
+from splitgill.locking import AlreadyLocked, LockManager
 
 
 class TestLockManager:

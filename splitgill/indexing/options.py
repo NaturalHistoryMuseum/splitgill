@@ -1,7 +1,7 @@
 from typing import Optional, Set
 
-from splitgill.diffing import DATETIME_FORMAT, DATE_FORMAT, NAIVE_DATETIME_FORMAT
-from splitgill.model import ParsingOptions, GeoFieldHint
+from splitgill.diffing import DATE_FORMAT, DATETIME_FORMAT, NAIVE_DATETIME_FORMAT
+from splitgill.model import GeoFieldHint, ParsingOptions
 
 
 class ParsingOptionsBuilder:

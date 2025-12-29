@@ -2,16 +2,16 @@ import json
 import math
 
 import pytest
-from shapely import Point, MultiPoint, LineString, Polygon, from_geojson
+from shapely import LineString, MultiPoint, Point, Polygon, from_geojson
 from shapely.geometry.base import BaseGeometry
 
 from splitgill.indexing.fields import ParsedType
 from splitgill.indexing.geo import (
     create_polygon_circle,
-    is_winding_valid,
-    match_hints,
     is_shape_valid,
+    is_winding_valid,
     match_geojson,
+    match_hints,
     match_wkt,
 )
 from splitgill.model import GeoFieldHint

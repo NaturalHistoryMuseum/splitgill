@@ -1,15 +1,15 @@
 import datetime
 from collections import defaultdict
-from typing import Dict, Union, Optional
+from typing import Dict, Optional, Union
 
 from elasticsearch_dsl import Q
 from elasticsearch_dsl.query import Bool, Query
 
 from splitgill.indexing.fields import (
+    DATA_ID_FIELD,
     DocumentField,
     ParsedType,
     parsed_path,
-    DATA_ID_FIELD,
 )
 from splitgill.utils import to_timestamp
 

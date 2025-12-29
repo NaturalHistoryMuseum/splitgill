@@ -1,11 +1,11 @@
 from functools import lru_cache
 from itertools import groupby
-from typing import Union, NamedTuple, Tuple
+from typing import NamedTuple, Tuple, Union
 
 from fastnumbers import try_float
 
-from splitgill.indexing.fields import ParsedType, DataType
-from splitgill.indexing.geo import match_geojson, match_wkt, match_hints
+from splitgill.indexing.fields import DataType, ParsedType
+from splitgill.indexing.geo import match_geojson, match_hints, match_wkt
 from splitgill.model import ParsingOptions
 from splitgill.utils import parse_to_timestamp
 

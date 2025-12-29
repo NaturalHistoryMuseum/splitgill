@@ -1,11 +1,11 @@
 import json
-from os import getenv
 from contextlib import suppress
+from os import getenv
 from typing import List
 
 import pytest
 from elastic_transport import NodeConfig
-from elasticsearch import Elasticsearch, AsyncElasticsearch
+from elasticsearch import AsyncElasticsearch, Elasticsearch
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database

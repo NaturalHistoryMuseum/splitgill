@@ -1,21 +1,21 @@
 import abc
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, date
+from datetime import date, datetime
 from itertools import zip_longest
 from typing import (
-    Iterable,
-    Tuple,
     Any,
-    Union,
-    NamedTuple,
-    Dict,
-    Deque,
-    List,
-    TypeVar,
-    Generic,
-    Optional,
     Collection,
+    Deque,
+    Dict,
+    Generic,
+    Iterable,
+    List,
+    NamedTuple,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
 )
 
 import regex as rx

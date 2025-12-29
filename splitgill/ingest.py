@@ -1,12 +1,12 @@
 from itertools import islice
-from typing import Iterable, Union, Optional
+from typing import Iterable, Optional, Union
 
-from pymongo import InsertOne, UpdateOne, DeleteOne
+from pymongo import DeleteOne, InsertOne, UpdateOne
 from pymongo.collection import Collection
 
-from splitgill.diffing import prepare_data, diff, prepare_field_name
+from splitgill.diffing import diff, prepare_data, prepare_field_name
 from splitgill.indexing.fields import DATA_ID_FIELD
-from splitgill.model import Record, MongoRecord
+from splitgill.model import MongoRecord, Record
 from splitgill.utils import partition
 
 MongoBulkOp = Union[InsertOne, UpdateOne, DeleteOne]

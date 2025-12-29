@@ -4,10 +4,10 @@ from bson import ObjectId
 
 from splitgill.diffing import diff
 from splitgill.model import (
-    MongoRecord,
-    VersionedData,
     GeoFieldHint,
+    MongoRecord,
     ParsingOptions,
+    VersionedData,
 )
 
 

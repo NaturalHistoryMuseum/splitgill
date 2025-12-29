@@ -1,7 +1,8 @@
 import dataclasses
 from collections import Counter
 from enum import auto
-from typing import Optional, List, Counter as CounterType, Union
+from typing import Counter as CounterType
+from typing import List, Optional, Union
 
 from strenum import LowercaseStrEnum, StrEnum
 

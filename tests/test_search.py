@@ -6,16 +6,16 @@ from splitgill.indexing.fields import ParsedType
 from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.indexing.parser import parse
 from splitgill.search import (
-    term_query,
-    number,
-    date,
-    boolean,
-    match_query,
     ALL_TEXT,
-    text,
+    boolean,
+    date,
     keyword,
+    match_query,
+    number,
     range_query,
     rebuild_data,
+    term_query,
+    text,
 )
 from splitgill.utils import to_timestamp
 

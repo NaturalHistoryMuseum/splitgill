@@ -1,12 +1,12 @@
-from dataclasses import dataclass, field, astuple
+from dataclasses import astuple, dataclass, field
 from itertools import chain
-from typing import Dict, Iterable, NamedTuple, List, Optional, FrozenSet, Any
+from typing import Any, Dict, FrozenSet, Iterable, List, NamedTuple, Optional
 from uuid import uuid4
 
 from bson import ObjectId
 from pymongo.results import BulkWriteResult
 
-from splitgill.diffing import patch, DiffOp
+from splitgill.diffing import DiffOp, patch
 
 
 @dataclass

@@ -1,11 +1,11 @@
 from dataclasses import dataclass
-from datetime import datetime, timezone, date
+from datetime import date, datetime, timezone
 from itertools import islice
 from time import time
-from typing import Iterable, Union, List, Any
+from typing import Any, Iterable, List, Union
 
 from cytoolz import get_in
-from elasticsearch_dsl import Search, A
+from elasticsearch_dsl import A, Search
 from elasticsearch_dsl.aggs import Agg
 
 

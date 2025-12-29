@@ -1,12 +1,12 @@
-from datetime import datetime, date, timezone, timedelta
+from datetime import date, datetime, timedelta, timezone
 from itertools import chain
 
 import pytest
 from shapely import from_wkt
 
 from splitgill.diffing import prepare_data
-from splitgill.indexing.fields import ParsedType, DataType
-from splitgill.indexing.geo import match_hints, match_geojson
+from splitgill.indexing.fields import DataType, ParsedType
+from splitgill.indexing.geo import match_geojson, match_hints
 from splitgill.indexing.options import ParsingOptionsBuilder
 from splitgill.indexing.parser import parse, parse_value
 from splitgill.model import ParsingOptions

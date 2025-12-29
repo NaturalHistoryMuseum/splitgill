@@ -1,15 +1,15 @@
 from datetime import datetime
-from typing import List, Any
+from typing import Any, List
 
 import pytest
 
 from splitgill.indexing.fields import (
+    DataField,
+    DataType,
+    DocumentField,
+    ParsedField,
     ParsedType,
     parsed_path,
-    DocumentField,
-    DataType,
-    DataField,
-    ParsedField,
 )
 
 

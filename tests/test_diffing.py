@@ -1,16 +1,16 @@
-from datetime import datetime, timezone, timedelta, date
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
 
 from splitgill.diffing import (
-    prepare_data,
-    diff,
-    DiffOp,
-    DiffingTypeComparisonException,
-    patch,
     DictComparison,
+    DiffingTypeComparisonException,
+    DiffOp,
     ListComparison,
+    diff,
+    patch,
+    prepare_data,
     prepare_field_name,
 )
 
