@@ -247,7 +247,7 @@ def rebuild_data(parsed_data: dict) -> dict:
 
 
 def rebuild_dict_or_list(
-    value: Union[dict, list]
+    value: Union[dict, list],
 ) -> Union[int, str, bool, float, dict, list, None]:
     """
     Rebuild a dict or a list inside the parsed dict.
