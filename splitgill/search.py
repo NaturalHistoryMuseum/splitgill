@@ -253,7 +253,7 @@ def rebuild_dict_or_list(
     Rebuild a dict or a list inside the parsed dict.
 
     :param value: a dict which can either be for structure or a value, or a list of
-                  either value or structure dicts
+        either value or structure dicts
     :return: a dict, list, or value
     """
     if isinstance(value, dict):

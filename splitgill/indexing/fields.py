@@ -76,7 +76,7 @@ class ParsedType(StrEnum):
 
         :param field: the name (including dots if needed) of the field
         :param full: whether to prepend the parsed field name to the path or not
-                     (default: True)
+            (default: True)
         :return: the path
         """
         return parsed_path(field, self, full)
@@ -94,7 +94,7 @@ def parsed_path(
     :param field: the name (including dots if needed) of the field
     :param parsed_type: the parsed type (default: None)
     :param full: whether to prepend the parsed field name to the path or not (default:
-                 True)
+        True)
     :return: the path
     """
     if parsed_type is not None:
@@ -166,7 +166,7 @@ class DataField:
         Add the given type count data to this field.
 
         :param type_names: the types this field is seen as a string of their names
-                          separated by commas.
+            separated by commas.
         :param count: the number of records with this combination of types
         """
         self.count += count
@@ -179,7 +179,7 @@ class DataField:
 
         :param data_types: the data types to be checked
         :return: True if the field is an instance of one of the given data types, False
-                 if not
+            if not
         """
         return any(self.type_counts[data_type] > 0 for data_type in data_types)
 
@@ -290,7 +290,7 @@ class ParsedField:
         Add the given type count data to this field.
 
         :param type_names: the types this field is seen as a string of their names
-                          separated by commas.
+            separated by commas.
         :param count: the number of records with this combination of types
         """
         self.count += count
@@ -303,7 +303,7 @@ class ParsedField:
 
         :param parsed_types: the parsed types to be checked
         :return: True if the field is an instance of one of the given parsed types,
-                 False if not
+            False if not
         """
         return any(self.type_counts[parsed_type] > 0 for parsed_type in parsed_types)
 

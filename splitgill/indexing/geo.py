@@ -94,7 +94,7 @@ def create_polygon_circle(
     :param longitude: a longitude float value
     :param radius_in_metres: a radius in metres value
     :param segments: the quad_segs parameter to pass when creating the circle around the
-                     point (the number of segments used will be 4*segments).
+        point (the number of segments used will be 4*segments).
     :return: a Polygon
     """
     if radius_in_metres <= 0:

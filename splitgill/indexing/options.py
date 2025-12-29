@@ -135,7 +135,7 @@ class ParsingOptionsBuilder:
         :param longitude_field: the name of the longitude field
         :param radius_field: the name of the radius field (optional)
         :param segments: the number of segments to use when creating the circle
-                         (optional, defaults to 16)
+            (optional, defaults to 16)
         :return: self
         """
         if latitude_field and longitude_field:

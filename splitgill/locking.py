@@ -41,7 +41,7 @@ class LockManager:
 
         :param lock_id: the ID of the lock to acquire
         :param raise_on_fail: if True, raises an AlreadyLocked exception if the lock
-                              can't be acquired. Default: False.
+            can't be acquired. Default: False.
         :return: True if the lock was acquired, False if not
         """
         try:

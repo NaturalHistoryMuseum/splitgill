@@ -100,7 +100,7 @@ class MongoRecord:
         with the latest data and working back to the first version.
 
         :return: VersionedData (version: int, data: dict) named tuples in descending
-                 version order
+            version order
         """
         yield VersionedData(self.version, self.data)
         base = self.data

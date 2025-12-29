@@ -20,7 +20,7 @@ def to_timestamp(moment: Union[datetime, date]) -> int:
 
     :param moment: a datetime or date object
     :return: the timestamp (number of milliseconds between the UNIX epoch and the
-             moment) as an int
+        moment) as an int
     """
     if isinstance(moment, datetime):
         return int(moment.timestamp() * 1000)
@@ -42,7 +42,7 @@ def parse_to_timestamp(
     :param datetime_format: the format as a string
     :param tz: the timezone to use (default: UTC)
     :return: the parsed datetime as the number of milliseconds since the UNIX epoch as
-             an int
+        an int
     """
     dt = datetime.strptime(datetime_string, datetime_format)
     if dt.tzinfo is None:

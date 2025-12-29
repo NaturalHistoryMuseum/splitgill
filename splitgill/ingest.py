@@ -67,13 +67,12 @@ def generate_ops(
     :param data_collection: the data collection containing any existing records
     :param records: the records to generate insert/update ops for
     :param modified_field: optional field containing a modified date. If this parameter
-                           is specified, the check to see if there are any changes
-                           between the old and new versions of the data will ignore this
-                           field (if there are other fields that have changed, then a
-                           full diff is generated with these fields included). Defaults
-                           to None, indicating no modified field should be used.
+        is specified, the check to see if there are any changes between the old and new
+        versions of the data will ignore this field (if there are other fields that have
+        changed, then a full diff is generated with these fields included). Defaults to
+        None, indicating no modified field should be used.
     :param find_size: the number of records look up at a time. This corresponds directly
-                      to the size of the $in query ID list. Defaults to 100.
+        to the size of the $in query ID list. Defaults to 100.
     :return: yields bulk Mongo ops
     """
     # todo: refactor this, it's a bit messy
@@ -214,7 +213,7 @@ def revert_record(record: MongoRecord) -> Optional[UpdateOne]:
     returned as you shouldn't be reverting committed data, that breaks Splitgill!
 
     :return: an UpdateOne object if there was a previous version to revert to and
-             therefore the revert was completed, None if not
+        therefore the revert was completed, None if not
     """
     if not record.diffs or record.version is not None:
         return None

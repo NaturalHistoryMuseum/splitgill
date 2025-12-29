@@ -334,7 +334,7 @@ def patch(base: dict, ops: Collection[DiffOp]) -> dict:
 
     :param base: the starting dict
     :param ops: the DiffOps to apply to the base dict (can be pure tuples, doesn't have
-                to be DiffOp namedtuples)
+        to be DiffOp namedtuples)
     :return: a new dict with the changes applied
     """
     # nothing to do
