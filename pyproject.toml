@@ -75,7 +75,8 @@ tag_format = "v$version"
 update_changelog_on_bump = true
 changelog_incremental = false
 version_files = [
-    "pyproject.toml:version"
+    "pyproject.toml:version",
+    "CITATION.cff:^version"
 ]
 
 [tool.pylint]
