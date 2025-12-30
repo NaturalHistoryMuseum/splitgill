@@ -1,3 +1,9 @@
+## v3.2.1 (2025-12-30)
+
+### Fix
+
+- update elasticsearch-dsl version
+
 ## v3.2.0 (2025-12-30)
 
 ### Feature
