@@ -21,7 +21,7 @@ classifiers = [
 
 dependencies = [
     "elasticsearch[async]>=8.0.0",
-    "elasticsearch-dsl>=8.9.0",
+    "elasticsearch-dsl>=8.13.1",
     "pymongo>=4.4.1",
     "cytoolz>=0.12.3",
     "fastnumbers>=5.0.1",
