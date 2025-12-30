@@ -661,7 +661,11 @@ class SplitgillDatabase:
         fields: Dict[str, DataField] = {}
 
         # create the basic field objects and add type counts
-        for term in iter_terms(search, DocumentField.DATA_TYPES, **iter_terms_kwargs):
+        for term in iter_terms(
+            search,
+            DocumentField.DATA_TYPES,
+            **{k: v for k, v in iter_terms_kwargs if k not in ['search', 'field']},
+        ):
             path, raw_types = term.value.rsplit('.', 1)
             if path not in fields:
                 fields[path] = DataField(path)
@@ -717,7 +721,11 @@ class SplitgillDatabase:
         fields: Dict[str, ParsedField] = {}
 
         # create the basic field objects and add type counts
-        for term in iter_terms(search, DocumentField.PARSED_TYPES, **iter_terms_kwargs):
+        for term in iter_terms(
+            search,
+            DocumentField.PARSED_TYPES,
+            **{k: v for k, v in iter_terms_kwargs if k not in ['search', 'field']},
+        ):
             path, raw_types = term.value.rsplit('.', 1)
             if path not in fields:
                 fields[path] = ParsedField(path)
