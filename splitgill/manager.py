@@ -4,7 +4,7 @@ from typing import Dict, Iterable, List, Optional, Union
 
 from cytoolz.dicttoolz import get_in
 from elasticsearch import Elasticsearch
-from elasticsearch_dsl import Search
+from elasticsearch_dsl import Index, Search
 from elasticsearch_dsl.query import Query
 from pymongo import ASCENDING, DESCENDING, IndexModel, MongoClient
 from pymongo.collection import Collection
@@ -637,7 +637,10 @@ class SplitgillDatabase:
         return sorted(self.get_version_changed_counts().keys())
 
     def get_data_fields(
-        self, version: Optional[int] = None, query: Optional[Query] = None
+        self,
+        version: Optional[int] = None,
+        query: Optional[Query] = None,
+        **iter_terms_kwargs,
     ) -> List[DataField]:
         """
         Retrieves the available data fields for this database, optionally at the given
@@ -647,6 +650,8 @@ class SplitgillDatabase:
             searched
         :param query: the query to filter records with before finding the data fields,
             if None, all record data is considered
+        :param iter_terms_kwargs: kwargs passed directly to iter_terms (e.g. chunk_size,
+            sample_probability)
         :return: a list of DataField objects with the most frequent field first
         """
         search = self.search(version if version is not None else SearchVersion.latest)
@@ -656,7 +661,15 @@ class SplitgillDatabase:
         fields: Dict[str, DataField] = {}
 
         # create the basic field objects and add type counts
-        for term in iter_terms(search, DocumentField.DATA_TYPES):
+        for term in iter_terms(
+            search,
+            DocumentField.DATA_TYPES,
+            **{
+                k: v
+                for k, v in iter_terms_kwargs.items()
+                if k not in ['search', 'field']
+            },
+        ):
             path, raw_types = term.value.rsplit('.', 1)
             if path not in fields:
                 fields[path] = DataField(path)
@@ -688,7 +701,10 @@ class SplitgillDatabase:
         return data_fields
 
     def get_parsed_fields(
-        self, version: Optional[int] = None, query: Optional[Query] = None
+        self,
+        version: Optional[int] = None,
+        query: Optional[Query] = None,
+        **iter_terms_kwargs,
     ) -> List[ParsedField]:
         """
         Retrieves the available parsed fields for this database, optionally at the given
@@ -698,6 +714,8 @@ class SplitgillDatabase:
             is searched
         :param query: the query to filter records with before finding the parsed fields,
             if None, all record data is considered
+        :param iter_terms_kwargs: kwargs passed directly to iter_terms (e.g. chunk_size,
+            sample_probability)
         :return: a list of ParsedField objects with the most frequent field first
         """
         search = self.search(version if version is not None else SearchVersion.latest)
@@ -707,7 +725,15 @@ class SplitgillDatabase:
         fields: Dict[str, ParsedField] = {}
 
         # create the basic field objects and add type counts
-        for term in iter_terms(search, DocumentField.PARSED_TYPES):
+        for term in iter_terms(
+            search,
+            DocumentField.PARSED_TYPES,
+            **{
+                k: v
+                for k, v in iter_terms_kwargs.items()
+                if k not in ['search', 'field']
+            },
+        ):
             path, raw_types = term.value.rsplit('.', 1)
             if path not in fields:
                 fields[path] = ParsedField(path)
@@ -724,4 +750,28 @@ class SplitgillDatabase:
         parsed_fields.sort(key=lambda f: f.path)
         # descending frequency (so most frequent fields first)
         parsed_fields.sort(key=lambda f: f.count, reverse=True)
+        return parsed_fields
+
+    def get_field_names(self) -> List[str]:
+        """
+        Retrieves a list of field names from the latest index mapping.
+
+        Does not take any version or query parameters; simply returns all the "data."
+        fields available on the index, along with their available types. All relevant
+        type counts are set to 1 to enable use of e.g. .is_text(). Use get_data_fields
+        or get_parsed_fields if you need accurate counts, or to filter by version or
+        query.
+        """
+        latest_index = Index(self.indices.latest, using=self._client.elasticsearch)
+        mapping = latest_index.get_mapping()
+        parsed_fields = []
+        for field_path, field_props in get_in(
+            [self.indices.latest, 'mappings', 'properties', 'data', 'properties'],
+            mapping.body,
+            default={},
+        ).items():
+            parsed_field = ParsedField(field_path)
+            for type_name in field_props['properties'].keys():
+                parsed_field.add(type_name, 1)
+            parsed_fields.append(parsed_field)
         return parsed_fields

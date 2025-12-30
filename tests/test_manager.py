@@ -1,6 +1,8 @@
+import random
 import time
 from collections import Counter
 from datetime import datetime, timezone
+from operator import itemgetter
 from typing import List
 from unittest.mock import MagicMock, patch
 
@@ -1270,6 +1272,54 @@ class TestGetFieldsMethods:
         check_data_fields(data_fields[10].children, [f__h_i])
         assert all(field.parent.path == f__h.path for field in data_fields[9].children)
 
+    def test_random_sample(self, database: SplitgillDatabase):
+        # I can't get consistent records returned with this even with seeds and
+        # explicitly set versions and record IDs, so unfortunately there's a small
+        # element of randomness to this one
+        random.seed(1)
+        records = [
+            Record.new({field_name: 1})
+            for field_name in random.choices(
+                ['a', 'b', 'c', 'd'], weights=[1, 3, 2, 4], k=1000
+            )
+        ]
+        database.ingest(records, commit=True)
+        database.sync()
+
+        field_counts = sorted(
+            Counter(
+                (['_id'] * 1000) + [list(r.data.keys())[0] for r in records]
+            ).items(),
+            key=itemgetter(1),
+            reverse=True,
+        )
+
+        data_fields = database.get_data_fields(sample_probability=0.5, seed=1)
+        assert len(data_fields) == 5
+        id_field = next(f for f in data_fields if f.path == '_id')
+        assert 900 < id_field.count < 1100
+        exact_counts = 0
+        for data_field, field in zip(data_fields, field_counts):
+            field_name, field_count = field
+            assert data_field.path == field_name
+            if data_field.count == field_count:
+                exact_counts += 1
+        # this is *technically* possible but very unlikely unless it's not sampling
+        assert exact_counts != len(data_fields)
+
+        parsed_fields = database.get_parsed_fields(sample_probability=0.5, seed=1)
+        assert len(parsed_fields) == 5
+        id_field = next(f for f in parsed_fields if f.path == '_id')
+        assert 900 < id_field.count < 1100
+        exact_counts = 0
+        for parsed_field, field in zip(parsed_fields, field_counts):
+            field_name, field_count = field
+            assert parsed_field.path == field_name
+            if parsed_field.count == field_count:
+                exact_counts += 1
+        # this is *technically* possible but very unlikely unless it's not sampling
+        assert exact_counts != len(parsed_fields)
+
 
 def test_get_rounded_version(splitgill: SplitgillClient):
     database = splitgill.get_database('test')
@@ -1426,3 +1476,29 @@ def test_resync_arcs(splitgill: SplitgillClient):
     assert count == 2400
     assert r_5_count == 3
     assert r_780_count == 2
+
+
+def test_get_field_names(splitgill: SplitgillClient):
+    database = splitgill.get_database('test')
+    records = [
+        Record.new({'a': 1}),
+        Record.new({'a': 2}),
+        Record.new({'b': 3}),
+        Record.new({'b': 'x'}),
+        Record.new({'b': 5}),
+        Record.new({'c': 'y'}),
+    ]
+    database.ingest(records, commit=True)
+    database.sync()
+
+    field_names = database.get_field_names()
+    assert len(field_names) == 4
+    expected_fields = [
+        pf('_id', 3, t=1),
+        pf('a', 4, t=1, n=1),
+        pf('b', 4, t=1, n=1),
+        pf('c', 3, t=1),
+    ]
+    for f in expected_fields:
+        f.type_counts[ParsedType.UNPARSED] = 1
+    assert field_names == expected_fields
