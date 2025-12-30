@@ -664,7 +664,11 @@ class SplitgillDatabase:
         for term in iter_terms(
             search,
             DocumentField.DATA_TYPES,
-            **{k: v for k, v in iter_terms_kwargs if k not in ['search', 'field']},
+            **{
+                k: v
+                for k, v in iter_terms_kwargs.items()
+                if k not in ['search', 'field']
+            },
         ):
             path, raw_types = term.value.rsplit('.', 1)
             if path not in fields:
@@ -724,7 +728,11 @@ class SplitgillDatabase:
         for term in iter_terms(
             search,
             DocumentField.PARSED_TYPES,
-            **{k: v for k, v in iter_terms_kwargs if k not in ['search', 'field']},
+            **{
+                k: v
+                for k, v in iter_terms_kwargs.items()
+                if k not in ['search', 'field']
+            },
         ):
             path, raw_types = term.value.rsplit('.', 1)
             if path not in fields:
