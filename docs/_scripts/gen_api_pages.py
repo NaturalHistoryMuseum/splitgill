@@ -1,6 +1,5 @@
 # !/usr/bin/env python
 # encoding: utf-8
-
 """
 Generate the code reference pages and navigation.
 
@@ -35,7 +34,7 @@ for path in py_files:
 
     nav[parts] = doc_path.as_posix()
 
-    with mkdocs_gen_files.open(full_doc_path, "w") as fd:
+    with mkdocs_gen_files.open(full_doc_path, 'w') as fd:
         ident = '.'.join(parts)
         fd.write(f'::: splitgill.{ident}')
 

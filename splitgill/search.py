@@ -1,15 +1,15 @@
 import datetime
 from collections import defaultdict
-from typing import Dict, Union, Optional
+from typing import Dict, Optional, Union
 
 from elasticsearch_dsl import Q
 from elasticsearch_dsl.query import Bool, Query
 
 from splitgill.indexing.fields import (
+    DATA_ID_FIELD,
     DocumentField,
     ParsedType,
     parsed_path,
-    DATA_ID_FIELD,
 )
 from splitgill.utils import to_timestamp
 
@@ -52,7 +52,7 @@ def version_query(version: int) -> Query:
     :param version: the requested version
     :return: an elasticsearch-dsl Query object
     """
-    return Q("term", **{DocumentField.VERSIONS: version})
+    return Q('term', **{DocumentField.VERSIONS: version})
 
 
 def index_specific_version_filter(indexes_and_versions: Dict[str, int]) -> Query:
@@ -86,13 +86,13 @@ def index_specific_version_filter(indexes_and_versions: Dict[str, int]) -> Query
             if len(indexes) == 1:
                 # there's only one index requiring this version so use a term query
                 filters.append(
-                    Bool(filter=[Q("term", _index=indexes[0]), version_filter])
+                    Bool(filter=[Q('term', _index=indexes[0]), version_filter])
                 )
             else:
                 # there are a few indexes using this version, query them using terms as
                 # a group
                 filters.append(
-                    Bool(filter=[Q("terms", _index=indexes), version_filter])
+                    Bool(filter=[Q('terms', _index=indexes), version_filter])
                 )
         return Bool(should=filters, minimum_should_match=1)
 
@@ -104,7 +104,7 @@ def has_geo() -> Query:
 
     :return: an exists Query object
     """
-    return Q("exists", field=DocumentField.ALL_POINTS)
+    return Q('exists', field=DocumentField.ALL_POINTS)
 
 
 def exists_query(field: str) -> Query:
@@ -114,7 +114,7 @@ def exists_query(field: str) -> Query:
     :param field: the field path
     :return: an exists query on the field using the full parsed path
     """
-    return Q("exists", field=parsed_path(field, parsed_type=None, full=True))
+    return Q('exists', field=parsed_path(field, parsed_type=None, full=True))
 
 
 def infer_parsed_type(
@@ -137,7 +137,7 @@ def infer_parsed_type(
     elif isinstance(value, (datetime.date, datetime.datetime)):
         return ParsedType.DATE
     else:
-        raise ValueError(f"Unexpected type {type(value)}")
+        raise ValueError(f'Unexpected type {type(value)}')
 
 
 def term_query(
@@ -162,7 +162,7 @@ def term_query(
     if parsed_type == ParsedType.DATE and isinstance(value, datetime.date):
         value = to_timestamp(value)
 
-    return Q("term", **{parsed_path(field, parsed_type=parsed_type, full=True): value})
+    return Q('term', **{parsed_path(field, parsed_type=parsed_type, full=True): value})
 
 
 def match_query(query: str, field: Optional[str] = None, **match_kwargs) -> Query:
@@ -180,7 +180,7 @@ def match_query(query: str, field: Optional[str] = None, **match_kwargs) -> Quer
         path = ALL_TEXT
     else:
         path = text(field)
-    return Q("match", **{path: {"query": query, **match_kwargs}})
+    return Q('match', **{path: {'query': query, **match_kwargs}})
 
 
 def range_query(
@@ -209,7 +209,7 @@ def range_query(
     """
     range_inner = {}
     for_inference = None
-    for key, value in zip(["gte", "lt", "gt", "lte"], [gte, lt, gt, lte]):
+    for key, value in zip(['gte', 'lt', 'gt', 'lte'], [gte, lt, gt, lte]):
         if value is None:
             continue
         if for_inference is None:
@@ -221,7 +221,7 @@ def range_query(
             range_inner[key] = value
 
     if not range_inner:
-        raise ValueError("You must provide at least one of the lt/lte/gt/gte values")
+        raise ValueError('You must provide at least one of the lt/lte/gt/gte values')
 
     if parsed_type is None:
         parsed_type = infer_parsed_type(for_inference)
@@ -229,7 +229,7 @@ def range_query(
     range_inner.update(range_kwargs)
 
     return Q(
-        "range", **{parsed_path(field, parsed_type=parsed_type, full=True): range_inner}
+        'range', **{parsed_path(field, parsed_type=parsed_type, full=True): range_inner}
     )
 
 
@@ -247,13 +247,13 @@ def rebuild_data(parsed_data: dict) -> dict:
 
 
 def rebuild_dict_or_list(
-    value: Union[dict, list]
+    value: Union[dict, list],
 ) -> Union[int, str, bool, float, dict, list, None]:
     """
     Rebuild a dict or a list inside the parsed dict.
 
     :param value: a dict which can either be for structure or a value, or a list of
-                  either value or structure dicts
+        either value or structure dicts
     :return: a dict, list, or value
     """
     if isinstance(value, dict):
@@ -267,7 +267,7 @@ def rebuild_dict_or_list(
             return {
                 key: rebuild_dict_or_list(value)
                 for key, value in value.items()
-                if not key.startswith("_") or key == DATA_ID_FIELD
+                if not key.startswith('_') or key == DATA_ID_FIELD
             }
     elif isinstance(value, list):
         # pass each element of the list through this function

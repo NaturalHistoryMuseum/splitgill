@@ -1,12 +1,11 @@
 from dataclasses import dataclass
-from datetime import datetime, timezone, date
+from datetime import date, datetime, timezone
 from itertools import islice
 from time import time
-from typing import Iterable, Union, List, Any
+from typing import Iterable, Optional, Union
 
 from cytoolz import get_in
-from elasticsearch_dsl import Search, A
-from elasticsearch_dsl.aggs import Agg
+from elasticsearch_dsl import A, Search
 
 
 def to_timestamp(moment: Union[datetime, date]) -> int:
@@ -21,7 +20,7 @@ def to_timestamp(moment: Union[datetime, date]) -> int:
 
     :param moment: a datetime or date object
     :return: the timestamp (number of milliseconds between the UNIX epoch and the
-             moment) as an int
+        moment) as an int
     """
     if isinstance(moment, datetime):
         return int(moment.timestamp() * 1000)
@@ -43,7 +42,7 @@ def parse_to_timestamp(
     :param datetime_format: the format as a string
     :param tz: the timezone to use (default: UTC)
     :return: the parsed datetime as the number of milliseconds since the UNIX epoch as
-             an int
+        an int
     """
     dt = datetime.strptime(datetime_string, datetime_format)
     if dt.tzinfo is None:
@@ -85,7 +84,13 @@ class Term:
     count: int
 
 
-def iter_terms(search: Search, field: str, chunk_size: int = 50) -> Iterable[Term]:
+def iter_terms(
+    search: Search,
+    field: str,
+    chunk_size: int = 50,
+    sample_probability: float = 1.0,
+    seed: Optional[int] = None,
+) -> Iterable[Term]:
     """
     Yields Term objects, each representing a value and the number of documents which
     contain that value in the given field. The Terms are yielded in descending order of
@@ -94,6 +99,10 @@ def iter_terms(search: Search, field: str, chunk_size: int = 50) -> Iterable[Ter
     :param search: a Search instance to use to run the aggregation
     :param field: the name of the field to get the terms for
     :param chunk_size: the number of buckets to retrieve per request
+    :param sample_probability: the probability that a given record will be included in a
+        random sample; set to 1 to use all records (default 1)
+    :param seed: sets the seed manually (if None or not set, defaults to current date
+        timestamp / 3600)
     :return: yields Term objects
     """
     after = None
@@ -102,22 +111,50 @@ def iter_terms(search: Search, field: str, chunk_size: int = 50) -> Iterable[Ter
         # when we don't need them, and it ensures we get a fresh copy of the
         # search to work with
         agg_search = search[:0]
-        agg_search.aggs.bucket(
-            "values",
-            "composite",
-            size=chunk_size,
-            sources={"value": A("terms", field=field)},
+
+        # this is the core aggregation
+        composite_agg = A(
+            'composite', size=chunk_size, sources={'value': A('terms', field=field)}
         )
-        if after is not None:
-            agg_search.aggs["values"].after = after
+        result_keys = ['values', 'buckets']
+        after_keys = ['values', 'after_key']
+
+        if sample_probability < 1:
+            # this should stay relatively constant for caching purposes, but we can
+            # change it once a day.
+            # divide it by 3600 just to make it fit under the ES seed max (2147483647)
+            # for longer - otherwise this stops working in 2038. The actual number isn't
+            # important.
+            seed = (
+                seed
+                if seed is not None
+                else int(
+                    datetime.now()
+                    .replace(hour=0, minute=0, second=0, microsecond=0)
+                    .timestamp()
+                    / 3600
+                )
+            )
+            # if we're sampling, the core agg gets nested underneath the sampler
+            agg_search.aggs.bucket(
+                'sampling', 'random_sampler', probability=sample_probability, seed=seed
+            ).bucket('values', composite_agg)
+            if after is not None:
+                agg_search.aggs['sampling'].aggs['values'].after = after
+            result_keys = ['sampling'] + result_keys
+            after_keys = ['sampling'] + after_keys
+        else:
+            agg_search.aggs.bucket('values', composite_agg)
+            if after is not None:
+                agg_search.aggs['values'].after = after
 
         result = agg_search.execute().aggs.to_dict()
 
-        buckets = get_in(("values", "buckets"), result, [])
-        after = get_in(("values", "after_key"), result, None)
+        buckets = get_in(result_keys, result, [])
+        after = get_in(after_keys, result, None)
         if not buckets:
             break
         else:
             yield from (
-                Term(bucket["key"]["value"], bucket["doc_count"]) for bucket in buckets
+                Term(bucket['key']['value'], bucket['doc_count']) for bucket in buckets
             )
