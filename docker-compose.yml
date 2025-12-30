@@ -10,6 +10,8 @@ services:
     depends_on:
       - es
       - mongo
+    volumes:
+      - '.:/usr/src/app'
 
   # serves the docs locally with realtime auto-reloading
   docs:
