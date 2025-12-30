@@ -1476,3 +1476,29 @@ def test_resync_arcs(splitgill: SplitgillClient):
     assert count == 2400
     assert r_5_count == 3
     assert r_780_count == 2
+
+
+def test_get_field_names(splitgill: SplitgillClient):
+    database = splitgill.get_database('test')
+    records = [
+        Record.new({'a': 1}),
+        Record.new({'a': 2}),
+        Record.new({'b': 3}),
+        Record.new({'b': 'x'}),
+        Record.new({'b': 5}),
+        Record.new({'c': 'y'}),
+    ]
+    database.ingest(records, commit=True)
+    database.sync()
+
+    field_names = database.get_field_names()
+    assert len(field_names) == 4
+    expected_fields = [
+        pf('_id', 3, t=1),
+        pf('a', 4, t=1, n=1),
+        pf('b', 4, t=1, n=1),
+        pf('c', 3, t=1),
+    ]
+    for f in expected_fields:
+        f.type_counts[ParsedType.UNPARSED] = 1
+    assert field_names == expected_fields

@@ -4,7 +4,7 @@ from typing import Dict, Iterable, List, Optional, Union
 
 from cytoolz.dicttoolz import get_in
 from elasticsearch import Elasticsearch
-from elasticsearch_dsl import Search
+from elasticsearch_dsl import Index, Search
 from elasticsearch_dsl.query import Query
 from pymongo import ASCENDING, DESCENDING, IndexModel, MongoClient
 from pymongo.collection import Collection
@@ -734,4 +734,28 @@ class SplitgillDatabase:
         parsed_fields.sort(key=lambda f: f.path)
         # descending frequency (so most frequent fields first)
         parsed_fields.sort(key=lambda f: f.count, reverse=True)
+        return parsed_fields
+
+    def get_field_names(self) -> List[str]:
+        """
+        Retrieves a list of field names from the latest index mapping.
+
+        Does not take any version or query parameters; simply returns all the "data."
+        fields available on the index, along with their available types. All relevant
+        type counts are set to 1 to enable use of e.g. .is_text(). Use get_data_fields
+        or get_parsed_fields if you need accurate counts, or to filter by version or
+        query.
+        """
+        latest_index = Index(self.indices.latest, using=self._client.elasticsearch)
+        mapping = latest_index.get_mapping()
+        parsed_fields = []
+        for field_path, field_props in get_in(
+            [self.indices.latest, 'mappings', 'properties', 'data', 'properties'],
+            mapping.body,
+            default={},
+        ).items():
+            parsed_field = ParsedField(field_path)
+            for type_name in field_props['properties'].keys():
+                parsed_field.add(type_name, 1)
+            parsed_fields.append(parsed_field)
         return parsed_fields
