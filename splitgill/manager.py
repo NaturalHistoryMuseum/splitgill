@@ -637,7 +637,10 @@ class SplitgillDatabase:
         return sorted(self.get_version_changed_counts().keys())
 
     def get_data_fields(
-        self, version: Optional[int] = None, query: Optional[Query] = None
+        self,
+        version: Optional[int] = None,
+        query: Optional[Query] = None,
+        **iter_terms_kwargs,
     ) -> List[DataField]:
         """
         Retrieves the available data fields for this database, optionally at the given
@@ -647,6 +650,8 @@ class SplitgillDatabase:
             searched
         :param query: the query to filter records with before finding the data fields,
             if None, all record data is considered
+        :param iter_terms_kwargs: kwargs passed directly to iter_terms (e.g. chunk_size,
+            sample_probability)
         :return: a list of DataField objects with the most frequent field first
         """
         search = self.search(version if version is not None else SearchVersion.latest)
@@ -656,7 +661,7 @@ class SplitgillDatabase:
         fields: Dict[str, DataField] = {}
 
         # create the basic field objects and add type counts
-        for term in iter_terms(search, DocumentField.DATA_TYPES):
+        for term in iter_terms(search, DocumentField.DATA_TYPES, **iter_terms_kwargs):
             path, raw_types = term.value.rsplit('.', 1)
             if path not in fields:
                 fields[path] = DataField(path)
@@ -688,7 +693,10 @@ class SplitgillDatabase:
         return data_fields
 
     def get_parsed_fields(
-        self, version: Optional[int] = None, query: Optional[Query] = None
+        self,
+        version: Optional[int] = None,
+        query: Optional[Query] = None,
+        **iter_terms_kwargs,
     ) -> List[ParsedField]:
         """
         Retrieves the available parsed fields for this database, optionally at the given
@@ -698,6 +706,8 @@ class SplitgillDatabase:
             is searched
         :param query: the query to filter records with before finding the parsed fields,
             if None, all record data is considered
+        :param iter_terms_kwargs: kwargs passed directly to iter_terms (e.g. chunk_size,
+            sample_probability)
         :return: a list of ParsedField objects with the most frequent field first
         """
         search = self.search(version if version is not None else SearchVersion.latest)
@@ -707,7 +717,7 @@ class SplitgillDatabase:
         fields: Dict[str, ParsedField] = {}
 
         # create the basic field objects and add type counts
-        for term in iter_terms(search, DocumentField.PARSED_TYPES):
+        for term in iter_terms(search, DocumentField.PARSED_TYPES, **iter_terms_kwargs):
             path, raw_types = term.value.rsplit('.', 1)
             if path not in fields:
                 fields[path] = ParsedField(path)
