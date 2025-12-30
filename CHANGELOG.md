@@ -1,3 +1,48 @@
+## v3.2.0 (2025-12-30)
+
+### Feature
+
+- add method to get field names on latest index
+- allow passing kwargs to iter_terms via get fields methods
+- allow optional sampling for iter_terms
+
+### Fix
+
+- iterate on dict items
+- remove search and field from iter_terms kwargs
+
+### Refactor
+
+- remove unused imports
+
+### Docs
+
+- install doc requirements from pyproject
+
+### Style
+
+- fix docstrings
+- fix quotes
+- automated formatting (except quotes)
+- automated import sorting
+
+### Tests
+
+- add test for iter_terms sampling
+
+### CI System(s)
+
+- mount source folder to test volume
+- update pre-commit hooks
+- add ruff config
+- add pr validation workflow
+
+### Chores/Misc
+
+- remove docker version
+- remove unnecessary manifest file
+- add repo info files
+
 ## v3.1.1 (2025-09-04)
 
 ### Fix
