@@ -1485,19 +1485,21 @@ def test_get_field_names(splitgill: SplitgillClient):
         Record.new({'a': 2}),
         Record.new({'b': 3}),
         Record.new({'b': 'x'}),
-        Record.new({'b': 5}),
+        Record.new({'b': {'d': 1}, 'x': {'y': {'z': 1}}}),
         Record.new({'c': 'y'}),
     ]
     database.ingest(records, commit=True)
     database.sync()
 
     field_names = database.get_field_names()
-    assert len(field_names) == 4
+    assert len(field_names) == 6
     expected_fields = [
         pf('_id', 3, t=1),
         pf('a', 4, t=1, n=1),
         pf('b', 4, t=1, n=1),
+        pf('b.d', 4, t=1, n=1),
         pf('c', 3, t=1),
+        pf('x.y.z', 4, t=1, n=1),
     ]
     for f in expected_fields:
         f.type_counts[ParsedType.UNPARSED] = 1
