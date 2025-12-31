@@ -1,3 +1,13 @@
+## v3.2.2 (2025-12-31)
+
+### Fix
+
+- extract nested fields from mapping
+
+### Tests
+
+- add further layer of nested fields to test
+
 ## v3.2.1 (2025-12-30)
 
 ### Fix
