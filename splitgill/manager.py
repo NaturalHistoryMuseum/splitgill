@@ -764,14 +764,29 @@ class SplitgillDatabase:
         """
         latest_index = Index(self.indices.latest, using=self._client.elasticsearch)
         mapping = latest_index.get_mapping()
-        parsed_fields = []
-        for field_path, field_props in get_in(
+        parsed_fields = {}
+        top_level = get_in(
             [self.indices.latest, 'mappings', 'properties', 'data', 'properties'],
             mapping.body,
             default={},
-        ).items():
-            parsed_field = ParsedField(field_path)
-            for type_name in field_props['properties'].keys():
-                parsed_field.add(type_name, 1)
-            parsed_fields.append(parsed_field)
-        return parsed_fields
+        )
+
+        def _extract_fields(field_name, field_props, parents=None):
+            parents = [p for p in (parents or []) if p is not None]
+            if 'properties' in field_props:
+                _extract_fields(field_name, field_props['properties'], parents)
+            else:
+                for k, v in field_props.items():
+                    if k.startswith('_') and 'type' in v:
+                        field_path = '.'.join(parents + [field_name])
+                        parsed_field = parsed_fields.get(
+                            field_path, ParsedField(field_path)
+                        )
+                        parsed_field.add(k, 1)
+                        parsed_fields[field_path] = parsed_field
+                    else:
+                        _extract_fields(k, v['properties'], parents + [field_name])
+
+        _extract_fields(None, top_level)
+
+        return list(parsed_fields.values())
